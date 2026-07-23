@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 
 class ApiException implements Exception {
@@ -11,7 +12,17 @@ class ApiException implements Exception {
 }
 
 class ApiClient {
-  static const String baseUrl = 'http://localhost:3000';
+  /// IP locale du PC de dev sur le Wi-Fi — un téléphone physique ne peut pas
+  /// résoudre "localhost" vers le backend qui tourne sur l'ordinateur de dev,
+  /// il doit passer par l'adresse réseau locale. À mettre à jour si l'IP
+  /// change (reconnexion Wi-Fi, autre réseau) : trouvable via `ipconfig`
+  /// (Windows, carte "Wi-Fi", ligne "Adresse IPv4").
+  static const String _devMachineLanIp = '192.168.1.161';
+
+  /// localhost en Web (le navigateur tourne sur la même machine que le
+  /// backend en dev) ; IP locale du PC pour toute autre plateforme (mobile
+  /// physique, notamment).
+  static String get baseUrl => kIsWeb ? 'http://localhost:3000' : 'http://$_devMachineLanIp:3000';
 
   String? _accessToken;
   String? _refreshToken;
