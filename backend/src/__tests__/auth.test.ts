@@ -1,0 +1,152 @@
+import { describe, it, expect, beforeEach, afterAll } from 'vitest';
+import request from 'supertest';
+import { createApp } from '../app';
+import { prisma } from '../prisma';
+import { resetDb } from './helpers';
+
+const app = createApp();
+
+beforeEach(async () => {
+  await resetDb();
+});
+
+afterAll(async () => {
+  await prisma.$disconnect();
+});
+
+describe('POST /auth/signup', () => {
+  it("crée un compte installateur en attente de validation", async () => {
+    const res = await request(app).post('/auth/signup').send({
+      nom: 'Dupont',
+      prenom: 'Jean',
+      mobile: '06 11 22 33 44',
+      email: 'jean.dupont@example.com',
+      password: 'motdepasse',
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body.user.role).toBe('installateur');
+    expect(res.body.user.isActive).toBe(false);
+    expect(res.body.accessToken).toBeTruthy();
+    expect(res.body.refreshToken).toBeTruthy();
+  });
+
+  it('refuse une inscription sans email', async () => {
+    const res = await request(app).post('/auth/signup').send({
+      nom: 'Dupont', prenom: 'Jean', mobile: '0611223344', password: 'motdepasse',
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('normalise le mobile (espaces retirés) pour éviter les doublons', async () => {
+    await request(app).post('/auth/signup').send({
+      nom: 'Dupont', prenom: 'Jean', mobile: '0611223344', email: 'jean.dupont@example.com', password: 'motdepasse',
+    });
+    const res = await request(app).post('/auth/signup').send({
+      nom: 'Autre', prenom: 'Personne', mobile: '06 11 22 33 44', email: 'autre.personne@example.com', password: 'motdepasse',
+    });
+    expect(res.status).toBe(409);
+  });
+
+  it('refuse un mot de passe trop court', async () => {
+    const res = await request(app).post('/auth/signup').send({
+      nom: 'Dupont', prenom: 'Jean', mobile: '0611223344', email: 'jean.dupont@example.com', password: '123',
+    });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('POST /auth/signup-interne', () => {
+  it('crée un compte chargé d\'affaires en attente de validation par un admin', async () => {
+    const res = await request(app).post('/auth/signup-interne').send({
+      nom: 'Bernard', prenom: 'Julien', mobile: '0611223344', email: 'j.bernard@actiwork.fr',
+      password: 'motdepasse', role: 'chargeAffaires',
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body.user.role).toBe('chargeAffaires');
+    expect(res.body.user.isActive).toBe(false);
+    expect(res.body.accessToken).toBeTruthy();
+  });
+
+  it('refuse un email hors domaine @actiwork.fr', async () => {
+    const res = await request(app).post('/auth/signup-interne').send({
+      nom: 'Bernard', prenom: 'Julien', mobile: '0611223344', email: 'j.bernard@gmail.com',
+      password: 'motdepasse', role: 'qualite',
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('refuse un rôle qui ne correspond pas à un compte interne', async () => {
+    const res = await request(app).post('/auth/signup-interne').send({
+      nom: 'Bernard', prenom: 'Julien', mobile: '0611223344', email: 'j.bernard@actiwork.fr',
+      password: 'motdepasse', role: 'admin',
+    });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('POST /auth/login', () => {
+  beforeEach(async () => {
+    await request(app).post('/auth/signup').send({
+      nom: 'Roux', prenom: 'Thomas', mobile: '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo',
+    });
+  });
+
+  it('connecte avec le mobile même formaté avec des espaces', async () => {
+    const res = await request(app).post('/auth/login').send({
+      identifier: '06 52 41 78 90',
+      password: 'demodemo',
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.user.mobile).toBe('0652417890');
+  });
+
+  it('connecte avec l\'email', async () => {
+    const res = await request(app).post('/auth/login').send({
+      identifier: 't.roux@elevpro.fr',
+      password: 'demodemo',
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it('refuse un mauvais mot de passe', async () => {
+    const res = await request(app).post('/auth/login').send({
+      identifier: 't.roux@elevpro.fr',
+      password: 'mauvais',
+    });
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('GET /auth/me', () => {
+  it('refuse sans jeton', async () => {
+    const res = await request(app).get('/auth/me');
+    expect(res.status).toBe(401);
+  });
+
+  it('renvoie le profil avec un jeton valide', async () => {
+    const signup = await request(app).post('/auth/signup').send({
+      nom: 'Roux', prenom: 'Thomas', mobile: '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo',
+    });
+    const res = await request(app).get('/auth/me').set('Authorization', `Bearer ${signup.body.accessToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.user.fullName).toBe('Thomas Roux');
+  });
+});
+
+describe('POST /auth/refresh', () => {
+  it('émet un nouveau jeton d\'accès à partir du refresh token', async () => {
+    const signup = await request(app).post('/auth/signup').send({
+      nom: 'Roux', prenom: 'Thomas', mobile: '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo',
+    });
+    const res = await request(app).post('/auth/refresh').send({ refreshToken: signup.body.refreshToken });
+    expect(res.status).toBe(200);
+    expect(res.body.accessToken).toBeTruthy();
+  });
+
+  it('refuse un refresh token invalide', async () => {
+    const res = await request(app).post('/auth/refresh').send({ refreshToken: 'invalide' });
+    expect(res.status).toBe(401);
+  });
+});

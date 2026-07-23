@@ -1,0 +1,200 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import '../../core/theme.dart';
+import '../../data/models/activity_feed.dart';
+import '../../data/models/user.dart';
+import '../../state/admin_state.dart';
+import '../../state/auth_state.dart';
+import 'widgets/bo_shell.dart';
+import 'widgets/bo_panel.dart';
+
+class BoAdminDashboardScreen extends StatefulWidget {
+  const BoAdminDashboardScreen({super.key});
+
+  @override
+  State<BoAdminDashboardScreen> createState() => _BoAdminDashboardScreenState();
+}
+
+class _BoAdminDashboardScreenState extends State<BoAdminDashboardScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.read<AdminState>().fetch();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final authState = context.watch<AuthState>();
+
+    // Écran réservé au rôle admin — un CA/Qualité qui naviguerait ici
+    // directement (URL tapée à la main) est renvoyé au tableau de bord.
+    if (!authState.isLoading && authState.currentUser?.role != UserRole.admin) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) context.go('/backoffice');
+      });
+      return const Scaffold(body: SizedBox.shrink());
+    }
+
+    final adminState = context.watch<AdminState>();
+    final feed = adminState.activityFeed;
+
+    return BoShell(
+      activeNav: 'admin',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Administration', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 14),
+          _buildComptesInternes(adminState),
+          const SizedBox(height: 12),
+          if (adminState.isLoading && feed == null)
+            const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
+          else ...[
+            _buildAnomalies(feed),
+            const SizedBox(height: 12),
+            _buildPvRecents(feed),
+            const SizedBox(height: 12),
+            _buildRexEnAttente(feed),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildComptesInternes(AdminState adminState) {
+    final enAttente = adminState.comptesInternes.where((u) => !u.isActive).toList();
+    return BoPanel(
+      title: 'Comptes internes en attente de validation (${enAttente.length})',
+      child: enAttente.isEmpty
+          ? const Text('Aucune demande en attente.', style: TextStyle(fontSize: 11, color: AppColors.acierClair))
+          : Column(children: [for (final u in enAttente) _compteRow(adminState, u)]),
+    );
+  }
+
+  Widget _compteRow(AdminState adminState, User u) {
+    final roleLabel = u.role == UserRole.chargeAffaires ? 'Chargé d\'affaires' : 'Qualité';
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFEEF1F3)))),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(u.fullName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                Text('$roleLabel · ${u.email ?? ''}', style: const TextStyle(fontSize: 10.5, color: AppColors.acierClair)),
+              ],
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => adminState.validerCompteInterne(u),
+            style: ElevatedButton.styleFrom(minimumSize: const Size(0, 30), padding: const EdgeInsets.symmetric(horizontal: 12)),
+            child: const Text('Valider', style: TextStyle(fontSize: 11)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAnomalies(ActivityFeed? feed) {
+    final anomalies = feed?.anomalies ?? const <AnomalieSignalee>[];
+    return BoPanel(
+      title: 'Anomalies signalées (${anomalies.length})',
+      child: anomalies.isEmpty
+          ? const Text('Aucune anomalie en cours.', style: TextStyle(fontSize: 11, color: AppColors.acierClair))
+          : Column(children: [for (final a in anomalies) _anomalieRow(a)]),
+    );
+  }
+
+  Widget _anomalieRow(AnomalieSignalee a) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFEEF1F3)))),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppColors.rouge, shape: BoxShape.circle)),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${a.chantierReference} · ${a.client} — ${a.libelle}${a.critique ? ' (sécurité)' : ''}',
+                  style: const TextStyle(fontSize: 11, color: AppColors.acier, fontWeight: FontWeight.w600),
+                ),
+                if (a.validePar != null && a.valideAt != null)
+                  Text(
+                    'Signalé par ${a.validePar} · ${DateFormat('dd/MM HH:mm').format(a.valideAt!)}',
+                    style: const TextStyle(fontSize: 10, color: AppColors.acierClair),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPvRecents(ActivityFeed? feed) {
+    final pvRecents = feed?.pvRecents ?? const <PvRecent>[];
+    return BoPanel(
+      title: 'PV signés récemment — en attente de facturation (${pvRecents.length})',
+      child: pvRecents.isEmpty
+          ? const Text('Aucun PV signé récemment.', style: TextStyle(fontSize: 11, color: AppColors.acierClair))
+          : Column(children: [for (final pv in pvRecents) _pvRow(pv)]),
+    );
+  }
+
+  Widget _pvRow(PvRecent pv) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFEEF1F3)))),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              '${pv.chantierReference} · ${pv.client}',
+              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
+            ),
+          ),
+          Text(
+            pv.pvSigneAt != null
+                ? 'Signé par ${pv.pvSigneur ?? 'le client'} · ${DateFormat('dd/MM HH:mm').format(pv.pvSigneAt!)}'
+                : '—',
+            style: const TextStyle(fontSize: 10.5, color: AppColors.acierClair),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRexEnAttente(ActivityFeed? feed) {
+    final rexEnAttente = feed?.rexEnAttente ?? const <RexEnAttente>[];
+    return BoPanel(
+      title: 'REX reçus — en attente de traitement BE/Qualité (${rexEnAttente.length})',
+      child: rexEnAttente.isEmpty
+          ? const Text('Aucun REX en attente.', style: TextStyle(fontSize: 11, color: AppColors.acierClair))
+          : Column(children: [for (final rex in rexEnAttente) _rexRow(rex)]),
+    );
+  }
+
+  Widget _rexRow(RexEnAttente rex) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFEEF1F3)))),
+      child: Text(
+        '${rex.chantierReference} · ${rex.client} — « ${rex.rexTranscription} »',
+        style: const TextStyle(fontSize: 10.5, color: AppColors.acier),
+      ),
+    );
+  }
+}

@@ -1,0 +1,150 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  installateur
+  chargeAffaires
+  qualite
+  direction
+  admin
+}
+
+enum UserStatus {
+  salarie
+  sousTraitant
+}
+
+model User {
+  id            String   @id @default(cuid())
+  nom           String
+  prenom        String
+  mobile        String   @unique
+  email         String?  @unique
+  passwordHash  String
+  role          UserRole
+  status        UserStatus?
+  societe       String?
+  isActive      Boolean  @default(false)
+  suspendu      Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  habilitations       Habilitation[]
+  chantiersRattaches  ChantierInstallateur[]
+  documentsTerrain    DocumentTerrain[]
+  refreshTokens       RefreshToken[]
+}
+
+model Habilitation {
+  id             String   @id @default(cuid())
+  titre          String
+  dateExpiration DateTime
+  filePath       String?
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId         String
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model Chantier {
+  id                String   @id @default(cuid())
+  reference         String   @unique
+  client            String
+  adresse           String
+  ville             String
+  dateDebut         DateTime
+  dateFin           DateTime
+  contactNom        String
+  contactTel        String
+  horaires          String
+  consignes         String   // JSON-encoded string list
+  typeMonteCharge   String
+  capacite          String
+  niveaux           Int
+  referenceAffaire  String
+  syncStatus        String   @default("nouveau")
+  rexValide         Boolean  @default(false)
+  rexTranscription  String?
+  rexAudioPath      String?
+  rexSoumisAt       DateTime?
+  pvSigne           Boolean  @default(false)
+  pvSigneur         String?
+  pvSigneAt         DateTime?
+  pvSignatureImagePath String?
+  createdAt         DateTime @default(now())
+
+  pointsControle      PointControle[]
+  installateurs       ChantierInstallateur[]
+  documentsTerrain    DocumentTerrain[]
+  livretsOuvertsJson  String @default("[]") // JSON-encoded list of user ids
+}
+
+model ChantierInstallateur {
+  id          String   @id @default(cuid())
+  chantier    Chantier @relation(fields: [chantierId], references: [id], onDelete: Cascade)
+  chantierId  String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  rattacheAt  DateTime @default(now())
+
+  @@unique([chantierId, userId])
+}
+
+enum PointType {
+  reception
+  autoControle
+}
+
+enum PointStatus {
+  vide
+  conforme
+  nonConforme
+}
+
+model PointControle {
+  id            String      @id @default(cuid())
+  chantier      Chantier    @relation(fields: [chantierId], references: [id], onDelete: Cascade)
+  chantierId    String
+  type          PointType
+  libelle       String
+  categorie     String      @default("generale")
+  critique      Boolean     @default(false)
+  photoRequise  Boolean     @default(true)
+  status        PointStatus @default(vide)
+  photoPath     String?
+  validePar     String?
+  valideAt      DateTime?
+  ordre         Int         @default(0)
+}
+
+enum CategorieDocument {
+  bonLivraison
+  documentClient
+  habilitation
+  constat
+  autre
+}
+
+model DocumentTerrain {
+  id          String            @id @default(cuid())
+  chantier    Chantier          @relation(fields: [chantierId], references: [id], onDelete: Cascade)
+  chantierId  String
+  titre       String
+  categorie   CategorieDocument
+  filePath    String?
+  auteur      User              @relation(fields: [auteurId], references: [id], onDelete: Cascade)
+  auteurId    String
+  horodatage  DateTime          @default(now())
+}

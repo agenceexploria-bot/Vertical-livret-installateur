@@ -1,0 +1,37 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'package:record/record.dart';
+
+/// Capture une note vocale et la renvoie en data URL base64 (webm/opus),
+/// prête à être mise en file d'attente hors-ligne (PendingOperations) — la
+/// transcription automatique (Whisper) n'est pas requise pour la V1, seul
+/// l'envoi de l'audio (ou d'un texte saisi) l'est.
+class VoiceRecorder {
+  final _recorder = AudioRecorder();
+
+  Future<bool> start() async {
+    if (!await _recorder.hasPermission()) return false;
+    await _recorder.start(
+      const RecordConfig(encoder: AudioEncoder.opus),
+      path: 'rex-${DateTime.now().millisecondsSinceEpoch}.webm',
+    );
+    return true;
+  }
+
+  Future<String?> stopAndEncode() async {
+    final pathOrBlobUrl = await _recorder.stop();
+    if (pathOrBlobUrl == null) return null;
+    try {
+      // Sur le Web, `record` renvoie une URL blob: résoluble via fetch depuis
+      // la même page — c'est la cible prioritaire de cette PWA.
+      final response = await http.get(Uri.parse(pathOrBlobUrl));
+      return 'data:audio/webm;base64,${base64Encode(response.bodyBytes)}';
+    } catch (e) {
+      debugPrint('VoiceRecorder.stopAndEncode: $e');
+      return null;
+    }
+  }
+
+  void dispose() => _recorder.dispose();
+}
