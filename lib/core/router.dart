@@ -1,7 +1,7 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'platform/mobile_detector.dart';
 import '../state/auth_state.dart';
 import '../data/models/user.dart';
 import '../screens/auth/login_screen.dart';
@@ -19,6 +19,8 @@ import '../screens/installateur/modules/rex_screen.dart';
 import '../screens/installateur/modules/docs_terrain_screen.dart';
 import '../screens/client/signature_screen.dart';
 import '../screens/client/confirmation_screen.dart';
+import '../screens/charge_affaires/ca_home_screen.dart';
+import '../screens/charge_affaires/ca_validation_screen.dart';
 import '../screens/backoffice/bo_login_screen.dart';
 import '../screens/backoffice/bo_access_request_screen.dart';
 import '../screens/backoffice/bo_ca_chantiers_screen.dart';
@@ -56,19 +58,25 @@ class AppRouter {
       initialLocation: '/',
       refreshListenable: authState,
       redirect: (context, state) {
+        // Le back-office Web (BoShell, tableaux denses, plusieurs colonnes)
+        // n'est pas conçu pour un écran de téléphone — le CA y a sa propre
+        // interface mobile dédiée (CaHomeScreen/CaValidationScreen, atteinte
+        // via /login comme n'importe quel autre rôle), avec un jeu de
+        // fonctionnalités volontairement réduit (suivi chantiers, relance des
+        // livrets non ouverts, validation des inscriptions) plutôt qu'une
+        // version rétrécie du dashboard web. isMobileDevice() se base sur le
+        // vrai user-agent sur Web (voir mobile_detector.dart) plutôt que sur
+        // defaultTargetPlatform, qui reflète l'OS hôte et non le navigateur.
+        final isMobilePlatform = isMobileDevice();
+
         if (state.matchedLocation.startsWith('/backoffice')) {
-          // Back-office Web : accessible depuis une plateforme mobile
-          // uniquement pour l'espace CA (interface interconnectée avec le
-          // Web, voir bo_ca_chantiers_screen.dart et consorts) — Admin et
-          // Qualité restent strictement réservés au Web, y compris via une
-          // URL tapée à la main. Flutter détecte l'OS hôte via
-          // defaultTargetPlatform même sur le Web.
-          final isMobilePlatform = defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS;
+          // Back-office Web : strictement inaccessible depuis une plateforme
+          // mobile, même en PWA — ça inclut /login et /acces, un mobile n'a
+          // aucune raison de voir ne serait-ce que l'écran de connexion.
+          if (isMobilePlatform) return '/login';
+
           final isBoLogin = state.matchedLocation == '/backoffice/login';
           final isBoAcces = state.matchedLocation == '/backoffice/acces';
-          final isCaSpace = state.matchedLocation.startsWith('/backoffice/ca');
-          if (isMobilePlatform && !isCaSpace && !isBoLogin && !isBoAcces) return '/login';
-
           if (isBoLogin || isBoAcces) return null;
 
           if (authState.isLoading) return null;
@@ -79,10 +87,6 @@ class AppRouter {
           // est renvoyé vers son propre espace, quelle que soit l'URL visée.
           final home = _boHomeFor(authState.currentUser!.role);
           if (home == null) return '/backoffice/login';
-          // Sur mobile, un Admin/Qualité authentifié n'a aucune présence
-          // légitime dans le back-office : on l'éjecte entièrement plutôt que
-          // de le renvoyer vers son propre espace, lui-même bloqué sur mobile.
-          if (isMobilePlatform && home != '/backoffice/ca') return '/login';
           if (!state.matchedLocation.startsWith(home)) return home;
           return null;
         }
@@ -111,13 +115,21 @@ class AppRouter {
             return '/';
           }
 
-          // Le CA (web comme mobile) est toujours dirigé vers son espace
-          // back-office — une seule interface, réellement interconnectée
-          // (voir garde /backoffice ci-dessus pour l'accès mobile).
+          // Sur Web, le CA est dirigé vers le back-office (interface riche) —
+          // sur mobile, il reste sur '/' où le builder ci-dessous affiche sa
+          // propre interface dédiée (CaHomeScreen).
           final role = authState.currentUser!.role;
           final isCaRole = role == UserRole.chargeAffaires || role == UserRole.direction;
-          if (isCaRole && authState.currentUser!.isActive && state.matchedLocation == '/') {
+          if (!isMobilePlatform && isCaRole && authState.currentUser!.isActive && state.matchedLocation == '/') {
             return '/backoffice/ca';
+          }
+
+          // /ca/validation est réservé au CA/Direction — un autre rôle qui
+          // tape l'URL à la main est renvoyé sur son propre accueil. Le
+          // backend impose déjà ce rôle sur les endpoints valider/suspendre
+          // (voir comptes.ts), ce garde n'est qu'une défense en profondeur.
+          if (state.matchedLocation.startsWith('/ca/validation') && !isCaRole) {
+            return '/';
           }
         }
 
@@ -139,11 +151,20 @@ class AppRouter {
             if (authState.isLoading || authState.currentUser == null) {
               return const Scaffold(body: Center(child: CircularProgressIndicator()));
             }
-            // Un CA/Direction ne construit jamais cet écran : le garde de
-            // redirection ci-dessus l'envoie vers /backoffice/ca avant même
-            // que ce builder ne s'exécute.
+            // Sur Web, un CA/Direction ne construit jamais cet écran : le
+            // garde de redirection ci-dessus l'envoie vers /backoffice/ca
+            // avant même que ce builder ne s'exécute. Sur mobile, il reste
+            // ici et voit sa propre interface (CaHomeScreen).
+            final role = authState.currentUser!.role;
+            if (role == UserRole.chargeAffaires || role == UserRole.direction) {
+              return const CaHomeScreen();
+            }
             return const InstallateurHomeScreen();
           },
+        ),
+        GoRoute(
+          path: '/ca/validation',
+          builder: (context, state) => const CaValidationScreen(),
         ),
         GoRoute(
           path: '/chantier/:ref',

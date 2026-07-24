@@ -4,7 +4,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme.dart';
 import '../../../core/widgets/responsive_layout.dart';
 import '../../../core/widgets/app_card.dart';
-import '../../../data/api_client.dart';
 import '../../../data/models/document_chantier.dart';
 import '../../../state/chantier_state.dart';
 
@@ -40,7 +39,7 @@ class DossierTechniqueScreen extends StatelessWidget {
               itemBuilder: (context, index) {
                 final doc = docs[index];
                 return AppCard(
-                  onTap: () => launchUrl(Uri.parse('${ApiClient.baseUrl}${doc.filePath}')),
+                  onTap: () => launchUrl(Uri.parse(doc.filePath)),
                   child: Row(
                     children: [
                       const Icon(Icons.description_outlined, color: AppColors.encre, size: 28),

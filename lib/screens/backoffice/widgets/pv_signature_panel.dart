@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme.dart';
-import '../../../data/api_client.dart';
 
 /// Affichage du PV signé (signataire, horodatage, image de signature
 /// cliquable) — partagé entre CA, Qualité et Admin, qui ont tous besoin de
@@ -34,7 +33,7 @@ class PvSignaturePanel extends StatelessWidget {
       );
     }
 
-    final imageUrl = '${ApiClient.baseUrl}$imagePath';
+    final imageUrl = imagePath;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

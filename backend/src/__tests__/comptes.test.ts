@@ -1,8 +1,6 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import request from 'supertest';
 import bcrypt from 'bcryptjs';
-import fs from 'fs';
-import path from 'path';
 import { createApp } from '../app';
 import { prisma } from '../prisma';
 import { resetDb, signup as doSignup } from './helpers';
@@ -82,7 +80,7 @@ describe('Cycle de vie des comptes installateurs (EX-01 à EX-06)', () => {
 });
 
 describe('POST /comptes/moi/habilitations (EX-13)', () => {
-  it('téléverse un vrai certificat et enregistre le fichier sur le disque', async () => {
+  it('téléverse un vrai certificat et enregistre le fichier sur le stockage distant', async () => {
     const token = await createInstallateur();
 
     const res = await request(app)
@@ -96,11 +94,7 @@ describe('POST /comptes/moi/habilitations (EX-13)', () => {
 
     expect(res.status).toBe(201);
     const filePath = res.body.habilitation.filePath as string;
-    expect(filePath).toMatch(/^\/uploads\/habilitation-.+\.png$/);
-
-    const fileOnDisk = path.join(__dirname, '..', '..', 'uploads', path.basename(filePath));
-    expect(fs.existsSync(fileOnDisk)).toBe(true);
-    fs.unlinkSync(fileOnDisk);
+    expect(filePath).toMatch(/^https:\/\/blob\.vercel-storage\.com\/test\/habilitation-.+\.png$/);
 
     const caToken = await createCa();
     const list = await request(app).get('/comptes').set('Authorization', `Bearer ${caToken}`);

@@ -1,8 +1,6 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import request from 'supertest';
 import bcrypt from 'bcryptjs';
-import fs from 'fs';
-import path from 'path';
 import { createApp } from '../app';
 import { prisma } from '../prisma';
 import { resetDb, signup as doSignup } from './helpers';
@@ -162,7 +160,7 @@ describe('Progression et modules', () => {
     expect(patch.body.point.valideAt).toBe(clientValidatedAt);
   });
 
-  it("enregistre la photo d'un point de contrôle sur le disque et renvoie son chemin", async () => {
+  it("enregistre la photo d'un point de contrôle sur le stockage distant et renvoie son URL", async () => {
     const ca = await createCa();
     const created = await createChantier(ca.accessToken);
     const pointId = created.body.chantier.receptionMarchandises[0].id;
@@ -174,11 +172,7 @@ describe('Progression et modules', () => {
 
     expect(patch.status).toBe(200);
     const photoPath = patch.body.point.photoPath as string;
-    expect(photoPath).toMatch(new RegExp(`^/uploads/point-${pointId}-.+\\.jpeg$`));
-
-    const fileOnDisk = path.join(__dirname, '..', '..', 'uploads', path.basename(photoPath));
-    expect(fs.existsSync(fileOnDisk)).toBe(true);
-    fs.unlinkSync(fileOnDisk);
+    expect(photoPath).toMatch(new RegExp(`^https://blob\\.vercel-storage\\.com/test/point-${pointId}-.+\\.jpeg$`));
   });
 
   it('refuse de signer le PV tant que l\'auto-contrôle n\'est pas complet', async () => {
@@ -222,7 +216,7 @@ describe('Progression et modules', () => {
     expect(second.status).toBe(409);
   });
 
-  it('enregistre l\'image de la signature sur le disque et renvoie son chemin', async () => {
+  it('enregistre l\'image de la signature sur le stockage distant et renvoie son URL', async () => {
     const ca = await createCa();
     const created = await createChantier(ca.accessToken);
 
@@ -242,14 +236,7 @@ describe('Progression et modules', () => {
 
     expect(res.status).toBe(200);
     const imagePath = res.body.chantier.pvSignatureImagePath as string;
-    expect(imagePath).toMatch(/^\/uploads\/signature-.+\.png$/);
-
-    const filename = path.basename(imagePath);
-    const fileOnDisk = path.join(__dirname, '..', '..', 'uploads', filename);
-    expect(fs.existsSync(fileOnDisk)).toBe(true);
-    expect(fs.readFileSync(fileOnDisk).equals(Buffer.from(ONE_PX_PNG_BASE64, 'base64'))).toBe(true);
-
-    fs.unlinkSync(fileOnDisk);
+    expect(imagePath).toMatch(/^https:\/\/blob\.vercel-storage\.com\/test\/signature-.+\.png$/);
   });
 });
 
@@ -281,11 +268,7 @@ describe('POST /chantiers/:reference/rex', () => {
     expect(res.body.chantier.rexValide).toBe(true);
     expect(res.body.chantier.rexTranscription).toBeNull();
     const audioPath = res.body.chantier.rexAudioPath as string;
-    expect(audioPath).toMatch(/^\/uploads\/rex-LD64397-.+\.webm$/);
-
-    const fileOnDisk = path.join(__dirname, '..', '..', 'uploads', path.basename(audioPath));
-    expect(fs.existsSync(fileOnDisk)).toBe(true);
-    fs.unlinkSync(fileOnDisk);
+    expect(audioPath).toMatch(/^https:\/\/blob\.vercel-storage\.com\/test\/rex-LD64397-.+\.webm$/);
   });
 
   it('refuse un REX sans transcription ni audio', async () => {
@@ -301,7 +284,7 @@ describe('POST /chantiers/:reference/rex', () => {
 });
 
 describe('POST /chantiers/:reference/documents', () => {
-  it('dépose un document (photo) et enregistre le fichier sur le disque', async () => {
+  it('dépose un document (photo) et enregistre le fichier sur le stockage distant', async () => {
     const ca = await createCa();
     await createChantier(ca.accessToken);
 
@@ -313,11 +296,7 @@ describe('POST /chantiers/:reference/documents', () => {
     expect(res.status).toBe(201);
     expect(res.body.document.categorie).toBe('bonLivraison');
     const filePath = res.body.document.filePath as string;
-    expect(filePath).toMatch(/^\/uploads\/doc-.+\.png$/);
-
-    const fileOnDisk = path.join(__dirname, '..', '..', 'uploads', path.basename(filePath));
-    expect(fs.existsSync(fileOnDisk)).toBe(true);
-    fs.unlinkSync(fileOnDisk);
+    expect(filePath).toMatch(/^https:\/\/blob\.vercel-storage\.com\/test\/doc-.+\.png$/);
   });
 
   it('refuse un dépôt sans catégorie', async () => {
@@ -462,11 +441,7 @@ describe('POST /chantiers/:reference/documents-chantier (Modules 1-3)', () => {
     expect(res.body.chantier.documentsChantier[0].type).toBe('securite');
     expect(res.body.chantier.documentsChantier[0].nom).toBe('PPSPS');
     const filePath = res.body.chantier.documentsChantier[0].filePath as string;
-    expect(filePath).toMatch(/^\/uploads\/doc-chantier-.+\.png$/);
-
-    const fileOnDisk = path.join(__dirname, '..', '..', 'uploads', path.basename(filePath));
-    expect(fs.existsSync(fileOnDisk)).toBe(true);
-    fs.unlinkSync(fileOnDisk);
+    expect(filePath).toMatch(/^https:\/\/blob\.vercel-storage\.com\/test\/doc-chantier-.+\.png$/);
 
     const get = await request(app).get('/chantiers/LD64397').set('Authorization', `Bearer ${ca.accessToken}`);
     expect(get.body.chantier.documentsChantier).toHaveLength(1);

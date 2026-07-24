@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/status_indicator.dart';
-import '../../data/api_client.dart';
 import '../../data/models/chantier.dart';
 import '../../data/models/point_controle.dart';
 import '../../data/models/user.dart';
@@ -203,7 +202,7 @@ class BoQualiteScreen extends StatelessWidget {
           if (h.filePath != null) ...[
             const SizedBox(width: 8),
             TextButton(
-              onPressed: () => launchUrl(Uri.parse('${ApiClient.baseUrl}${h.filePath}')),
+              onPressed: () => launchUrl(Uri.parse(h.filePath!)),
               style: TextButton.styleFrom(minimumSize: const Size(0, 28), padding: const EdgeInsets.symmetric(horizontal: 8)),
               child: const Text('Voir', style: TextStyle(fontSize: 11)),
             ),

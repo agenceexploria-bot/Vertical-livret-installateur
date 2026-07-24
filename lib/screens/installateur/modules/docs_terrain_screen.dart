@@ -7,7 +7,6 @@ import '../../../core/document_capture.dart';
 import '../../../core/theme.dart';
 import '../../../core/widgets/responsive_layout.dart';
 import '../../../core/widgets/app_card.dart';
-import '../../../data/api_client.dart';
 import '../../../state/auth_state.dart';
 import '../../../state/chantier_state.dart';
 import '../../../state/network_state.dart';
@@ -166,7 +165,7 @@ class _DocsTerrainScreenState extends State<DocsTerrainScreen> {
 
   Widget _buildDocItem(DocumentTerrain d) {
     return AppCard(
-      onTap: d.filePath == null ? null : () => launchUrl(Uri.parse('${ApiClient.baseUrl}${d.filePath}')),
+      onTap: d.filePath == null ? null : () => launchUrl(Uri.parse(d.filePath!)),
       child: Row(
         children: [
           Icon(d.filePath != null ? Icons.description_outlined : Icons.image_outlined, color: AppColors.acierClair),

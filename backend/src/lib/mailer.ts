@@ -1,56 +1,32 @@
 import nodemailer, { Transporter } from 'nodemailer';
 
-let transporterPromise: Promise<{ transporter: Transporter; isEthereal: boolean }> | null = null;
+let transporter: Transporter | null = null;
 
-/// En dev/test, si aucun SMTP n'est configuré (.env), on crée à la volée un
-/// compte de test Ethereal — aucune configuration manuelle requise, l'email
-/// n'est jamais réellement délivré mais consultable via l'URL de prévisualisation
-/// loguée après chaque envoi. Si SMTP_HOST est renseigné (ex. Mailtrap), on
-/// l'utilise à la place.
-function getTransporter() {
-  if (!transporterPromise) {
-    transporterPromise = (async () => {
-      if (process.env.SMTP_HOST) {
-        const transporter = nodemailer.createTransport({
-          host: process.env.SMTP_HOST,
-          port: Number(process.env.SMTP_PORT ?? 587),
-          secure: Number(process.env.SMTP_PORT) === 465,
-          auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined,
-        });
-        return { transporter, isEthereal: false };
-      }
-
-      const testAccount = await nodemailer.createTestAccount();
-      const transporter = nodemailer.createTransport({
-        host: testAccount.smtp.host,
-        port: testAccount.smtp.port,
-        secure: testAccount.smtp.secure,
-        auth: { user: testAccount.user, pass: testAccount.pass },
-      });
-      return { transporter, isEthereal: true };
-    })();
+/// Le transport est construit une seule fois à partir des variables SMTP du
+/// .env — leur présence est déjà garantie au démarrage par server.ts (voir
+/// REQUIRED_SMTP_VARS), donc pas de re-validation ici.
+function getTransporter(): Transporter {
+  if (!transporter) {
+    transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST,
+      port: Number(process.env.SMTP_PORT),
+      secure: Number(process.env.SMTP_PORT) === 465,
+      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    });
   }
-  return transporterPromise;
+  return transporter;
 }
 
 export async function sendVerificationCodeEmail(to: string, code: string): Promise<void> {
-  // En test, le code est déjà renvoyé en clair dans la réponse HTTP (voir
-  // authRouter) — inutile de dépendre du réseau (création de compte Ethereal,
-  // envoi SMTP réel) qui ralentirait ou rendrait la suite flaky.
+  // En test, aucun envoi réel : le code est déjà renvoyé en clair dans la
+  // réponse HTTP (voir authRouter) et la suite ne dépend donc pas du réseau.
   if (process.env.NODE_ENV === 'test') return;
 
-  const { transporter, isEthereal } = await getTransporter();
-
-  const info = await transporter.sendMail({
-    from: process.env.SMTP_FROM ?? '"Vertical" <no-reply@vertical.fr>',
+  await getTransporter().sendMail({
+    from: process.env.SMTP_FROM,
     to,
     subject: 'Votre code de vérification Vertical',
     text: `Votre code de vérification est : ${code}\n\nCe code expire dans 10 minutes.`,
     html: `<p>Votre code de vérification est : <strong style="font-size:20px">${code}</strong></p><p>Ce code expire dans 10 minutes.</p>`,
   });
-
-  if (isEthereal) {
-    // eslint-disable-next-line no-console
-    console.log(`[mailer] Email de test — prévisualisation : ${nodemailer.getTestMessageUrl(info)}`);
-  }
 }

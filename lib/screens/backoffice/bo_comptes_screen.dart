@@ -5,7 +5,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/coming_soon.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/status_indicator.dart';
-import '../../data/api_client.dart';
 import '../../data/models/user.dart';
 import '../../state/chantier_state.dart';
 import '../../state/comptes_state.dart';
@@ -139,7 +138,7 @@ class BoComptesScreen extends StatelessWidget {
             flex: 3,
             child: GestureDetector(
               onTap: u.habilitations.any((h) => h.filePath != null)
-                  ? () => launchUrl(Uri.parse('${ApiClient.baseUrl}${u.habilitations.firstWhere((h) => h.filePath != null).filePath}'))
+                  ? () => launchUrl(Uri.parse(u.habilitations.firstWhere((h) => h.filePath != null).filePath!))
                   : null,
               child: StatusIndicator(label: habLabel, type: habType),
             ),

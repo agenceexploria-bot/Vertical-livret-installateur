@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, kReleaseMode;
 import 'package:http/http.dart' as http;
 
 class ApiException implements Exception {
@@ -19,10 +19,17 @@ class ApiClient {
   /// (Windows, carte "Wi-Fi", ligne "Adresse IPv4").
   static const String _devMachineLanIp = '192.168.1.161';
 
-  /// localhost en Web (le navigateur tourne sur la même machine que le
-  /// backend en dev) ; IP locale du PC pour toute autre plateforme (mobile
+  /// Sur Vercel, frontend et backend sont servis sur la même origine — l'API
+  /// répond sous /api (voir vercel.json et api/index.ts) : on construit un
+  /// build web de prod (kReleaseMode) via `flutter build web`, jamais avec
+  /// `flutter run`, donc ce cas ne couvre que le déploiement Vercel.
+  /// En dev : localhost en Web (le navigateur tourne sur la même machine que
+  /// le backend en dev) ; IP locale du PC pour toute autre plateforme (mobile
   /// physique, notamment).
-  static String get baseUrl => kIsWeb ? 'http://localhost:3000' : 'http://$_devMachineLanIp:3000';
+  static String get baseUrl {
+    if (kIsWeb && kReleaseMode) return '/api';
+    return kIsWeb ? 'http://localhost:3000' : 'http://$_devMachineLanIp:3000';
+  }
 
   String? _accessToken;
   String? _refreshToken;

@@ -57,13 +57,16 @@ class StatusIndicator extends StatelessWidget {
           ),
           const SizedBox(width: 8),
         ],
-        Text(
-          label,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: type == StatusType.attente || type == StatusType.factuel
-                    ? AppColors.acierClair
-                    : AppColors.acier,
-              ),
+        Flexible(
+          child: Text(
+            label,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: type == StatusType.attente || type == StatusType.factuel
+                      ? AppColors.acierClair
+                      : AppColors.acier,
+                ),
+          ),
         ),
       ],
     );

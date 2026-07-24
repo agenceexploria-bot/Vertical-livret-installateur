@@ -1,0 +1,31 @@
+# Présence de ce fichier = Vercel ignore .gitignore pour l'upload, il faut
+# donc lister explicitement ce qui est inutile au déploiement (Web + API).
+
+# Toolchain Flutter mobile/desktop — inutile pour le déploiement Web + API
+android/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.gradle/
+.kotlin/
+.idea/
+gradle/
+gradlew
+gradlew.bat
+*.iml
+local.properties
+
+# Build Flutter : seul build/web (généré localement par
+# `flutter build web --release` avant le déploiement) doit être uploadé.
+build/*
+!build/web
+
+# Backend : réinstallé par buildCommand, inutile de l'uploader
+backend/node_modules/
+backend/uploads/
+backend/prisma/dev.db
+backend/prisma/dev.db-journal
+backend/prisma/test.db
+backend/prisma/test.db-journal
+
+.git/

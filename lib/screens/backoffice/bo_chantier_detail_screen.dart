@@ -7,7 +7,6 @@ import '../../core/coming_soon.dart';
 import '../../core/document_capture.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/status_indicator.dart';
-import '../../data/api_client.dart';
 import '../../data/models/chantier.dart';
 import '../../data/models/document_chantier.dart';
 import '../../data/models/document_terrain.dart';
@@ -177,7 +176,7 @@ class BoChantierDetailScreen extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 6),
       decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFEEF1F3)))),
       child: InkWell(
-        onTap: d.filePath == null ? null : () => launchUrl(Uri.parse('${ApiClient.baseUrl}${d.filePath}')),
+        onTap: d.filePath == null ? null : () => launchUrl(Uri.parse(d.filePath!)),
         child: Row(
           children: [
             Icon(d.filePath != null ? Icons.description_outlined : Icons.image_outlined, size: 16, color: AppColors.acierClair),
@@ -205,7 +204,7 @@ class BoChantierDetailScreen extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 6),
       decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFEEF1F3)))),
       child: InkWell(
-        onTap: () => launchUrl(Uri.parse('${ApiClient.baseUrl}${d.filePath}')),
+        onTap: () => launchUrl(Uri.parse(d.filePath)),
         child: Row(
           children: [
             Icon(d.type == TypeDocumentChantier.securite ? Icons.shield_outlined : Icons.description_outlined,

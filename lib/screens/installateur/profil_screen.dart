@@ -5,7 +5,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/document_capture.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/responsive_layout.dart';
-import '../../data/api_client.dart';
 import '../../data/models/user.dart';
 import '../../state/auth_state.dart';
 
@@ -150,7 +149,7 @@ class ProfilScreen extends StatelessWidget {
         border: Border.all(color: AppColors.lignes),
       ),
       child: InkWell(
-        onTap: h.filePath == null ? null : () => launchUrl(Uri.parse('${ApiClient.baseUrl}${h.filePath}')),
+        onTap: h.filePath == null ? null : () => launchUrl(Uri.parse(h.filePath!)),
         child: Row(
           children: [
             Expanded(
