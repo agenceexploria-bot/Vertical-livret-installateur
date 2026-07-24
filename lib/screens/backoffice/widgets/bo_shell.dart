@@ -129,6 +129,34 @@ class _TopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Logo + badge d'espace + onglets défilent horizontalement s'ils ne
+    // tiennent pas (viewport téléphone) — notification et avatar restent
+    // toujours visibles à droite, jamais coupés par le défilement.
+    final leftCluster = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(height: 28, child: VerticalLogo(height: 28, onDarkBackground: true)),
+        const SizedBox(width: 20),
+        Container(
+          margin: const EdgeInsets.only(right: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            border: Border.all(color: const Color(0xFFB9C4CE)),
+            borderRadius: BorderRadius.circular(99),
+          ),
+          child: Text(
+            space.name,
+            style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w700),
+          ),
+        ),
+        const SizedBox(width: 16),
+        for (final tab in space.tabs) ...[
+          _NavLink(label: tab.label, route: tab.route, isActive: activeNav == tab.key),
+          const SizedBox(width: 18),
+        ],
+      ],
+    );
+
     return Container(
       color: AppColors.encre,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -137,26 +165,13 @@ class _TopBar extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 1200),
           child: Row(
             children: [
-              const SizedBox(height: 28, child: VerticalLogo(height: 28, onDarkBackground: true)),
-              const SizedBox(width: 20),
-              Container(
-                margin: const EdgeInsets.only(right: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  border: Border.all(color: const Color(0xFFB9C4CE)),
-                  borderRadius: BorderRadius.circular(99),
-                ),
-                child: Text(
-                  space.name,
-                  style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w700),
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: leftCluster,
                 ),
               ),
               const SizedBox(width: 16),
-              for (final tab in space.tabs) ...[
-                _NavLink(label: tab.label, route: tab.route, isActive: activeNav == tab.key),
-                const SizedBox(width: 18),
-              ],
-              const Spacer(),
               Stack(
                 clipBehavior: Clip.none,
                 children: [

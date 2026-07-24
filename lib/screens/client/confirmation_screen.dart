@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import '../../core/coming_soon.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../state/chantier_state.dart';
@@ -50,7 +51,7 @@ class ConfirmationScreen extends StatelessWidget {
                   const Icon(Icons.picture_as_pdf, color: AppColors.rouge),
                   const SizedBox(width: 16),
                   Expanded(child: Text('PV_${chantier?.reference ?? ''}_Reception.pdf', style: const TextStyle(fontSize: 13))),
-                  IconButton(onPressed: () {}, icon: const Icon(Icons.download, size: 20)),
+                  IconButton(onPressed: () => showComingSoon(context), icon: const Icon(Icons.download, size: 20)),
                 ],
               ),
             ),

@@ -54,8 +54,13 @@ class ChantierState extends ChangeNotifier {
     _replaceInList(updated);
   }
 
-  Future<void> updatePoint(String reference, String pointId, {String? status, String? photo}) async {
-    await _repository.updatePoint(reference, pointId, status: status, photo: photo);
+  Future<void> addDocumentChantier(String reference, {required String type, required String nom, required String file}) async {
+    final updated = await _repository.addDocumentChantier(reference, type: type, nom: nom, file: file);
+    _replaceInList(updated);
+  }
+
+  Future<void> updatePoint(String reference, String pointId, {String? status, String? photo, String? validatedByName}) async {
+    await _repository.updatePoint(reference, pointId, status: status, photo: photo, validatedByName: validatedByName);
     final updated = await _repository.getChantier(reference);
     _replaceInList(updated);
   }
@@ -70,8 +75,8 @@ class ChantierState extends ChangeNotifier {
     _replaceInList(updated);
   }
 
-  Future<void> addDocument(String reference, {required String titre, required String categorie, required String file}) async {
-    await _repository.addDocument(reference, titre: titre, categorie: categorie, file: file);
+  Future<void> addDocument(String reference, {required String titre, required String categorie, required String file, String? auteurName}) async {
+    await _repository.addDocument(reference, titre: titre, categorie: categorie, file: file, auteurName: auteurName);
     final updated = await _repository.getChantier(reference);
     _replaceInList(updated);
   }

@@ -23,12 +23,20 @@ class AuthRepository {
     return user;
   }
 
+  Future<Map<String, dynamic>> requestEmailCode(String email) => _api.requestEmailCode(email);
+
+  Future<String> verifyEmailCode(String email, String code) async {
+    final data = await _api.verifyEmailCode(email, code);
+    return data['verificationTicket'] as String;
+  }
+
   Future<User> signup({
     required String nom,
     required String prenom,
-    required String mobile,
+    String? mobile,
     required String password,
     required String email,
+    required String verificationTicket,
     bool sousTraitant = false,
     String? societe,
   }) async {
@@ -38,6 +46,7 @@ class AuthRepository {
       mobile: mobile,
       password: password,
       email: email,
+      verificationTicket: verificationTicket,
       sousTraitant: sousTraitant,
       societe: societe,
     );
@@ -67,6 +76,13 @@ class AuthRepository {
     _api.setTokens(accessToken: data['accessToken'] as String, refreshToken: data['refreshToken'] as String);
     final user = User.fromJson(data['user'] as Map<String, dynamic>);
     await _persistRefreshToken(data['refreshToken'] as String);
+    await _persistUser(user);
+    return user;
+  }
+
+  Future<User> updateProfile({String? nom, String? prenom, String? email, String? mobile, String? societe}) async {
+    final data = await _api.updateProfile(nom: nom, prenom: prenom, email: email, mobile: mobile, societe: societe);
+    final user = User.fromJson(data['user'] as Map<String, dynamic>);
     await _persistUser(user);
     return user;
   }

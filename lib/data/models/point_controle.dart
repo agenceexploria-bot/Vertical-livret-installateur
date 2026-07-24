@@ -36,4 +36,18 @@ class PointControle {
         validePar: json['validePar'] as String?,
         valideAt: json['valideAt'] != null ? DateTime.parse(json['valideAt'] as String) : null,
       );
+
+  /// Miroir de [fromJson] — utilisé pour réécrire le cache local (Drift)
+  /// après une mise à jour optimiste hors-ligne.
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'libelle': libelle,
+        'categorie': categorie,
+        'critique': critique,
+        'photoRequise': photoRequise,
+        'status': status.name,
+        'photoPath': photoPath,
+        'validePar': validePar,
+        'valideAt': valideAt?.toIso8601String(),
+      };
 }

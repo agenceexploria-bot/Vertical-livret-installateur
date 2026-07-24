@@ -1,4 +1,4 @@
-import { Chantier, ChantierInstallateur, DocumentTerrain, Habilitation, PointControle, User } from '@prisma/client';
+import { Chantier, ChantierInstallateur, DocumentChantier, DocumentTerrain, Habilitation, PointControle, User } from '@prisma/client';
 
 export function serializeUser(user: User & { habilitations?: Habilitation[] }) {
   return {
@@ -48,11 +48,16 @@ export function serializeDocumentTerrain(d: DocumentTerrain & { auteur?: User })
   };
 }
 
+export function serializeDocumentChantier(d: DocumentChantier) {
+  return { id: d.id, type: d.type, nom: d.nom, filePath: d.filePath, createdAt: d.createdAt };
+}
+
 export function serializeChantier(
   c: Chantier & {
     pointsControle?: PointControle[];
     installateurs?: (ChantierInstallateur & { user: User })[];
     documentsTerrain?: (DocumentTerrain & { auteur: User })[];
+    documentsChantier?: DocumentChantier[];
   },
 ) {
   const reception = (c.pointsControle ?? []).filter((p) => p.type === 'reception');
@@ -89,5 +94,6 @@ export function serializeChantier(
     progressionAutoControle: autoControle.length === 0 ? 0 : autoControle.filter(isComplete).length / autoControle.length,
     installateursRattaches: (c.installateurs ?? []).map((r) => serializeUser(r.user)),
     docsTerrain: (c.documentsTerrain ?? []).map((d) => serializeDocumentTerrain({ ...d, auteur: d.auteur })),
+    documentsChantier: (c.documentsChantier ?? []).map(serializeDocumentChantier),
   };
 }

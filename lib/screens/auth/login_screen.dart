@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/coming_soon.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/vertical_logo.dart';
 import '../../core/widgets/responsive_layout.dart';
@@ -67,7 +68,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               
               const SizedBox(height: 16),
-              TextButton(onPressed: () {}, child: const Text('Mot de passe oublié ?', style: TextStyle(color: AppColors.encre, fontSize: 13))),
+              TextButton(onPressed: () => showComingSoon(context), child: const Text('Mot de passe oublié ?', style: TextStyle(color: AppColors.encre, fontSize: 13))),
               
               const SizedBox(height: 32),
               const Divider(color: AppColors.lignes),

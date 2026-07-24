@@ -51,14 +51,41 @@ class PvRecent {
   final String client;
   final String? pvSigneur;
   final DateTime? pvSigneAt;
+  final String? pvSignatureImagePath;
 
-  PvRecent({required this.chantierReference, required this.client, this.pvSigneur, this.pvSigneAt});
+  PvRecent({
+    required this.chantierReference,
+    required this.client,
+    this.pvSigneur,
+    this.pvSigneAt,
+    this.pvSignatureImagePath,
+  });
 
   factory PvRecent.fromJson(Map<String, dynamic> json) => PvRecent(
         chantierReference: json['chantierReference'] as String,
         client: json['client'] as String,
         pvSigneur: json['pvSigneur'] as String?,
         pvSigneAt: json['pvSigneAt'] != null ? DateTime.parse(json['pvSigneAt'] as String) : null,
+        pvSignatureImagePath: json['pvSignatureImagePath'] as String?,
+      );
+}
+
+/// Compteurs hebdomadaires (PV signés, REX soumis, anomalies) pour les
+/// graphiques du dashboard Admin — une semaine glissante parmi les 8
+/// renvoyées par GET /admin/stats.
+class WeeklyStat {
+  final DateTime weekStart;
+  final int pvSignes;
+  final int rexSoumis;
+  final int anomalies;
+
+  WeeklyStat({required this.weekStart, required this.pvSignes, required this.rexSoumis, required this.anomalies});
+
+  factory WeeklyStat.fromJson(Map<String, dynamic> json) => WeeklyStat(
+        weekStart: DateTime.parse(json['weekStart'] as String),
+        pvSignes: json['pvSignes'] as int,
+        rexSoumis: json['rexSoumis'] as int,
+        anomalies: json['anomalies'] as int,
       );
 }
 

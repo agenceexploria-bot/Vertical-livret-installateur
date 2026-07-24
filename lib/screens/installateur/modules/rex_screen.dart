@@ -39,6 +39,11 @@ class _RexScreenState extends State<RexScreen> with SingleTickerProviderStateMix
     _waveController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000));
     _speech.initialize().then((available) {
       if (mounted) setState(() => _speechAvailable = available);
+    }).catchError((_) {
+      // Reconnaissance vocale indisponible (navigateur non supporté,
+      // permission refusée...) : on reste en mode audio seul, déjà géré
+      // sans elle — pas d'exception non interceptée dans la console.
+      if (mounted) setState(() => _speechAvailable = false);
     });
   }
 

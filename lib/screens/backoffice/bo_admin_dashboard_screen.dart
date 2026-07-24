@@ -1,3 +1,4 @@
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -9,6 +10,7 @@ import '../../state/admin_state.dart';
 import '../../state/auth_state.dart';
 import 'widgets/bo_shell.dart';
 import 'widgets/bo_panel.dart';
+import 'widgets/pv_signature_panel.dart';
 
 class BoAdminDashboardScreen extends StatefulWidget {
   const BoAdminDashboardScreen({super.key});
@@ -54,6 +56,8 @@ class _BoAdminDashboardScreenState extends State<BoAdminDashboardScreen> {
           if (adminState.isLoading && feed == null)
             const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
           else ...[
+            _buildWeeklyChart(adminState.weeklyStats),
+            const SizedBox(height: 12),
             _buildAnomalies(feed),
             const SizedBox(height: 12),
             _buildPvRecents(feed),
@@ -98,6 +102,83 @@ class _BoAdminDashboardScreenState extends State<BoAdminDashboardScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildWeeklyChart(List<WeeklyStat> weeks) {
+    return BoPanel(
+      title: 'Activité par semaine (8 dernières semaines)',
+      child: weeks.isEmpty
+          ? const Text('Pas encore de données.', style: TextStyle(fontSize: 11, color: AppColors.acierClair))
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  height: 180,
+                  child: BarChart(
+                    BarChartData(
+                      alignment: BarChartAlignment.spaceAround,
+                      gridData: const FlGridData(show: false),
+                      borderData: FlBorderData(show: false),
+                      titlesData: FlTitlesData(
+                        leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 24,
+                            getTitlesWidget: (value, meta) {
+                              final i = value.toInt();
+                              if (i < 0 || i >= weeks.length) return const SizedBox.shrink();
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 6),
+                                child: Text(
+                                  DateFormat('dd/MM').format(weeks[i].weekStart),
+                                  style: const TextStyle(fontSize: 9, color: AppColors.acierClair),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                      barGroups: [
+                        for (int i = 0; i < weeks.length; i++)
+                          BarChartGroupData(
+                            x: i,
+                            barRods: [
+                              BarChartRodData(toY: weeks[i].pvSignes.toDouble(), color: AppColors.vert, width: 6),
+                              BarChartRodData(toY: weeks[i].rexSoumis.toDouble(), color: AppColors.orange, width: 6),
+                              BarChartRodData(toY: weeks[i].anomalies.toDouble(), color: AppColors.rouge, width: 6),
+                            ],
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    _legendDot(AppColors.vert, 'PV signés'),
+                    const SizedBox(width: 16),
+                    _legendDot(AppColors.orange, 'REX soumis'),
+                    const SizedBox(width: 16),
+                    _legendDot(AppColors.rouge, 'Anomalies'),
+                  ],
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget _legendDot(Color color, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+        const SizedBox(width: 6),
+        Text(label, style: const TextStyle(fontSize: 10.5, color: AppColors.acier)),
+      ],
     );
   }
 
@@ -150,29 +231,48 @@ class _BoAdminDashboardScreenState extends State<BoAdminDashboardScreen> {
       title: 'PV signés récemment — en attente de facturation (${pvRecents.length})',
       child: pvRecents.isEmpty
           ? const Text('Aucun PV signé récemment.', style: TextStyle(fontSize: 11, color: AppColors.acierClair))
-          : Column(children: [for (final pv in pvRecents) _pvRow(pv)]),
+          : Column(children: [for (final pv in pvRecents) _pvRow(context, pv)]),
     );
   }
 
-  Widget _pvRow(PvRecent pv) {
+  Widget _pvRow(BuildContext context, PvRecent pv) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 6),
       decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFEEF1F3)))),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              '${pv.chantierReference} · ${pv.client}',
-              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
+      child: InkWell(
+        onTap: () => showDialog(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: Text('${pv.chantierReference} — ${pv.client}'),
+            content: SizedBox(
+              width: 360,
+              child: PvSignaturePanel(
+                signataire: pv.pvSigneur,
+                signeAt: pv.pvSigneAt,
+                signatureImagePath: pv.pvSignatureImagePath,
+              ),
             ),
+            actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Fermer'))],
           ),
-          Text(
-            pv.pvSigneAt != null
-                ? 'Signé par ${pv.pvSigneur ?? 'le client'} · ${DateFormat('dd/MM HH:mm').format(pv.pvSigneAt!)}'
-                : '—',
-            style: const TextStyle(fontSize: 10.5, color: AppColors.acierClair),
-          ),
-        ],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                '${pv.chantierReference} · ${pv.client}',
+                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
+              ),
+            ),
+            Text(
+              pv.pvSigneAt != null
+                  ? 'Signé par ${pv.pvSigneur ?? 'le client'} · ${DateFormat('dd/MM HH:mm').format(pv.pvSigneAt!)}'
+                  : '—',
+              style: const TextStyle(fontSize: 10.5, color: AppColors.acierClair),
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.chevron_right, size: 16, color: AppColors.acierClair),
+          ],
+        ),
       ),
     );
   }

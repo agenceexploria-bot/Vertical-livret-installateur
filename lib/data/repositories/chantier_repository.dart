@@ -2,6 +2,8 @@ import '../api_client.dart';
 import '../local/app_database.dart';
 import '../models/user.dart';
 import '../models/chantier.dart';
+import '../models/point_controle.dart';
+import '../models/document_terrain.dart';
 
 class ChantierRepository {
   final ApiClient _api;
@@ -46,6 +48,27 @@ class ChantierRepository {
     return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
   }
 
+  /// Dépôt d'un document de référence (PPSPS, plan...) par le CA — action
+  /// back-office web, pas de file d'attente hors-ligne (comme [createChantier]
+  /// et [rattacher], qui supposent déjà un réseau disponible).
+  Future<Chantier> addDocumentChantier(String reference, {required String type, required String nom, required String file}) async {
+    final data = await _api.addDocumentChantier(reference, type: type, nom: nom, file: file);
+    return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
+  }
+
+  /// Applique la même mutation qu'une action réussie directement sur le
+  /// chantier mis en cache (Drift), pour que l'écran reflète l'action
+  /// immédiatement même hors-ligne — sans ça, le prochain [getChantier]
+  /// retomberait sur le cache resté figé à l'état d'avant l'action, et
+  /// l'installateur croirait que son geste n'a pas été pris en compte.
+  Future<void> _applyOptimisticUpdate(String reference, void Function(Chantier) mutate) async {
+    final cached = await _db.getCachedChantier(reference);
+    if (cached == null) return;
+    final chantier = Chantier.fromJson(cached);
+    mutate(chantier);
+    await _db.cacheChantier(chantier.toJson());
+  }
+
   /// Écriture hors-ligne : si l'appel réseau échoue, l'action est mise en
   /// file d'attente locale (table PendingOperations) pour être rejouée par le
   /// SyncEngine dès que le réseau revient.
@@ -60,8 +83,11 @@ class ChantierRepository {
   /// [status] et/ou [photo] (JPEG compressé, en data URL base64) sont
   /// horodatés côté client (heure réelle de l'action terrain) plutôt que côté
   /// serveur, qui ne les recevra parfois que bien plus tard si l'installateur
-  /// était hors-ligne au moment de l'action.
-  Future<void> updatePoint(String reference, String pointId, {String? status, String? photo}) async {
+  /// était hors-ligne au moment de l'action. [validatedByName] n'est utilisé
+  /// que pour la mise à jour optimiste locale (l'attribution nominative
+  /// envoyée au serveur est toujours dérivée du compte connecté côté API,
+  /// jamais d'une valeur fournie par le client).
+  Future<void> updatePoint(String reference, String pointId, {String? status, String? photo, String? validatedByName}) async {
     final clientValidatedAt = status != null ? DateTime.now().toIso8601String() : null;
     try {
       await _api.updatePoint(reference, pointId, status: status, photo: photo, clientValidatedAt: clientValidatedAt);
@@ -76,6 +102,16 @@ class ChantierRepository {
           'clientValidatedAt': ?clientValidatedAt,
         },
       );
+      await _applyOptimisticUpdate(reference, (chantier) {
+        for (final point in [...chantier.receptionMarchandises, ...chantier.autoControle]) {
+          if (point.id != pointId) continue;
+          if (status != null) point.status = PointStatus.values.firstWhere((s) => s.name == status);
+          if (photo != null) point.photoPath = photo;
+          if (validatedByName != null) point.validePar = validatedByName;
+          if (clientValidatedAt != null) point.valideAt = DateTime.parse(clientValidatedAt);
+          break;
+        }
+      });
     }
   }
 
@@ -92,6 +128,10 @@ class ChantierRepository {
         chantierReference: reference,
         payload: {'transcription': ?transcription, 'audio': ?audio},
       );
+      await _applyOptimisticUpdate(reference, (chantier) {
+        chantier.rexValide = true;
+        if (transcription != null) chantier.rexTranscription = transcription;
+      });
       return getChantier(reference);
     }
   }
@@ -109,13 +149,19 @@ class ChantierRepository {
         chantierReference: reference,
         payload: {'signataire': signataire, 'signatureImage': ?signatureImage},
       );
+      await _applyOptimisticUpdate(reference, (chantier) {
+        chantier.pvSigne = true;
+        chantier.pvSigneur = signataire;
+        chantier.pvSigneAt = DateTime.now();
+      });
       return getChantier(reference);
     }
   }
 
   /// [file] : photo ou PDF, en data URL base64 (compressé côté client pour
   /// les photos) — requis, comme pour les autres pièces jointes hors-ligne.
-  Future<void> addDocument(String reference, {required String titre, required String categorie, required String file}) async {
+  /// [auteurName] n'est utilisé que pour l'affichage optimiste local.
+  Future<void> addDocument(String reference, {required String titre, required String categorie, required String file, String? auteurName}) async {
     try {
       await _api.addDocument(reference, titre: titre, categorie: categorie, file: file);
     } catch (_) {
@@ -124,6 +170,15 @@ class ChantierRepository {
         chantierReference: reference,
         payload: {'titre': titre, 'categorie': categorie, 'file': file},
       );
+      await _applyOptimisticUpdate(reference, (chantier) {
+        chantier.docsTerrain.add(DocumentTerrain(
+          titre: titre,
+          categorie: CategorieDocument.values.firstWhere((c) => c.name == categorie),
+          horodatage: DateTime.now(),
+          auteur: auteurName ?? '',
+          envoye: false,
+        ));
+      });
     }
   }
 }

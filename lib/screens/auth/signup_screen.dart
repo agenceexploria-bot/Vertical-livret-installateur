@@ -20,6 +20,7 @@ class _SignupScreenState extends State<SignupScreen> {
   final _prenomController = TextEditingController();
   final _mobileController = TextEditingController();
   final _emailController = TextEditingController();
+  final _codeController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
   final _societeController = TextEditingController();
@@ -27,44 +28,63 @@ class _SignupScreenState extends State<SignupScreen> {
 
   static final _emailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   Future<void> _nextStep() async {
-    if (_step < 4) {
-      if (_step == 1) {
-        if (_nomController.text.trim().isEmpty || _prenomController.text.trim().isEmpty || _mobileController.text.trim().isEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Nom, prénom et mobile sont obligatoires.')),
-          );
-          return;
-        }
-        if (!_emailRegex.hasMatch(_emailController.text.trim())) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Un email valide est obligatoire — il sert aussi à vous connecter.')),
-          );
-          return;
-        }
+    if (_step == 1) {
+      if (_nomController.text.trim().isEmpty || _prenomController.text.trim().isEmpty) {
+        _showError('Nom et prénom sont obligatoires.');
+        return;
       }
-      if (_step == 3) {
-        if (_passwordController.text.length < 6) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Le mot de passe doit contenir au moins 6 caractères.')),
-          );
-          return;
-        }
-        if (_passwordController.text != _confirmController.text) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Les mots de passe ne correspondent pas.')),
-          );
-          return;
-        }
+      if (!_emailRegex.hasMatch(_emailController.text.trim())) {
+        _showError('Un email valide est obligatoire — il sert aussi à vous connecter.');
+        return;
+      }
+      final ok = await context.read<AuthState>().requestEmailCode(_emailController.text.trim());
+      if (!mounted) return;
+      if (!ok) {
+        _showError(context.read<AuthState>().lastError ?? 'Impossible d\'envoyer le code de vérification.');
+        return;
       }
       setState(() => _step++);
       return;
     }
 
+    if (_step == 2) {
+      if (_codeController.text.trim().length != 6) {
+        _showError('Saisissez les 6 chiffres reçus par email.');
+        return;
+      }
+      final ok = await context.read<AuthState>().verifyEmailCode(_emailController.text.trim(), _codeController.text.trim());
+      if (!mounted) return;
+      if (!ok) {
+        _showError(context.read<AuthState>().lastError ?? 'Code incorrect.');
+        return;
+      }
+      setState(() => _step++);
+      return;
+    }
+
+    if (_step == 3) {
+      if (_passwordController.text.length < 6) {
+        _showError('Le mot de passe doit contenir au moins 6 caractères.');
+        return;
+      }
+      if (_passwordController.text != _confirmController.text) {
+        _showError('Les mots de passe ne correspondent pas.');
+        return;
+      }
+      setState(() => _step++);
+      return;
+    }
+
+    final mobile = _mobileController.text.trim();
     final success = await context.read<AuthState>().signup(
           nom: _nomController.text,
           prenom: _prenomController.text,
-          mobile: _mobileController.text,
+          mobile: mobile.isEmpty ? null : mobile,
           password: _passwordController.text,
           email: _emailController.text.trim(),
           sousTraitant: _status == 'Sous-traitant',
@@ -75,10 +95,14 @@ class _SignupScreenState extends State<SignupScreen> {
     if (success) {
       context.go('/pending');
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.read<AuthState>().lastError ?? 'Inscription impossible')),
-      );
+      _showError(context.read<AuthState>().lastError ?? 'Inscription impossible');
     }
+  }
+
+  Future<void> _renvoyerCode() async {
+    final ok = await context.read<AuthState>().requestEmailCode(_emailController.text.trim());
+    if (!mounted) return;
+    _showError(ok ? 'Un nouveau code a été envoyé par email.' : (context.read<AuthState>().lastError ?? 'Envoi impossible.'));
   }
 
   @override
@@ -149,7 +173,7 @@ class _SignupScreenState extends State<SignupScreen> {
             const SizedBox(height: 16),
             _buildField('Nom', _nomController),
             const SizedBox(height: 16),
-            _buildField('Téléphone mobile', _mobileController, hint: 'Identifiant de connexion'),
+            _buildField('Téléphone mobile', _mobileController, hint: 'Facultatif'),
             const SizedBox(height: 16),
             _buildField('Email', _emailController, hint: 'Sert aussi à vous connecter'),
             const SizedBox(height: 24),
@@ -177,21 +201,28 @@ class _SignupScreenState extends State<SignupScreen> {
         return Column(
           children: [
             const SizedBox(height: 40),
-            const Icon(Icons.sms_outlined, size: 48, color: AppColors.orange),
+            const Icon(Icons.mark_email_read_outlined, size: 48, color: AppColors.orange),
             const SizedBox(height: 24),
-            Text('Validation SMS', style: Theme.of(context).textTheme.titleLarge),
+            Text('Validation par email', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 12),
-            const Text(
-              'Saisissez le code à 4 chiffres envoyé au mobile renseigné.',
+            Text(
+              'Saisissez le code à 6 chiffres envoyé à ${_emailController.text.trim()}.',
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 32),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(4, (i) => _buildCodeBox()),
+            SizedBox(
+              width: 200,
+              child: TextField(
+                controller: _codeController,
+                textAlign: TextAlign.center,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                style: const TextStyle(fontSize: 24, letterSpacing: 8, fontWeight: FontWeight.bold),
+                decoration: const InputDecoration(counterText: '', border: OutlineInputBorder()),
+              ),
             ),
             const SizedBox(height: 24),
-            TextButton(onPressed: () {}, child: const Text('Renvoyer le code')),
+            TextButton(onPressed: _renvoyerCode, child: const Text('Renvoyer le code')),
           ],
         );
       case 3:
@@ -254,19 +285,6 @@ class _SignupScreenState extends State<SignupScreen> {
         onPressed: () => setState(() => _status = label),
         child: Text(label),
       ),
-    );
-  }
-
-  Widget _buildCodeBox() {
-    return Container(
-      width: 50,
-      height: 60,
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      decoration: BoxDecoration(
-        border: Border.all(color: AppColors.lignes),
-        borderRadius: BorderRadius.circular(9),
-      ),
-      child: const Center(child: Text('—', style: TextStyle(color: AppColors.acierClair))),
     );
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vertical_app/data/models/chantier.dart';
+import 'package:vertical_app/data/models/point_controle.dart';
 
 Map<String, dynamic> _baseJson({
   List<Map<String, dynamic>> reception = const [],
@@ -80,6 +81,36 @@ void main() {
         ],
       ));
       expect(incomplete.canSignPV, isFalse);
+    });
+  });
+
+  group('Chantier.toJson', () {
+    // La mise à jour optimiste hors-ligne (ChantierRepository) relit le
+    // cache via fromJson, mute l'objet, puis le réécrit via toJson — un
+    // aller-retour infidèle romprait silencieusement le cache local.
+    test('round-trips through fromJson without losing mutated fields', () {
+      final original = Chantier.fromJson(_baseJson(
+        reception: [_point('r1', status: 'vide')],
+        pvSigne: false,
+      ));
+
+      original.receptionMarchandises.first.status = PointStatus.conforme;
+      original.receptionMarchandises.first.photoPath = 'data:image/jpeg;base64,abc';
+      original.receptionMarchandises.first.validePar = 'Thomas Roux';
+      original.rexValide = true;
+      original.rexTranscription = 'RAS';
+      original.pvSigne = true;
+      original.pvSigneur = 'M. Weber';
+
+      final roundTripped = Chantier.fromJson(original.toJson());
+
+      expect(roundTripped.receptionMarchandises.first.status, PointStatus.conforme);
+      expect(roundTripped.receptionMarchandises.first.photoPath, 'data:image/jpeg;base64,abc');
+      expect(roundTripped.receptionMarchandises.first.validePar, 'Thomas Roux');
+      expect(roundTripped.rexValide, isTrue);
+      expect(roundTripped.rexTranscription, 'RAS');
+      expect(roundTripped.pvSigne, isTrue);
+      expect(roundTripped.pvSigneur, 'M. Weber');
     });
   });
 }

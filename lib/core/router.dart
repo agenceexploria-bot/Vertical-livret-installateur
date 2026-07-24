@@ -19,14 +19,13 @@ import '../screens/installateur/modules/rex_screen.dart';
 import '../screens/installateur/modules/docs_terrain_screen.dart';
 import '../screens/client/signature_screen.dart';
 import '../screens/client/confirmation_screen.dart';
-import '../screens/charge_affaires/ca_home_screen.dart';
-import '../screens/charge_affaires/ca_validation_screen.dart';
 import '../screens/backoffice/bo_login_screen.dart';
 import '../screens/backoffice/bo_access_request_screen.dart';
 import '../screens/backoffice/bo_ca_chantiers_screen.dart';
 import '../screens/backoffice/bo_new_chantier_screen.dart';
 import '../screens/backoffice/bo_chantier_detail_screen.dart';
 import '../screens/backoffice/bo_comptes_screen.dart';
+import '../screens/backoffice/bo_installateur_detail_screen.dart';
 import '../screens/backoffice/bo_qualite_screen.dart';
 import '../screens/backoffice/bo_admin_dashboard_screen.dart';
 
@@ -58,16 +57,18 @@ class AppRouter {
       refreshListenable: authState,
       redirect: (context, state) {
         if (state.matchedLocation.startsWith('/backoffice')) {
-          // Admin Web : strictement inaccessible depuis une plateforme
-          // mobile, même si l'app tourne en PWA — Flutter détecte l'OS hôte
-          // via defaultTargetPlatform même sur le Web.
+          // Back-office Web : accessible depuis une plateforme mobile
+          // uniquement pour l'espace CA (interface interconnectée avec le
+          // Web, voir bo_ca_chantiers_screen.dart et consorts) — Admin et
+          // Qualité restent strictement réservés au Web, y compris via une
+          // URL tapée à la main. Flutter détecte l'OS hôte via
+          // defaultTargetPlatform même sur le Web.
           final isMobilePlatform = defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS;
-          if (state.matchedLocation.startsWith('/backoffice/admin') && isMobilePlatform) {
-            return '/backoffice/ca';
-          }
-
           final isBoLogin = state.matchedLocation == '/backoffice/login';
           final isBoAcces = state.matchedLocation == '/backoffice/acces';
+          final isCaSpace = state.matchedLocation.startsWith('/backoffice/ca');
+          if (isMobilePlatform && !isCaSpace && !isBoLogin && !isBoAcces) return '/login';
+
           if (isBoLogin || isBoAcces) return null;
 
           if (authState.isLoading) return null;
@@ -78,6 +79,10 @@ class AppRouter {
           // est renvoyé vers son propre espace, quelle que soit l'URL visée.
           final home = _boHomeFor(authState.currentUser!.role);
           if (home == null) return '/backoffice/login';
+          // Sur mobile, un Admin/Qualité authentifié n'a aucune présence
+          // légitime dans le back-office : on l'éjecte entièrement plutôt que
+          // de le renvoyer vers son propre espace, lui-même bloqué sur mobile.
+          if (isMobilePlatform && home != '/backoffice/ca') return '/login';
           if (!state.matchedLocation.startsWith(home)) return home;
           return null;
         }
@@ -105,6 +110,15 @@ class AppRouter {
           if (authState.currentUser!.isActive && (isLoggingIn || isSigningUp || isPending)) {
             return '/';
           }
+
+          // Le CA (web comme mobile) est toujours dirigé vers son espace
+          // back-office — une seule interface, réellement interconnectée
+          // (voir garde /backoffice ci-dessus pour l'accès mobile).
+          final role = authState.currentUser!.role;
+          final isCaRole = role == UserRole.chargeAffaires || role == UserRole.direction;
+          if (isCaRole && authState.currentUser!.isActive && state.matchedLocation == '/') {
+            return '/backoffice/ca';
+          }
         }
 
         return null;
@@ -125,13 +139,11 @@ class AppRouter {
             if (authState.isLoading || authState.currentUser == null) {
               return const Scaffold(body: Center(child: CircularProgressIndicator()));
             }
-            if (authState.currentUser!.role == UserRole.chargeAffaires) return const CaHomeScreen();
+            // Un CA/Direction ne construit jamais cet écran : le garde de
+            // redirection ci-dessus l'envoie vers /backoffice/ca avant même
+            // que ce builder ne s'exécute.
             return const InstallateurHomeScreen();
           },
-        ),
-        GoRoute(
-          path: '/ca/validation',
-          builder: (context, state) => const CaValidationScreen(),
         ),
         GoRoute(
           path: '/chantier/:ref',
@@ -160,6 +172,7 @@ class AppRouter {
         GoRoute(path: '/backoffice/ca/chantiers/nouveau', builder: (context, state) => const BoNewChantierScreen()),
         GoRoute(path: '/backoffice/ca/chantiers/:ref', builder: (context, state) => const BoChantierDetailScreen()),
         GoRoute(path: '/backoffice/ca/comptes', builder: (context, state) => const BoComptesScreen()),
+        GoRoute(path: '/backoffice/ca/comptes/:id', builder: (context, state) => const BoInstallateurDetailScreen()),
 
         // Espace Qualité : auto-contrôles, REX, anomalies, habilitations.
         GoRoute(path: '/backoffice/qualite', builder: (context, state) => const BoQualiteScreen()),

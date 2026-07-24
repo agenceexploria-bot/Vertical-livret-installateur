@@ -112,21 +112,31 @@ class ApiClient {
 
   // ---- Auth ----
 
+  Future<Map<String, dynamic>> requestEmailCode(String email) {
+    return _request('POST', '/auth/request-email-code', auth: false, body: {'email': email});
+  }
+
+  Future<Map<String, dynamic>> verifyEmailCode(String email, String code) {
+    return _request('POST', '/auth/verify-email-code', auth: false, body: {'email': email, 'code': code});
+  }
+
   Future<Map<String, dynamic>> signup({
     required String nom,
     required String prenom,
-    required String mobile,
+    String? mobile,
     required String password,
     required String email,
+    required String verificationTicket,
     bool sousTraitant = false,
     String? societe,
   }) {
     return _request('POST', '/auth/signup', auth: false, body: {
       'nom': nom,
       'prenom': prenom,
-      'mobile': mobile,
+      'mobile': ?mobile,
       'password': password,
       'email': email,
+      'verificationTicket': verificationTicket,
       'sousTraitant': sousTraitant,
       'societe': ?societe,
     });
@@ -187,6 +197,16 @@ class ApiClient {
   Future<Map<String, dynamic>> suspendreCompte(String id) => _request('POST', '/comptes/$id/suspendre');
   Future<Map<String, dynamic>> reactiverCompte(String id) => _request('POST', '/comptes/$id/reactiver');
 
+  Future<Map<String, dynamic>> updateProfile({String? nom, String? prenom, String? email, String? mobile, String? societe}) {
+    return _request('PATCH', '/comptes/moi', body: {
+      'nom': ?nom,
+      'prenom': ?prenom,
+      'email': ?email,
+      'mobile': ?mobile,
+      'societe': ?societe,
+    });
+  }
+
   Future<Map<String, dynamic>> addHabilitation({required String titre, required String dateExpiration, required String file}) {
     return _request('POST', '/comptes/moi/habilitations', body: {
       'titre': titre,
@@ -205,6 +225,11 @@ class ApiClient {
   Future<Map<String, dynamic>> validerCompteInterne(String id) => _request('POST', '/admin/comptes-internes/$id/valider');
 
   Future<Map<String, dynamic>> getActivityFeed() => _request('GET', '/admin/activity');
+
+  Future<List<dynamic>> getAdminStats() async {
+    final data = await _request('GET', '/admin/stats');
+    return data['weeks'] as List<dynamic>;
+  }
 
   // ---- Chantiers ----
 
@@ -248,5 +273,9 @@ class ApiClient {
 
   Future<Map<String, dynamic>> addDocument(String reference, {required String titre, required String categorie, required String file}) {
     return _request('POST', '/chantiers/$reference/documents', body: {'titre': titre, 'categorie': categorie, 'file': file});
+  }
+
+  Future<Map<String, dynamic>> addDocumentChantier(String reference, {required String type, required String nom, required String file}) {
+    return _request('POST', '/chantiers/$reference/documents-chantier', body: {'type': type, 'nom': nom, 'file': file});
   }
 }

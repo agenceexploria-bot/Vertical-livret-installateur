@@ -7,12 +7,14 @@ class AdminState extends ChangeNotifier {
   final ApiClient _api;
   List<User> _comptesInternes = [];
   ActivityFeed? _activityFeed;
+  List<WeeklyStat> _weeklyStats = [];
   bool _isLoading = false;
 
   AdminState(this._api);
 
   List<User> get comptesInternes => _comptesInternes;
   ActivityFeed? get activityFeed => _activityFeed;
+  List<WeeklyStat> get weeklyStats => _weeklyStats;
   bool get isLoading => _isLoading;
 
   Future<void> fetch() async {
@@ -23,6 +25,8 @@ class AdminState extends ChangeNotifier {
       _comptesInternes = comptes.map((u) => User.fromJson(u as Map<String, dynamic>)).toList();
       final feed = await _api.getActivityFeed();
       _activityFeed = ActivityFeed.fromJson(feed);
+      final stats = await _api.getAdminStats();
+      _weeklyStats = stats.map((w) => WeeklyStat.fromJson(w as Map<String, dynamic>)).toList();
     } catch (_) {
       // Droits insuffisants ou serveur injoignable : le tableau de bord reste
       // tel quel plutôt que de planter l'appel non attendu depuis l'écran.

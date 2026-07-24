@@ -8,6 +8,7 @@ import '../../../core/theme.dart';
 import '../../../core/widgets/responsive_layout.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../data/api_client.dart';
+import '../../../state/auth_state.dart';
 import '../../../state/chantier_state.dart';
 import '../../../state/network_state.dart';
 import '../../../data/models/document_terrain.dart';
@@ -145,10 +146,11 @@ class _DocsTerrainScreenState extends State<DocsTerrainScreen> {
     final chantierState = context.read<ChantierState>();
     final reference = chantierState.currentChantier!.reference;
     final titre = '${_categories.firstWhere((c) => c.$2 == categorie).$1} — ${DateFormat('HH:mm').format(DateTime.now())}';
+    final auteur = context.read<AuthState>().currentUser?.fullName;
 
     // Le repository tente le réseau et, en cas d'échec, met l'envoi en file
     // d'attente locale (PendingOperations) — rejoué automatiquement au retour réseau.
-    await chantierState.addDocument(reference, titre: titre, categorie: categorie.name, file: file);
+    await chantierState.addDocument(reference, titre: titre, categorie: categorie.name, file: file, auteurName: auteur);
 
     if (!context.mounted) return;
     if (!isOnline) {

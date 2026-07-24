@@ -5,6 +5,7 @@ import '../../../core/theme.dart';
 import '../../../core/photo_capture.dart';
 import '../../../core/widgets/responsive_layout.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../state/auth_state.dart';
 import '../../../state/chantier_state.dart';
 import '../../../data/models/point_controle.dart';
 
@@ -179,12 +180,14 @@ class _PointCardState extends State<_PointCard> {
   }
 
   Future<void> _valider(BuildContext context) async {
-    await context.read<ChantierState>().updatePoint(widget.reference, widget.point.id, status: PointStatus.conforme.name);
+    final nom = context.read<AuthState>().currentUser?.fullName;
+    await context.read<ChantierState>().updatePoint(widget.reference, widget.point.id, status: PointStatus.conforme.name, validatedByName: nom);
   }
 
   /// Signalement d'anomalie en un geste : un seul tap suffit, sans attendre
   /// une photo — l'installateur doit pouvoir alerter le CA immédiatement.
   Future<void> _signalerAnomalie(BuildContext context) async {
-    await context.read<ChantierState>().updatePoint(widget.reference, widget.point.id, status: PointStatus.nonConforme.name);
+    final nom = context.read<AuthState>().currentUser?.fullName;
+    await context.read<ChantierState>().updatePoint(widget.reference, widget.point.id, status: PointStatus.nonConforme.name, validatedByName: nom);
   }
 }

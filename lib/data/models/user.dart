@@ -40,7 +40,7 @@ class User {
   final String id;
   final String nom;
   final String prenom;
-  final String mobile;
+  final String? mobile;
   final String? email;
   final UserRole role;
   final UserStatus? status;
@@ -53,7 +53,7 @@ class User {
     required this.id,
     required this.nom,
     required this.prenom,
-    required this.mobile,
+    this.mobile,
     this.email,
     required this.role,
     this.status,
@@ -69,7 +69,7 @@ class User {
         id: json['id'] as String,
         nom: json['nom'] as String,
         prenom: json['prenom'] as String,
-        mobile: json['mobile'] as String,
+        mobile: json['mobile'] as String?,
         email: json['email'] as String?,
         role: userRoleFromJson(json['role'] as String),
         status: userStatusFromJson(json['status'] as String?),

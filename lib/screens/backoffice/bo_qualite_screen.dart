@@ -12,6 +12,7 @@ import '../../state/chantier_state.dart';
 import '../../state/comptes_state.dart';
 import 'widgets/bo_shell.dart';
 import 'widgets/bo_panel.dart';
+import 'widgets/pv_signature_panel.dart';
 
 class BoQualiteScreen extends StatelessWidget {
   const BoQualiteScreen({super.key});
@@ -52,10 +53,61 @@ class BoQualiteScreen extends StatelessWidget {
             }(),
           ),
           const SizedBox(height: 12),
+          _buildPvSignes(context, chantiers),
+          const SizedBox(height: 12),
           _buildAnomalies(chantiers),
           const SizedBox(height: 12),
           _buildHabilitations(context),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPvSignes(BuildContext context, List<Chantier> chantiers) {
+    final signes = chantiers.where((c) => c.pvSigne).toList();
+    return BoPanel(
+      title: 'PV signés (${signes.length})',
+      child: signes.isEmpty
+          ? const Text('Aucun PV signé pour l\'instant.', style: TextStyle(fontSize: 11, color: AppColors.acierClair))
+          : Column(children: [for (final c in signes) _pvRow(context, c)]),
+    );
+  }
+
+  Widget _pvRow(BuildContext context, Chantier c) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFEEF1F3)))),
+      child: InkWell(
+        onTap: () => showDialog(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: Text('${c.reference} — ${c.client}'),
+            content: SizedBox(
+              width: 360,
+              child: PvSignaturePanel(
+                signataire: c.pvSigneur,
+                signeAt: c.pvSigneAt,
+                signatureImagePath: c.pvSignatureImagePath,
+              ),
+            ),
+            actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Fermer'))],
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text('${c.reference} · ${c.client}', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
+            ),
+            Text(
+              c.pvSigneAt != null
+                  ? 'Signé par ${c.pvSigneur ?? 'le client'} · ${DateFormat('dd/MM HH:mm').format(c.pvSigneAt!)}'
+                  : '—',
+              style: const TextStyle(fontSize: 10.5, color: AppColors.acierClair),
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.chevron_right, size: 16, color: AppColors.acierClair),
+          ],
+        ),
       ),
     );
   }

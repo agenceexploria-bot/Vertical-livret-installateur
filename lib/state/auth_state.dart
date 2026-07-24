@@ -10,6 +10,7 @@ class AuthState extends ChangeNotifier {
   DateTime? _offlineExpiry;
   bool _isLoading = true;
   String? _lastError;
+  String? _pendingVerificationTicket;
 
   AuthState(this._repository) {
     _init();
@@ -50,15 +51,67 @@ class AuthState extends ChangeNotifier {
     }
   }
 
+  /// Étape 1→2 de l'inscription (EX-2FA) : déclenche l'envoi du code par
+  /// email. Une 409 (email déjà utilisé) remonte via [ApiException] pour que
+  /// l'écran reste à l'étape 1 avec un message clair.
+  Future<bool> requestEmailCode(String email) async {
+    _isLoading = true;
+    _lastError = null;
+    notifyListeners();
+    try {
+      await _repository.requestEmailCode(email);
+      return true;
+    } on ApiException catch (e) {
+      _lastError = e.message;
+      return false;
+    } catch (e, st) {
+      debugPrint('AuthState.requestEmailCode: $e\n$st');
+      _lastError = 'Impossible de contacter le serveur';
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Étape 2→3 : vérifie le code saisi et conserve le ticket obtenu, transmis
+  /// ensuite à [signup] pour prouver que l'email a bien été vérifié.
+  Future<bool> verifyEmailCode(String email, String code) async {
+    _isLoading = true;
+    _lastError = null;
+    notifyListeners();
+    try {
+      _pendingVerificationTicket = await _repository.verifyEmailCode(email, code);
+      return true;
+    } on ApiException catch (e) {
+      _lastError = e.message;
+      return false;
+    } catch (e, st) {
+      debugPrint('AuthState.verifyEmailCode: $e\n$st');
+      _lastError = 'Impossible de contacter le serveur';
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   Future<bool> signup({
     required String nom,
     required String prenom,
-    required String mobile,
+    String? mobile,
     required String password,
     required String email,
     bool sousTraitant = false,
     String? societe,
   }) async {
+    final ticket = _pendingVerificationTicket;
+    if (ticket == null) {
+      _lastError = 'Vérification email requise avant de terminer l\'inscription.';
+      notifyListeners();
+      return false;
+    }
+
     _isLoading = true;
     _lastError = null;
     notifyListeners();
@@ -70,9 +123,11 @@ class AuthState extends ChangeNotifier {
         mobile: mobile,
         password: password,
         email: email,
+        verificationTicket: ticket,
         sousTraitant: sousTraitant,
         societe: societe,
       );
+      _pendingVerificationTicket = null;
       _offlineExpiry = await _repository.getSessionExpiry();
       return true;
     } on ApiException catch (e) {
@@ -116,6 +171,28 @@ class AuthState extends ChangeNotifier {
       return false;
     } catch (e, st) {
       debugPrint('AuthState.signupInterne: $e\n$st');
+      _lastError = 'Impossible de contacter le serveur';
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Modifie les informations de profil (nom/prénom/email/mobile/société) —
+  /// pas de changement de mot de passe ni de rôle ici, hors sujet.
+  Future<bool> updateProfile({String? nom, String? prenom, String? email, String? mobile, String? societe}) async {
+    _isLoading = true;
+    _lastError = null;
+    notifyListeners();
+    try {
+      _currentUser = await _repository.updateProfile(nom: nom, prenom: prenom, email: email, mobile: mobile, societe: societe);
+      return true;
+    } on ApiException catch (e) {
+      _lastError = e.message;
+      return false;
+    } catch (e, st) {
+      debugPrint('AuthState.updateProfile: $e\n$st');
       _lastError = 'Impossible de contacter le serveur';
       return false;
     } finally {

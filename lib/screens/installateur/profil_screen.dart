@@ -29,7 +29,7 @@ class ProfilScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildInfoCard(user, offlineExpiry),
+            _buildInfoCard(context, user, offlineExpiry),
             const SizedBox(height: 32),
             Text('Habilitations', style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 12),
@@ -68,7 +68,7 @@ class ProfilScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildInfoCard(User? user, DateTime? offlineExpiry) {
+  Widget _buildInfoCard(BuildContext context, User? user, DateTime? offlineExpiry) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -79,13 +79,25 @@ class ProfilScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(user?.fullName ?? '', style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
+          Row(
+            children: [
+              Expanded(
+                child: Text(user?.fullName ?? '', style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold)),
+              ),
+              if (user != null)
+                IconButton(
+                  onPressed: () => _openEditProfilDialog(context, user),
+                  icon: const Icon(Icons.edit_outlined, color: Colors.white, size: 18),
+                  tooltip: 'Modifier mon profil',
+                ),
+            ],
+          ),
           const SizedBox(height: 4),
           Text(user?.societe ?? 'Salarié Vertical', style: const TextStyle(color: AppColors.acierClair)),
           const SizedBox(height: 16),
           const Divider(color: Colors.white24),
           const SizedBox(height: 16),
-          _buildRow('Mobile', user?.mobile ?? '', true),
+          _buildRow('Mobile', user?.mobile ?? '-', true),
           _buildRow('Email', user?.email ?? '-', true),
           _buildRow(
             'Session',
@@ -94,6 +106,13 @@ class ProfilScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  void _openEditProfilDialog(BuildContext context, User user) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => _EditProfilDialog(user: user),
     );
   }
 
@@ -254,6 +273,103 @@ class _AddCertificatDialogState extends State<_AddCertificatDialog> {
           child: _isSubmitting
               ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
               : const Text('Ajouter'),
+        ),
+      ],
+    );
+  }
+}
+
+class _EditProfilDialog extends StatefulWidget {
+  final User user;
+  const _EditProfilDialog({required this.user});
+
+  @override
+  State<_EditProfilDialog> createState() => _EditProfilDialogState();
+}
+
+class _EditProfilDialogState extends State<_EditProfilDialog> {
+  late final _nomController = TextEditingController(text: widget.user.nom);
+  late final _prenomController = TextEditingController(text: widget.user.prenom);
+  late final _emailController = TextEditingController(text: widget.user.email ?? '');
+  late final _mobileController = TextEditingController(text: widget.user.mobile ?? '');
+  bool _isSubmitting = false;
+
+  @override
+  void dispose() {
+    _nomController.dispose();
+    _prenomController.dispose();
+    _emailController.dispose();
+    _mobileController.dispose();
+    super.dispose();
+  }
+
+  bool get _peutEnvoyer => _nomController.text.trim().isNotEmpty && _prenomController.text.trim().isNotEmpty && _emailController.text.trim().isNotEmpty;
+
+  Future<void> _envoyer() async {
+    setState(() => _isSubmitting = true);
+    final ok = await context.read<AuthState>().updateProfile(
+          nom: _nomController.text.trim(),
+          prenom: _prenomController.text.trim(),
+          email: _emailController.text.trim(),
+          mobile: _mobileController.text.trim().isEmpty ? null : _mobileController.text.trim(),
+        );
+    if (!mounted) return;
+    if (ok) {
+      Navigator.of(context).pop();
+    } else {
+      setState(() => _isSubmitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.read<AuthState>().lastError ?? 'Modification impossible')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Modifier mon profil'),
+      content: SizedBox(
+        width: 360,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: _prenomController,
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(labelText: 'Prénom', border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(7)))),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _nomController,
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(labelText: 'Nom', border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(7)))),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _emailController,
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(7)))),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _mobileController,
+              decoration: const InputDecoration(
+                labelText: 'Mobile',
+                hintText: 'Facultatif',
+                border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(7))),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Annuler')),
+        ElevatedButton(
+          onPressed: _peutEnvoyer && !_isSubmitting ? _envoyer : null,
+          child: _isSubmitting
+              ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Text('Enregistrer'),
         ),
       ],
     );

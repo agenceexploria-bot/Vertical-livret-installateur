@@ -1,6 +1,7 @@
 import 'point_controle.dart';
 import 'user.dart';
 import 'document_terrain.dart';
+import 'document_chantier.dart';
 
 enum ChantierSyncStatus { nouveau, charge }
 
@@ -36,6 +37,8 @@ class Chantier {
   final Set<String> livretsOuverts;
   // Module 8 (EX-10 à EX-13) : dépôts terrain de l'installateur.
   final List<DocumentTerrain> docsTerrain;
+  // Modules 1-3 : documents de référence déposés par le CA (PPSPS, plans...).
+  final List<DocumentChantier> documentsChantier;
 
   Chantier({
     required this.reference,
@@ -64,9 +67,11 @@ class Chantier {
     List<User>? installateursRattaches,
     Set<String>? livretsOuverts,
     List<DocumentTerrain>? docsTerrain,
+    List<DocumentChantier>? documentsChantier,
   })  : installateursRattaches = installateursRattaches ?? [],
         livretsOuverts = livretsOuverts ?? {},
-        docsTerrain = docsTerrain ?? [];
+        docsTerrain = docsTerrain ?? [],
+        documentsChantier = documentsChantier ?? [];
 
   double get progressionReception => receptionMarchandises.isEmpty
       ? 0
@@ -113,5 +118,40 @@ class Chantier {
         docsTerrain: ((json['docsTerrain'] as List?) ?? [])
             .map((d) => DocumentTerrain.fromJson(d as Map<String, dynamic>))
             .toList(),
+        documentsChantier: ((json['documentsChantier'] as List?) ?? [])
+            .map((d) => DocumentChantier.fromJson(d as Map<String, dynamic>))
+            .toList(),
       );
+
+  /// Miroir de [fromJson] — utilisé pour réécrire le cache local (Drift)
+  /// après une mise à jour optimiste hors-ligne (voir ChantierRepository).
+  Map<String, dynamic> toJson() => {
+        'reference': reference,
+        'client': client,
+        'adresse': adresse,
+        'ville': ville,
+        'dateDebut': dateDebut.toIso8601String(),
+        'dateFin': dateFin.toIso8601String(),
+        'contactNom': contactNom,
+        'contactTel': contactTel,
+        'horaires': horaires,
+        'consignes': consignes,
+        'typeMonteCharge': typeMonteCharge,
+        'capacite': capacite,
+        'niveaux': niveaux,
+        'referenceAffaire': referenceAffaire,
+        'syncStatus': syncStatus.name,
+        'receptionMarchandises': receptionMarchandises.map((p) => p.toJson()).toList(),
+        'autoControle': autoControle.map((p) => p.toJson()).toList(),
+        'rexValide': rexValide,
+        'rexTranscription': rexTranscription,
+        'pvSigne': pvSigne,
+        'pvSigneur': pvSigneur,
+        'pvSigneAt': pvSigneAt?.toIso8601String(),
+        'pvSignatureImagePath': pvSignatureImagePath,
+        'installateursRattaches': installateursRattaches.map((u) => u.toJson()).toList(),
+        'livretsOuverts': livretsOuverts.toList(),
+        'docsTerrain': docsTerrain.map((d) => d.toJson()).toList(),
+        'documentsChantier': documentsChantier.map((d) => d.toJson()).toList(),
+      };
 }

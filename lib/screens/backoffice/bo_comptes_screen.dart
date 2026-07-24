@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../core/coming_soon.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/status_indicator.dart';
 import '../../data/api_client.dart';
@@ -110,9 +112,7 @@ class BoComptesScreen extends StatelessWidget {
       );
     } else {
       action = OutlinedButton(
-        onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Lien de réinitialisation envoyé')),
-        ),
+        onPressed: () => showComingSoon(context),
         style: OutlinedButton.styleFrom(minimumSize: const Size(0, 30), padding: const EdgeInsets.symmetric(horizontal: 10)),
         child: const Text('Réinit. mdp', style: TextStyle(fontSize: 11)),
       );
@@ -123,7 +123,16 @@ class BoComptesScreen extends StatelessWidget {
       decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.lignes))),
       child: Row(
         children: [
-          Expanded(flex: 3, child: Text(u.fullName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+          Expanded(
+            flex: 3,
+            child: InkWell(
+              onTap: () => context.push('/backoffice/ca/comptes/${u.id}'),
+              child: Text(
+                u.fullName,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, decoration: TextDecoration.underline),
+              ),
+            ),
+          ),
           Expanded(flex: 3, child: Text(statutLabel, style: const TextStyle(fontSize: 11.5, color: AppColors.acier))),
           Expanded(flex: 2, child: StatusIndicator(label: compteLabel, type: compteType)),
           Expanded(

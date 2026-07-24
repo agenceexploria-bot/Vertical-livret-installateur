@@ -24,7 +24,7 @@ model User {
   id            String   @id @default(cuid())
   nom           String
   prenom        String
-  mobile        String   @unique
+  mobile        String?  @unique
   email         String?  @unique
   passwordHash  String
   role          UserRole
@@ -47,6 +47,19 @@ model Habilitation {
   filePath       String?
   user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId         String
+}
+
+// Code de vérification à 6 chiffres envoyé par email lors de l'inscription
+// (EX-2FA) — courte durée de vie, une seule ligne active par email à la fois.
+model EmailVerificationCode {
+  id        String   @id @default(cuid())
+  email     String
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([email])
 }
 
 model RefreshToken {
@@ -88,6 +101,7 @@ model Chantier {
   pointsControle      PointControle[]
   installateurs       ChantierInstallateur[]
   documentsTerrain    DocumentTerrain[]
+  documentsChantier   DocumentChantier[]
   livretsOuvertsJson  String @default("[]") // JSON-encoded list of user ids
 }
 
@@ -147,4 +161,22 @@ model DocumentTerrain {
   auteur      User              @relation(fields: [auteurId], references: [id], onDelete: Cascade)
   auteurId    String
   horodatage  DateTime          @default(now())
+}
+
+enum TypeDocumentChantier {
+  securite
+  technique
+}
+
+// Documents de référence déposés par le CA (PPSPS, plans, notices...) —
+// consultés en lecture seule par l'installateur (Modules 1-3), à ne pas
+// confondre avec DocumentTerrain (dépôts de l'installateur lui-même sur site).
+model DocumentChantier {
+  id         String               @id @default(cuid())
+  chantier   Chantier             @relation(fields: [chantierId], references: [id], onDelete: Cascade)
+  chantierId String
+  type       TypeDocumentChantier
+  nom        String
+  filePath   String
+  createdAt  DateTime             @default(now())
 }

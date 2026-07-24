@@ -29,3 +29,20 @@ export function signRefreshToken(payload: AccessTokenPayload): string {
 export function verifyRefreshToken(token: string): AccessTokenPayload {
   return jwt.verify(token, REFRESH_SECRET) as AccessTokenPayload;
 }
+
+export interface EmailVerificationTicketPayload {
+  email: string;
+  purpose: 'signup-email-verified';
+}
+
+/// Ticket signé de courte durée prouvant qu'un code envoyé à [email] a été
+/// vérifié — transmis par le client à /auth/signup pour prouver la
+/// vérification sans avoir à re-soumettre le code à la création du compte.
+export function signEmailVerificationTicket(email: string): string {
+  const payload: EmailVerificationTicketPayload = { email, purpose: 'signup-email-verified' };
+  return jwt.sign(payload, ACCESS_SECRET, { expiresIn: '15m' });
+}
+
+export function verifyEmailVerificationTicket(token: string): EmailVerificationTicketPayload {
+  return jwt.verify(token, ACCESS_SECRET) as EmailVerificationTicketPayload;
+}

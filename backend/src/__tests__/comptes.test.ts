@@ -5,7 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { createApp } from '../app';
 import { prisma } from '../prisma';
-import { resetDb } from './helpers';
+import { resetDb, signup as doSignup } from './helpers';
 
 const ONE_PX_PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
@@ -13,7 +13,7 @@ const ONE_PX_PNG_BASE64 =
 const app = createApp();
 
 async function createInstallateur() {
-  const signup = await request(app).post('/auth/signup').send({
+  const signup = await doSignup(app, {
     nom: 'Roux', prenom: 'Thomas', mobile: '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo',
   });
   return signup.body.accessToken as string;
@@ -42,7 +42,7 @@ afterAll(async () => {
 describe('Cycle de vie des comptes installateurs (EX-01 à EX-06)', () => {
   it('un compte nouvellement inscrit apparaît en attente pour le CA', async () => {
     const caToken = await createCa();
-    await request(app).post('/auth/signup').send({ nom: 'Roux', prenom: 'Thomas', mobile: '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo' });
+    await doSignup(app, { nom: 'Roux', prenom: 'Thomas', mobile: '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo' });
 
     const res = await request(app).get('/comptes').set('Authorization', `Bearer ${caToken}`);
     expect(res.status).toBe(200);
@@ -52,7 +52,7 @@ describe('Cycle de vie des comptes installateurs (EX-01 à EX-06)', () => {
 
   it('le CA peut valider un compte, qui devient alors actif', async () => {
     const caToken = await createCa();
-    const signup = await request(app).post('/auth/signup').send({ nom: 'Roux', prenom: 'Thomas', mobile: '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo' });
+    const signup = await doSignup(app, { nom: 'Roux', prenom: 'Thomas', mobile: '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo' });
 
     const res = await request(app)
       .post(`/comptes/${signup.body.user.id}/valider`)
@@ -62,14 +62,14 @@ describe('Cycle de vie des comptes installateurs (EX-01 à EX-06)', () => {
   });
 
   it('un installateur ne peut pas accéder à la liste des comptes', async () => {
-    const signup = await request(app).post('/auth/signup').send({ nom: 'Roux', prenom: 'Thomas', mobile: '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo' });
+    const signup = await doSignup(app, { nom: 'Roux', prenom: 'Thomas', mobile: '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo' });
     const res = await request(app).get('/comptes').set('Authorization', `Bearer ${signup.body.accessToken}`);
     expect(res.status).toBe(403);
   });
 
   it('suspendre puis réactiver un compte fonctionne', async () => {
     const caToken = await createCa();
-    const signup = await request(app).post('/auth/signup').send({ nom: 'Roux', prenom: 'Thomas', mobile: '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo' });
+    const signup = await doSignup(app, { nom: 'Roux', prenom: 'Thomas', mobile: '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo' });
     await request(app).post(`/comptes/${signup.body.user.id}/valider`).set('Authorization', `Bearer ${caToken}`);
 
     const suspended = await request(app).post(`/comptes/${signup.body.user.id}/suspendre`).set('Authorization', `Bearer ${caToken}`);
@@ -115,5 +115,30 @@ describe('POST /comptes/moi/habilitations (EX-13)', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ titre: 'Habilitation électrique BR', dateExpiration: '2027-03-12T00:00:00.000Z' });
     expect(res.status).toBe(400);
+  });
+});
+
+describe('PATCH /comptes/moi', () => {
+  it('modifie le nom et le prénom du compte connecté', async () => {
+    const token = await createInstallateur();
+
+    const res = await request(app)
+      .patch('/comptes/moi')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ nom: 'Nouveau', prenom: 'Prénom' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.user.fullName).toBe('Prénom Nouveau');
+  });
+
+  it('refuse un email déjà utilisé par un autre compte', async () => {
+    const token = await createInstallateur();
+    await doSignup(app, { nom: 'Autre', prenom: 'Personne', email: 'autre@example.com', password: 'demodemo' });
+
+    const res = await request(app)
+      .patch('/comptes/moi')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ email: 'autre@example.com' });
+    expect(res.status).toBe(409);
   });
 });

@@ -45,6 +45,39 @@ comptesRouter.post('/:id/reactiver', requireAuth, requireRole('chargeAffaires', 
   res.json({ user: serializeUser(user) });
 });
 
+const updateProfileSchema = z.object({
+  nom: z.string().min(1).optional(),
+  prenom: z.string().min(1).optional(),
+  email: z.string().email('Email invalide').optional(),
+  mobile: z.string().min(6).optional(),
+  societe: z.string().optional().nullable(),
+});
+
+// Un utilisateur (tout rôle) modifie ses propres informations de profil —
+// pas de changement de mot de passe ni de rôle ici, hors sujet de cette action.
+comptesRouter.patch('/moi', requireAuth, async (req: AuthedRequest, res) => {
+  const parsed = updateProfileSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  const { email, mobile } = parsed.data;
+
+  if (email || mobile) {
+    const existing = await prisma.user.findFirst({
+      where: {
+        id: { not: req.auth!.userId },
+        OR: [...(email ? [{ email }] : []), ...(mobile ? [{ mobile }] : [])],
+      },
+    });
+    if (existing) return res.status(409).json({ error: 'Cet email ou ce mobile est déjà utilisé par un autre compte' });
+  }
+
+  const user = await prisma.user.update({
+    where: { id: req.auth!.userId },
+    data: parsed.data,
+    include: { habilitations: true },
+  });
+  res.json({ user: serializeUser(user) });
+});
+
 const habilitationSchema = z.object({
   titre: z.string().min(1),
   dateExpiration: z.string(), // ISO date

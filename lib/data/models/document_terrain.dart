@@ -42,7 +42,22 @@ class DocumentTerrain {
         categorie: categorieFromJson(json['categorie'] as String),
         horodatage: DateTime.parse(json['horodatage'] as String),
         auteur: json['auteur'] as String? ?? '',
-        envoye: true,
+        // Le serveur ne renvoie que des documents déjà envoyés ; `envoye:
+        // false` n'apparaît que sur une entrée optimiste ajoutée localement
+        // au cache pendant que l'envoi est en file d'attente hors-ligne.
+        envoye: json['envoye'] as bool? ?? true,
         filePath: json['filePath'] as String?,
       );
+
+  /// Miroir de [fromJson] — utilisé pour réécrire le cache local (Drift)
+  /// après un ajout optimiste hors-ligne.
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'titre': titre,
+        'categorie': categorie.name,
+        'horodatage': horodatage.toIso8601String(),
+        'auteur': auteur,
+        'envoye': envoye,
+        'filePath': filePath,
+      };
 }

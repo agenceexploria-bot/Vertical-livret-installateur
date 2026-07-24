@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/coming_soon.dart';
 import '../../../core/theme.dart';
 import '../../../core/widgets/responsive_layout.dart';
 import '../../../state/chantier_state.dart';
@@ -83,7 +84,7 @@ class FicheChantierScreen extends StatelessWidget {
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () {},
+                      onPressed: () => showComingSoon(context),
                       icon: const Icon(Icons.phone, size: 18),
                       label: const Text('Appeler'),
                     ),
@@ -91,7 +92,7 @@ class FicheChantierScreen extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () {},
+                      onPressed: () => showComingSoon(context),
                       icon: const Icon(Icons.map_outlined, size: 18),
                       label: const Text('GPS'),
                     ),

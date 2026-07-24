@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../app';
 import { prisma } from '../prisma';
-import { resetDb } from './helpers';
+import { resetDb, signup as doSignup } from './helpers';
 
 const app = createApp();
 
@@ -16,7 +16,7 @@ afterAll(async () => {
 
 describe('POST /auth/signup', () => {
   it("crée un compte installateur en attente de validation", async () => {
-    const res = await request(app).post('/auth/signup').send({
+    const res = await doSignup(app, {
       nom: 'Dupont',
       prenom: 'Jean',
       mobile: '06 11 22 33 44',
@@ -32,27 +32,101 @@ describe('POST /auth/signup', () => {
   });
 
   it('refuse une inscription sans email', async () => {
-    const res = await request(app).post('/auth/signup').send({
+    const res = await doSignup(app, {
       nom: 'Dupont', prenom: 'Jean', mobile: '0611223344', password: 'motdepasse',
     });
     expect(res.status).toBe(400);
   });
 
   it('normalise le mobile (espaces retirés) pour éviter les doublons', async () => {
-    await request(app).post('/auth/signup').send({
+    await doSignup(app, {
       nom: 'Dupont', prenom: 'Jean', mobile: '0611223344', email: 'jean.dupont@example.com', password: 'motdepasse',
     });
-    const res = await request(app).post('/auth/signup').send({
+    const res = await doSignup(app, {
       nom: 'Autre', prenom: 'Personne', mobile: '06 11 22 33 44', email: 'autre.personne@example.com', password: 'motdepasse',
     });
     expect(res.status).toBe(409);
   });
 
   it('refuse un mot de passe trop court', async () => {
-    const res = await request(app).post('/auth/signup').send({
+    const res = await doSignup(app, {
       nom: 'Dupont', prenom: 'Jean', mobile: '0611223344', email: 'jean.dupont@example.com', password: '123',
     });
     expect(res.status).toBe(400);
+  });
+
+  it('accepte une inscription sans mobile (facultatif)', async () => {
+    const res = await doSignup(app, {
+      nom: 'Dupont', prenom: 'Jean', email: 'jean.dupont@example.com', password: 'motdepasse',
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.user.mobile).toBeNull();
+  });
+
+  it('refuse un signup sans ticket de vérification email', async () => {
+    const res = await request(app).post('/auth/signup').send({
+      nom: 'Dupont', prenom: 'Jean', email: 'jean.dupont@example.com', password: 'motdepasse',
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('refuse un signup dont le ticket ne correspond pas à l\'email soumis', async () => {
+    const codeRes = await request(app).post('/auth/request-email-code').send({ email: 'jean.dupont@example.com' });
+    const verifyRes = await request(app)
+      .post('/auth/verify-email-code')
+      .send({ email: 'jean.dupont@example.com', code: codeRes.body.code });
+
+    const res = await request(app).post('/auth/signup').send({
+      nom: 'Dupont', prenom: 'Jean', email: 'autre@example.com', password: 'motdepasse',
+      verificationTicket: verifyRes.body.verificationTicket,
+    });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('POST /auth/request-email-code', () => {
+  it('envoie un code et le renvoie en clair en environnement de test', async () => {
+    const res = await request(app).post('/auth/request-email-code').send({ email: 'jean.dupont@example.com' });
+    expect(res.status).toBe(200);
+    expect(res.body.code).toMatch(/^\d{6}$/);
+  });
+
+  it('bloque si un compte existe déjà avec cet email', async () => {
+    await doSignup(app, { nom: 'Dupont', prenom: 'Jean', email: 'jean.dupont@example.com', password: 'motdepasse' });
+
+    const res = await request(app).post('/auth/request-email-code').send({ email: 'jean.dupont@example.com' });
+    expect(res.status).toBe(409);
+  });
+});
+
+describe('POST /auth/verify-email-code', () => {
+  it('refuse un code incorrect', async () => {
+    await request(app).post('/auth/request-email-code').send({ email: 'jean.dupont@example.com' });
+    const res = await request(app).post('/auth/verify-email-code').send({ email: 'jean.dupont@example.com', code: '000000' });
+    expect(res.status).toBe(400);
+  });
+
+  it('refuse un code quand aucune demande n\'a été faite', async () => {
+    const res = await request(app).post('/auth/verify-email-code').send({ email: 'inconnu@example.com', code: '123456' });
+    expect(res.status).toBe(400);
+  });
+
+  it('bloque après 5 tentatives incorrectes', async () => {
+    await request(app).post('/auth/request-email-code').send({ email: 'jean.dupont@example.com' });
+    for (let i = 0; i < 5; i++) {
+      await request(app).post('/auth/verify-email-code').send({ email: 'jean.dupont@example.com', code: '000000' });
+    }
+    const res = await request(app).post('/auth/verify-email-code').send({ email: 'jean.dupont@example.com', code: '000000' });
+    expect(res.status).toBe(429);
+  });
+
+  it('renvoie un ticket de vérification pour un code correct', async () => {
+    const codeRes = await request(app).post('/auth/request-email-code').send({ email: 'jean.dupont@example.com' });
+    const res = await request(app)
+      .post('/auth/verify-email-code')
+      .send({ email: 'jean.dupont@example.com', code: codeRes.body.code });
+    expect(res.status).toBe(200);
+    expect(res.body.verificationTicket).toBeTruthy();
   });
 });
 
@@ -88,7 +162,7 @@ describe('POST /auth/signup-interne', () => {
 
 describe('POST /auth/login', () => {
   beforeEach(async () => {
-    await request(app).post('/auth/signup').send({
+    await doSignup(app, {
       nom: 'Roux', prenom: 'Thomas', mobile: '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo',
     });
   });
@@ -126,7 +200,7 @@ describe('GET /auth/me', () => {
   });
 
   it('renvoie le profil avec un jeton valide', async () => {
-    const signup = await request(app).post('/auth/signup').send({
+    const signup = await doSignup(app, {
       nom: 'Roux', prenom: 'Thomas', mobile: '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo',
     });
     const res = await request(app).get('/auth/me').set('Authorization', `Bearer ${signup.body.accessToken}`);
@@ -137,7 +211,7 @@ describe('GET /auth/me', () => {
 
 describe('POST /auth/refresh', () => {
   it('émet un nouveau jeton d\'accès à partir du refresh token', async () => {
-    const signup = await request(app).post('/auth/signup').send({
+    const signup = await doSignup(app, {
       nom: 'Roux', prenom: 'Thomas', mobile: '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo',
     });
     const res = await request(app).post('/auth/refresh').send({ refreshToken: signup.body.refreshToken });

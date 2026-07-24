@@ -5,7 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { createApp } from '../app';
 import { prisma } from '../prisma';
-import { resetDb } from './helpers';
+import { resetDb, signup as doSignup } from './helpers';
 
 const ONE_PX_PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
@@ -25,7 +25,7 @@ async function createCa() {
 }
 
 async function createInstallateur(overrides: Partial<{ isActive: boolean; mobile: string }> = {}) {
-  const signup = await request(app).post('/auth/signup').send({
+  const signup = await doSignup(app, {
     nom: 'Roux', prenom: 'Thomas', mobile: overrides.mobile ?? '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo',
   });
   if (overrides.isActive) {
@@ -339,6 +339,159 @@ describe('POST /chantiers/:reference/documents', () => {
       .post('/chantiers/LD64397/documents')
       .set('Authorization', `Bearer ${ca.accessToken}`)
       .send({ titre: 'Sans fichier', categorie: 'constat' });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('Sécurité — rattachement obligatoire pour un installateur (bug 3B)', () => {
+  it('refuse à un installateur non rattaché de modifier un point de contrôle', async () => {
+    const ca = await createCa();
+    const created = await createChantier(ca.accessToken);
+    const pointId = created.body.chantier.receptionMarchandises[0].id;
+    const etranger = await createInstallateur({ isActive: true });
+
+    const res = await request(app)
+      .patch(`/chantiers/LD64397/points/${pointId}`)
+      .set('Authorization', `Bearer ${etranger.accessToken}`)
+      .send({ status: 'conforme' });
+    expect(res.status).toBe(403);
+  });
+
+  it('refuse à un installateur non rattaché de soumettre un REX', async () => {
+    const ca = await createCa();
+    await createChantier(ca.accessToken);
+    const etranger = await createInstallateur({ isActive: true });
+
+    const res = await request(app)
+      .post('/chantiers/LD64397/rex')
+      .set('Authorization', `Bearer ${etranger.accessToken}`)
+      .send({ transcription: 'Tentative non autorisée' });
+    expect(res.status).toBe(403);
+  });
+
+  it('refuse à un installateur non rattaché de signer le PV', async () => {
+    const ca = await createCa();
+    await createChantier(ca.accessToken);
+    const etranger = await createInstallateur({ isActive: true });
+
+    const res = await request(app)
+      .post('/chantiers/LD64397/pv')
+      .set('Authorization', `Bearer ${etranger.accessToken}`)
+      .send({ signataire: 'Tentative non autorisée' });
+    expect(res.status).toBe(403);
+  });
+
+  it('refuse à un installateur non rattaché de déposer un document', async () => {
+    const ca = await createCa();
+    await createChantier(ca.accessToken);
+    const etranger = await createInstallateur({ isActive: true });
+
+    const res = await request(app)
+      .post('/chantiers/LD64397/documents')
+      .set('Authorization', `Bearer ${etranger.accessToken}`)
+      .send({ titre: 'Intrusion', categorie: 'constat', file: `data:image/png;base64,${ONE_PX_PNG_BASE64}` });
+    expect(res.status).toBe(403);
+  });
+
+  it('autorise toujours un installateur bien rattaché à modifier un point', async () => {
+    const ca = await createCa();
+    const created = await createChantier(ca.accessToken);
+    const pointId = created.body.chantier.receptionMarchandises[0].id;
+    const installateur = await createInstallateur({ isActive: true });
+    await request(app)
+      .post('/chantiers/LD64397/rattacher')
+      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .send({ userId: installateur.user.id });
+
+    const res = await request(app)
+      .patch(`/chantiers/LD64397/points/${pointId}`)
+      .set('Authorization', `Bearer ${installateur.accessToken}`)
+      .send({ status: 'conforme' });
+    expect(res.status).toBe(200);
+  });
+
+  it("refuse d'accéder à un point de contrôle appartenant à un autre chantier", async () => {
+    const ca = await createCa();
+    const chantierA = await createChantier(ca.accessToken, 'LD64397');
+    await createChantier(ca.accessToken, 'LD91245');
+    const pointDeA = chantierA.body.chantier.receptionMarchandises[0].id;
+
+    const installateur = await createInstallateur({ isActive: true });
+    // Rattaché à LD91245, mais pas à LD64397 — pointDeA appartient à LD64397.
+    await request(app)
+      .post('/chantiers/LD91245/rattacher')
+      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .send({ userId: installateur.user.id });
+
+    const res = await request(app)
+      .patch(`/chantiers/LD91245/points/${pointDeA}`)
+      .set('Authorization', `Bearer ${installateur.accessToken}`)
+      .send({ status: 'conforme' });
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('Sécurité — GET /chantiers filtré par rôle (bug 3A)', () => {
+  it("refuse à l'Admin l'accès à la liste des chantiers", async () => {
+    const passwordHash = await bcrypt.hash('demodemo', 10);
+    await prisma.user.create({
+      data: {
+        nom: 'Lefebvre', prenom: 'Admin', mobile: '0102030407', email: 'admin@actiwork.fr',
+        passwordHash, role: 'admin', isActive: true,
+      },
+    });
+    const login = await request(app).post('/auth/login').send({ identifier: 'admin@actiwork.fr', password: 'demodemo' });
+
+    const res = await request(app).get('/chantiers').set('Authorization', `Bearer ${login.body.accessToken}`);
+    expect(res.status).toBe(403);
+  });
+});
+
+describe('POST /chantiers/:reference/documents-chantier (Modules 1-3)', () => {
+  it('permet au CA de déposer un document de référence, lisible ensuite via GET', async () => {
+    const ca = await createCa();
+    await createChantier(ca.accessToken);
+
+    const res = await request(app)
+      .post('/chantiers/LD64397/documents-chantier')
+      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .send({ type: 'securite', nom: 'PPSPS', file: `data:image/png;base64,${ONE_PX_PNG_BASE64}` });
+
+    expect(res.status).toBe(201);
+    expect(res.body.chantier.documentsChantier).toHaveLength(1);
+    expect(res.body.chantier.documentsChantier[0].type).toBe('securite');
+    expect(res.body.chantier.documentsChantier[0].nom).toBe('PPSPS');
+    const filePath = res.body.chantier.documentsChantier[0].filePath as string;
+    expect(filePath).toMatch(/^\/uploads\/doc-chantier-.+\.png$/);
+
+    const fileOnDisk = path.join(__dirname, '..', '..', 'uploads', path.basename(filePath));
+    expect(fs.existsSync(fileOnDisk)).toBe(true);
+    fs.unlinkSync(fileOnDisk);
+
+    const get = await request(app).get('/chantiers/LD64397').set('Authorization', `Bearer ${ca.accessToken}`);
+    expect(get.body.chantier.documentsChantier).toHaveLength(1);
+  });
+
+  it('refuse à un installateur de déposer un document de référence', async () => {
+    const ca = await createCa();
+    await createChantier(ca.accessToken);
+    const installateur = await createInstallateur({ isActive: true });
+
+    const res = await request(app)
+      .post('/chantiers/LD64397/documents-chantier')
+      .set('Authorization', `Bearer ${installateur.accessToken}`)
+      .send({ type: 'technique', nom: 'Plan', file: `data:image/png;base64,${ONE_PX_PNG_BASE64}` });
+    expect(res.status).toBe(403);
+  });
+
+  it('refuse un type de document invalide', async () => {
+    const ca = await createCa();
+    await createChantier(ca.accessToken);
+
+    const res = await request(app)
+      .post('/chantiers/LD64397/documents-chantier')
+      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .send({ type: 'autre', nom: 'PPSPS', file: `data:image/png;base64,${ONE_PX_PNG_BASE64}` });
     expect(res.status).toBe(400);
   });
 });

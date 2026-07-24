@@ -3,7 +3,7 @@ import request from 'supertest';
 import bcrypt from 'bcryptjs';
 import { createApp } from '../app';
 import { prisma } from '../prisma';
-import { resetDb } from './helpers';
+import { resetDb, signup as doSignup } from './helpers';
 
 const app = createApp();
 
@@ -67,7 +67,7 @@ describe('Validation des comptes internes par un Admin', () => {
 
   it('refuse de valider un compte qui n\'est pas soumis à validation (ex. installateur)', async () => {
     const adminToken = await createAdmin();
-    const signup = await request(app).post('/auth/signup').send({
+    const signup = await doSignup(app, {
       nom: 'Roux', prenom: 'Thomas', mobile: '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo',
     });
 
@@ -84,7 +84,7 @@ describe("Tableau de bord d'activité Admin", () => {
     const ca = await createCa();
 
     // Inscription en attente (installateur)
-    await request(app).post('/auth/signup').send({
+    await doSignup(app, {
       nom: 'Roux', prenom: 'Thomas', mobile: '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo',
     });
 
@@ -132,5 +132,62 @@ describe("Tableau de bord d'activité Admin", () => {
     expect(feed.body.pvRecents[0].pvSigneur).toBe('M. Weber');
     expect(feed.body.rexEnAttente).toHaveLength(1);
     expect(feed.body.rexEnAttente[0].rexTranscription).toContain('bien passé');
+    expect(feed.body.pvRecents[0].pvSignatureImagePath).toBeNull();
+  });
+});
+
+describe('GET /admin/stats', () => {
+  it('refuse à un chargé d\'affaires l\'accès aux statistiques', async () => {
+    const ca = await createCa();
+    const res = await request(app).get('/admin/stats').set('Authorization', `Bearer ${ca.accessToken}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('renvoie 8 semaines glissantes avec les compteurs de la semaine en cours', async () => {
+    const adminToken = await createAdmin();
+    const ca = await createCa();
+
+    const created = await request(app)
+      .post('/chantiers')
+      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .send({
+        reference: 'LD64397', client: 'Costockage', adresse: '4 rue des Frères Lumière', ville: 'Meyzieu (69)',
+        dateDebut: '2026-07-21T00:00:00.000Z', dateFin: '2026-07-23T00:00:00.000Z',
+        contactNom: 'M. Weber', contactTel: '0612345678', horaires: '6h30-17h00',
+        typeMonteCharge: 'Monte-charge non accompagné', capacite: '300 kg', niveaux: 2, referenceAffaire: 'AF-2026-001',
+      });
+    const pointId = created.body.chantier.receptionMarchandises[0].id;
+
+    await request(app)
+      .patch(`/chantiers/LD64397/points/${pointId}`)
+      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .send({ status: 'nonConforme' });
+
+    await request(app)
+      .post('/chantiers/LD64397/rex')
+      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .send({ transcription: 'RAS.' });
+
+    await Promise.all(
+      (created.body.chantier.autoControle as { id: string }[]).map((p) =>
+        request(app)
+          .patch(`/chantiers/LD64397/points/${p.id}`)
+          .set('Authorization', `Bearer ${ca.accessToken}`)
+          .send({ status: 'conforme', photoPath: 'photo.jpg' }),
+      ),
+    );
+    await request(app)
+      .post('/chantiers/LD64397/pv')
+      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .send({ signataire: 'M. Weber' });
+
+    const res = await request(app).get('/admin/stats').set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.weeks).toHaveLength(8);
+
+    const currentWeek = res.body.weeks[7];
+    expect(currentWeek.pvSignes).toBe(1);
+    expect(currentWeek.rexSoumis).toBe(1);
+    expect(currentWeek.anomalies).toBe(1);
   });
 });

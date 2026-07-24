@@ -1,4 +1,5 @@
-import { Router } from 'express';
+import { Router, Response, NextFunction } from 'express';
+import { Chantier } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../prisma';
 import { serializeChantier } from '../serializers';
@@ -12,10 +13,40 @@ const CHANTIER_INCLUDE = {
   pointsControle: { orderBy: { ordre: 'asc' as const } },
   installateurs: { include: { user: true } },
   documentsTerrain: { include: { auteur: true } },
+  documentsChantier: { orderBy: { createdAt: 'asc' as const } },
 };
+
+interface ChantierScopedRequest extends AuthedRequest {
+  chantier?: Chantier;
+}
+
+/// Un installateur ne peut agir que sur un chantier auquel il est rattaché
+/// (table ChantierInstallateur) — sans ce garde, n'importe quel installateur
+/// authentifié pouvait modifier les points, signer le PV ou déposer un
+/// document sur n'importe quel chantier en connaissant sa seule référence.
+/// Les rôles internes (CA, Qualité, Direction, Admin) ne sont pas concernés
+/// par la notion de rattachement.
+async function requireRattachement(req: ChantierScopedRequest, res: Response, next: NextFunction) {
+  const chantier = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
+  if (!chantier) return res.status(404).json({ error: 'Chantier introuvable' });
+
+  if (req.auth!.role === 'installateur') {
+    const rattache = await prisma.chantierInstallateur.findUnique({
+      where: { chantierId_userId: { chantierId: chantier.id, userId: req.auth!.userId } },
+    });
+    if (!rattache) return res.status(403).json({ error: 'Vous n\'êtes pas rattaché à ce chantier' });
+  }
+
+  req.chantier = chantier;
+  next();
+}
 
 chantiersRouter.get('/', requireAuth, async (req: AuthedRequest, res) => {
   const { userId, role } = req.auth!;
+  // L'Admin n'a pas accès aux chantiers (son périmètre est le flux
+  // d'activité et la validation des comptes internes, voir /admin).
+  if (role === 'admin') return res.status(403).json({ error: 'Accès refusé' });
+
   const chantiers = await prisma.chantier.findMany({
     where: role === 'installateur' ? { installateurs: { some: { userId } } } : undefined,
     include: CHANTIER_INCLUDE,
@@ -122,12 +153,17 @@ const pointUpdateSchema = z.object({
   clientValidatedAt: z.string().optional(),
 });
 
-chantiersRouter.patch('/:reference/points/:pointId', requireAuth, async (req: AuthedRequest, res) => {
+chantiersRouter.patch('/:reference/points/:pointId', requireAuth, requireRattachement, async (req: ChantierScopedRequest, res) => {
   const parsed = pointUpdateSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
   const point = await prisma.pointControle.findUnique({ where: { id: req.params.pointId } });
-  if (!point) return res.status(404).json({ error: 'Point de contrôle introuvable' });
+  // Le point doit appartenir au chantier indiqué dans l'URL — sans ce
+  // contrôle, un installateur rattaché au chantier A pourrait modifier un
+  // point du chantier B en devinant/réutilisant son id.
+  if (!point || point.chantierId !== req.chantier!.id) {
+    return res.status(404).json({ error: 'Point de contrôle introuvable' });
+  }
 
   const photoPath = parsed.data.photo
     ? await saveBase64File(parsed.data.photo, `point-${point.id}`)
@@ -169,7 +205,7 @@ const rexSchema = z
   })
   .refine((d) => d.transcription || d.audio, { message: 'Une transcription ou une note vocale est requise' });
 
-chantiersRouter.post('/:reference/rex', requireAuth, async (req, res) => {
+chantiersRouter.post('/:reference/rex', requireAuth, requireRattachement, async (req, res) => {
   const parsed = rexSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
@@ -193,7 +229,7 @@ chantiersRouter.post('/:reference/rex', requireAuth, async (req, res) => {
 
 const pvSchema = z.object({ signataire: z.string().min(1), signatureImage: z.string().optional() });
 
-chantiersRouter.post('/:reference/pv', requireAuth, async (req, res) => {
+chantiersRouter.post('/:reference/pv', requireAuth, requireRattachement, async (req, res) => {
   const parsed = pvSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
@@ -236,13 +272,11 @@ const documentSchema = z.object({
   file: z.string().min(1, 'Un fichier (photo ou PDF) est requis'),
 });
 
-chantiersRouter.post('/:reference/documents', requireAuth, async (req: AuthedRequest, res) => {
+chantiersRouter.post('/:reference/documents', requireAuth, requireRattachement, async (req: ChantierScopedRequest, res) => {
   const parsed = documentSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-  const chantier = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
-  if (!chantier) return res.status(404).json({ error: 'Chantier introuvable' });
-
+  const chantier = req.chantier!;
   const filePath = await saveBase64File(parsed.data.file, `doc-${chantier.id}`);
 
   const doc = await prisma.documentTerrain.create({
@@ -257,3 +291,34 @@ chantiersRouter.post('/:reference/documents', requireAuth, async (req: AuthedReq
   });
   res.status(201).json({ document: doc });
 });
+
+const documentChantierSchema = z.object({
+  type: z.enum(['securite', 'technique']),
+  nom: z.string().min(1),
+  file: z.string().min(1, 'Un fichier (photo ou PDF) est requis'),
+});
+
+// Documents de référence (PPSPS, plans, notices...) déposés par le CA depuis
+// le back-office — consultés en lecture seule par l'installateur sur mobile
+// (Modules 1-3), via le même mécanisme de cache hors-ligne que le reste du chantier.
+chantiersRouter.post(
+  '/:reference/documents-chantier',
+  requireAuth,
+  requireRole('chargeAffaires', 'direction'),
+  async (req, res) => {
+    const parsed = documentChantierSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+    const chantier = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
+    if (!chantier) return res.status(404).json({ error: 'Chantier introuvable' });
+
+    const filePath = await saveBase64File(parsed.data.file, `doc-chantier-${chantier.id}`);
+
+    await prisma.documentChantier.create({
+      data: { chantierId: chantier.id, type: parsed.data.type, nom: parsed.data.nom, filePath },
+    });
+
+    const updated = await prisma.chantier.findUnique({ where: { id: chantier.id }, include: CHANTIER_INCLUDE });
+    res.status(201).json({ chantier: serializeChantier(updated!) });
+  },
+);
