@@ -17,8 +17,12 @@ local.properties
 
 # Build Flutter : seul build/web (généré localement par
 # `flutter build web --release` avant le déploiement) doit être uploadé.
+# (!build/web seul ne suffit pas : il faut aussi !build/web/** pour que le
+# contenu imbriqué — assets/, canvaskit/, etc. — ne reste pas exclu par
+# build/*.)
 build/*
 !build/web
+!build/web/**
 
 # Backend : réinstallé par buildCommand, inutile de l'uploader
 backend/node_modules/

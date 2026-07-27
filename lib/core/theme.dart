@@ -15,7 +15,7 @@ class AppColors {
   static const Color orange = Color(0xFFE85D0F);
 
   // Rouge du logo (si différent du rouge d'état)
-  static const Color rougeLogo = Color(0xFFB02E2E); // Approximé selon consignes
+  static const Color rougeLogo = Color(0xFFE11F1B);
 }
 
 class AppTheme {

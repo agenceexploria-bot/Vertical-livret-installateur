@@ -1,0 +1,26 @@
+name: Déploiement Vercel (production)
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.7'
+          channel: stable
+
+      - run: flutter pub get
+      - run: flutter build web --release
+
+      - name: Déploiement Vercel
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          npx vercel link --yes --token="$VERCEL_TOKEN" --scope explore-ia --project vertical-livret-installateur
+          npx vercel --prod --yes --token="$VERCEL_TOKEN"

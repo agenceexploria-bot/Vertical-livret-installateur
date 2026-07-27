@@ -22,3 +22,6 @@ local.properties
 .pub/
 **/doc/api/
 *.log
+
+.vercel
+.env*
