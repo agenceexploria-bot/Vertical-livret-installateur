@@ -49,6 +49,7 @@ class _BoLoginScreenState extends State<BoLoginScreen> {
                 const SizedBox(height: 4),
                 TextField(
                   controller: _emailController,
+                  textInputAction: TextInputAction.next,
                   decoration: const InputDecoration(
                     hintText: 's.martin@actiwork.fr',
                   ),
@@ -62,6 +63,8 @@ class _BoLoginScreenState extends State<BoLoginScreen> {
                 TextField(
                   controller: _passwordController,
                   obscureText: true,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _login(context),
                   decoration: const InputDecoration(),
                 ),
                 const SizedBox(height: 20),

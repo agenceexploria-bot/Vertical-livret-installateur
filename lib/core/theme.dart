@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppColors {
-  // Couleurs de base
-  static const Color encre = Color(0xFF17222E);
+  // Couleurs de marque — reprises du vrai logo Vertical (anthracite + rouge),
+  // le site officiel n'étant pas accessible pour vérification directe
+  // (protégé par Cloudflare). `encre` et `orange` gardent leur nom historique
+  // pour ne pas casser les dizaines d'usages existants dans l'app — seule la
+  // valeur a changé.
+  static const Color encre = Color(0xFF2D2A26);
   static const Color acier = Color(0xFF4C5E6E);
   static const Color acierClair = Color(0xFF98A3AE);
   static const Color lignes = Color(0xFFD8DDE2);
@@ -13,10 +17,7 @@ class AppColors {
   // Couleurs d'état
   static const Color vert = Color(0xFF1E7F5C);
   static const Color rouge = Color(0xFFB02E2E);
-  static const Color orange = Color(0xFFE85D0F);
-
-  // Rouge du logo (si différent du rouge d'état)
-  static const Color rougeLogo = Color(0xFFE11F1B);
+  static const Color orange = Color(0xFFE11F1B);
 }
 
 /// Ton clair du orange (utilisé pour les dégradés boutons/glow) — dérivé de

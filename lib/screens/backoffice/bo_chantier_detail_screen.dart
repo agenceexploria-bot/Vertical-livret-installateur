@@ -259,6 +259,35 @@ class BoChantierDetailScreen extends StatelessWidget {
             label: ouvert ? 'Prêt hors-ligne' : 'Livret non ouvert',
             type: ouvert ? StatusType.conforme : StatusType.nonConforme,
           ),
+          const SizedBox(width: 8),
+          IconButton(
+            onPressed: () => _confirmerDetachement(context, chantier, u),
+            icon: const Icon(Icons.link_off, size: 16, color: AppColors.acierClair),
+            tooltip: 'Détacher ${u.fullName} de ce chantier',
+            visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            padding: EdgeInsets.zero,
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmerDetachement(BuildContext context, Chantier chantier, User u) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Détacher cet installateur ?'),
+        content: Text('${u.fullName} ne sera plus rattaché au chantier ${chantier.reference}.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Annuler')),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              context.read<ChantierState>().detacher(chantier.reference, u.id);
+            },
+            child: const Text('Détacher'),
+          ),
         ],
       ),
     );

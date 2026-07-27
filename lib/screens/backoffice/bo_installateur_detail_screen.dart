@@ -51,7 +51,32 @@ class BoInstallateurDetailScreen extends StatelessWidget {
               const SizedBox(width: 10),
               StatusIndicator(label: compteLabel, type: compteType),
               const Spacer(),
-              if (isAdmin)
+              OutlinedButton(
+                onPressed: () => _openModifierProfilDialog(context, installateur),
+                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 34), padding: const EdgeInsets.symmetric(horizontal: 16)),
+                child: const Text('Modifier le profil', style: TextStyle(fontSize: 12)),
+              ),
+              const SizedBox(width: 8),
+              if (installateur.isActive && !installateur.suspendu)
+                OutlinedButton(
+                  onPressed: () => context.read<ComptesState>().suspendre(installateur),
+                  style: OutlinedButton.styleFrom(minimumSize: const Size(0, 34), padding: const EdgeInsets.symmetric(horizontal: 16)),
+                  child: const Text('Suspendre', style: TextStyle(fontSize: 12)),
+                )
+              else if (installateur.suspendu)
+                OutlinedButton(
+                  onPressed: () => context.read<ComptesState>().reactiver(installateur),
+                  style: OutlinedButton.styleFrom(minimumSize: const Size(0, 34), padding: const EdgeInsets.symmetric(horizontal: 16)),
+                  child: const Text('Réactiver', style: TextStyle(fontSize: 12)),
+                ),
+              const SizedBox(width: 8),
+              OutlinedButton(
+                onPressed: () => _openReinitDialog(context, installateur),
+                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 34), padding: const EdgeInsets.symmetric(horizontal: 16)),
+                child: const Text('Réinit. mot de passe', style: TextStyle(fontSize: 12)),
+              ),
+              if (isAdmin) ...[
+                const SizedBox(width: 8),
                 OutlinedButton(
                   onPressed: () => _confirmerSuppression(context, installateur),
                   style: OutlinedButton.styleFrom(
@@ -62,6 +87,7 @@ class BoInstallateurDetailScreen extends StatelessWidget {
                   ),
                   child: const Text('Supprimer le compte', style: TextStyle(fontSize: 12)),
                 ),
+              ],
             ],
           ),
           const SizedBox(height: 16),
@@ -78,6 +104,96 @@ class BoInstallateurDetailScreen extends StatelessWidget {
             },
           ),
         ],
+      ),
+    );
+  }
+
+  void _openModifierProfilDialog(BuildContext context, User u) {
+    final nomController = TextEditingController(text: u.nom);
+    final prenomController = TextEditingController(text: u.prenom);
+    final emailController = TextEditingController(text: u.email ?? '');
+    final mobileController = TextEditingController(text: u.mobile ?? '');
+    bool isSubmitting = false;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setState) => AlertDialog(
+          title: Text('Modifier le profil de ${u.fullName}'),
+          content: SizedBox(
+            width: 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: prenomController, decoration: const InputDecoration(labelText: 'Prénom')),
+                const SizedBox(height: 10),
+                TextField(controller: nomController, decoration: const InputDecoration(labelText: 'Nom')),
+                const SizedBox(height: 10),
+                TextField(controller: emailController, decoration: const InputDecoration(labelText: 'Email')),
+                const SizedBox(height: 10),
+                TextField(controller: mobileController, decoration: const InputDecoration(labelText: 'Mobile')),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Annuler')),
+            ElevatedButton(
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      setState(() => isSubmitting = true);
+                      await context.read<ComptesState>().modifierProfil(
+                            u,
+                            nom: nomController.text.trim(),
+                            prenom: prenomController.text.trim(),
+                            email: emailController.text.trim(),
+                            mobile: mobileController.text.trim(),
+                          );
+                      if (dialogContext.mounted) Navigator.pop(dialogContext);
+                    },
+              child: isSubmitting
+                  ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Enregistrer'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openReinitDialog(BuildContext context, User u) {
+    final controller = TextEditingController();
+    bool isSubmitting = false;
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setState) => AlertDialog(
+          title: Text('Réinitialiser le mot de passe de ${u.fullName}'),
+          content: SizedBox(
+            width: 320,
+            child: TextField(
+              controller: controller,
+              obscureText: true,
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(labelText: 'Nouveau mot de passe', hintText: 'Au moins 6 caractères'),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Annuler')),
+            ElevatedButton(
+              onPressed: controller.text.trim().length < 6 || isSubmitting
+                  ? null
+                  : () async {
+                      setState(() => isSubmitting = true);
+                      await context.read<ComptesState>().reinitialiserMotDePasse(u, controller.text.trim());
+                      if (dialogContext.mounted) Navigator.pop(dialogContext);
+                    },
+              child: isSubmitting
+                  ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Réinitialiser'),
+            ),
+          ],
+        ),
       ),
     );
   }

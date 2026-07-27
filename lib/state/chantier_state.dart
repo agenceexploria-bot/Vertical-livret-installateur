@@ -54,6 +54,11 @@ class ChantierState extends ChangeNotifier {
     _replaceInList(updated);
   }
 
+  Future<void> detacher(String reference, String userId) async {
+    final updated = await _repository.detacher(reference, userId);
+    _replaceInList(updated);
+  }
+
   /// Modification et suppression d'un chantier (Admin uniquement — voir la
   /// refonte des rôles back-office).
   Future<void> updateChantier(String reference, Map<String, dynamic> body) async {

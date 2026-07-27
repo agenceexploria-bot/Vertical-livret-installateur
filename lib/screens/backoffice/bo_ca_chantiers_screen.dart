@@ -12,6 +12,7 @@ import '../../state/chantier_state.dart';
 import '../../state/comptes_state.dart';
 import 'widgets/bo_shell.dart';
 import 'widgets/bo_panel.dart';
+import 'widgets/bo_responsive_table.dart';
 import 'widgets/pv_signature_panel.dart';
 
 /// Espace Chargé d'Affaires — gestion des chantiers (création, suivi, PV
@@ -53,17 +54,19 @@ class BoCaChantiersScreen extends StatelessWidget {
           const SizedBox(height: 20),
           Text('Auto-contrôles & qualité', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 14),
-          Container(
-            decoration: BoxDecoration(
-              color: AppColors.blanc,
-              border: Border.all(color: AppColors.lignes),
-              borderRadius: BorderRadius.circular(7),
-            ),
-            child: Column(
-              children: [
-                _qualiteHeaderRow(),
-                for (final c in chantiers) _qualiteDataRow(c),
-              ],
+          BoResponsiveTable(
+            child: Container(
+              decoration: BoxDecoration(
+                color: AppColors.blanc,
+                border: Border.all(color: AppColors.lignes),
+                borderRadius: BorderRadius.circular(7),
+              ),
+              child: Column(
+                children: [
+                  _qualiteHeaderRow(),
+                  for (final c in chantiers) _qualiteDataRow(c),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -118,17 +121,20 @@ class BoCaChantiersScreen extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        Container(
-          decoration: BoxDecoration(
-            color: AppColors.blanc,
-            border: Border.all(color: AppColors.lignes),
-            borderRadius: BorderRadius.circular(7),
-          ),
-          child: Column(
-            children: [
-              _headerRow(),
-              for (final c in chantiers) _dataRow(context, c),
-            ],
+        BoResponsiveTable(
+          minWidth: 600,
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.blanc,
+              border: Border.all(color: AppColors.lignes),
+              borderRadius: BorderRadius.circular(7),
+            ),
+            child: Column(
+              children: [
+                _headerRow(),
+                for (final c in chantiers) _dataRow(context, c),
+              ],
+            ),
           ),
         ),
       ],

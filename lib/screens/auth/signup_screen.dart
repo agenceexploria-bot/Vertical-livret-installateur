@@ -217,6 +217,8 @@ class _SignupScreenState extends State<SignupScreen> {
                 textAlign: TextAlign.center,
                 keyboardType: TextInputType.number,
                 maxLength: 6,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _nextStep(),
                 style: const TextStyle(fontSize: 24, letterSpacing: 8, fontWeight: FontWeight.bold),
                 decoration: const InputDecoration(counterText: ''),
               ),
@@ -266,6 +268,8 @@ class _SignupScreenState extends State<SignupScreen> {
     return TextField(
       controller: ctrl,
       obscureText: obscure,
+      textInputAction: TextInputAction.next,
+      onSubmitted: (_) => _nextStep(),
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,

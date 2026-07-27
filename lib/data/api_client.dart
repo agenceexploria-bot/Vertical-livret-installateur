@@ -211,6 +211,23 @@ class ApiClient {
   /// refonte des rôles) ; le backend rejette la requête pour tout autre rôle.
   Future<void> supprimerCompte(String id) => _request('DELETE', '/comptes/$id');
 
+  /// Réinitialisation du mot de passe d'un installateur — CA/Direction/Admin.
+  Future<void> reinitialiserMotDePasse(String id, String password) =>
+      _request('POST', '/comptes/$id/reinitialiser-mot-de-passe', body: {'password': password});
+
+  /// Modification du profil d'un installateur par le CA/Admin (distinct de
+  /// updateProfile ci-dessus, qui modifie le compte connecté lui-même).
+  Future<Map<String, dynamic>> updateCompte(String id,
+      {String? nom, String? prenom, String? email, String? mobile, String? societe}) {
+    return _request('PATCH', '/comptes/$id', body: {
+      'nom': ?nom,
+      'prenom': ?prenom,
+      'email': ?email,
+      'mobile': ?mobile,
+      'societe': ?societe,
+    });
+  }
+
   Future<Map<String, dynamic>> updateProfile({String? nom, String? prenom, String? email, String? mobile, String? societe}) {
     return _request('PATCH', '/comptes/moi', body: {
       'nom': ?nom,
@@ -259,6 +276,9 @@ class ApiClient {
 
   Future<Map<String, dynamic>> rattacher(String reference, String userId) =>
       _request('POST', '/chantiers/$reference/rattacher', body: {'userId': userId});
+
+  Future<Map<String, dynamic>> detacher(String reference, String userId) =>
+      _request('DELETE', '/chantiers/$reference/rattacher/$userId');
 
   Future<void> markLivretOuvert(String reference) =>
       _request('POST', '/chantiers/$reference/livret-ouvert');

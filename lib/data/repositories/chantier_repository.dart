@@ -48,6 +48,11 @@ class ChantierRepository {
     return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
   }
 
+  Future<Chantier> detacher(String reference, String userId) async {
+    final data = await _api.detacher(reference, userId);
+    return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
+  }
+
   /// Modification et suppression d'un chantier — réservées à l'Admin (voir la
   /// refonte des rôles back-office) ; le backend rejette la requête sinon.
   Future<Chantier> updateChantier(String reference, Map<String, dynamic> body) async {

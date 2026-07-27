@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../core/coming_soon.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/status_indicator.dart';
 import '../../data/models/user.dart';
+import '../../state/auth_state.dart';
 import '../../state/chantier_state.dart';
 import '../../state/comptes_state.dart';
+import 'widgets/bo_responsive_table.dart';
 import 'widgets/bo_shell.dart';
 
 class BoComptesScreen extends StatelessWidget {
@@ -17,6 +18,7 @@ class BoComptesScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final comptesState = context.watch<ComptesState>();
     final chantiers = context.watch<ChantierState>().chantiers;
+    final isAdmin = context.watch<AuthState>().currentUser?.role == UserRole.admin;
 
     return BoShell(
       activeNav: 'comptes',
@@ -40,18 +42,92 @@ class BoComptesScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          Container(
-            decoration: BoxDecoration(
-              color: AppColors.blanc,
-              border: Border.all(color: AppColors.lignes),
-              borderRadius: BorderRadius.circular(7),
+          BoResponsiveTable(
+            child: Container(
+              decoration: BoxDecoration(
+                color: AppColors.blanc,
+                border: Border.all(color: AppColors.lignes),
+                borderRadius: BorderRadius.circular(7),
+              ),
+              child: Column(
+                children: [
+                  _headerRow(),
+                  for (final u in comptesState.installateurs) _dataRow(context, u, chantiers, comptesState, isAdmin),
+                ],
+              ),
             ),
-            child: Column(
-              children: [
-                _headerRow(),
-                for (final u in comptesState.installateurs) _dataRow(context, u, chantiers, comptesState),
-              ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _onMenuAction(BuildContext context, ComptesState comptesState, User u, String value) {
+    switch (value) {
+      case 'suspendre':
+        comptesState.suspendre(u);
+        break;
+      case 'reinit':
+        _openReinitDialog(context, comptesState, u);
+        break;
+      case 'supprimer':
+        _confirmerSuppression(context, comptesState, u);
+        break;
+    }
+  }
+
+  void _openReinitDialog(BuildContext context, ComptesState comptesState, User u) {
+    final controller = TextEditingController();
+    bool isSubmitting = false;
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setState) => AlertDialog(
+          title: Text('Réinitialiser le mot de passe de ${u.fullName}'),
+          content: SizedBox(
+            width: 320,
+            child: TextField(
+              controller: controller,
+              obscureText: true,
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(labelText: 'Nouveau mot de passe', hintText: 'Au moins 6 caractères'),
             ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Annuler')),
+            ElevatedButton(
+              onPressed: controller.text.trim().length < 6 || isSubmitting
+                  ? null
+                  : () async {
+                      setState(() => isSubmitting = true);
+                      await comptesState.reinitialiserMotDePasse(u, controller.text.trim());
+                      if (dialogContext.mounted) Navigator.pop(dialogContext);
+                    },
+              child: isSubmitting
+                  ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Réinitialiser'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _confirmerSuppression(BuildContext context, ComptesState comptesState, User u) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Supprimer ce compte ?'),
+        content: Text('Le compte de ${u.fullName} sera supprimé définitivement. Cette action est irréversible.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Annuler')),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppColors.rouge),
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              comptesState.supprimer(u);
+            },
+            child: const Text('Supprimer définitivement'),
           ),
         ],
       ),
@@ -76,7 +152,7 @@ class BoComptesScreen extends StatelessWidget {
     );
   }
 
-  Widget _dataRow(BuildContext context, User u, List chantiers, ComptesState comptesState) {
+  Widget _dataRow(BuildContext context, User u, List chantiers, ComptesState comptesState, bool isAdmin) {
     final (compteLabel, compteType) = u.suspendu
         ? ('Suspendu', StatusType.attente)
         : !u.isActive
@@ -95,26 +171,36 @@ class BoComptesScreen extends StatelessWidget {
 
     final statutLabel = u.status == UserStatus.sousTraitant ? 'Sous-traitant${u.societe != null ? ' · ${u.societe}' : ''}' : 'Salarié';
 
-    Widget action;
+    Widget? primaryAction;
     if (!u.isActive) {
-      action = ElevatedButton(
+      primaryAction = ElevatedButton(
         onPressed: () => comptesState.valider(u),
         style: ElevatedButton.styleFrom(minimumSize: const Size(0, 30), padding: const EdgeInsets.symmetric(horizontal: 10)),
         child: const Text('Valider', style: TextStyle(fontSize: 11)),
       );
     } else if (u.suspendu) {
-      action = OutlinedButton(
+      primaryAction = OutlinedButton(
         onPressed: () => comptesState.reactiver(u),
         style: OutlinedButton.styleFrom(minimumSize: const Size(0, 30), padding: const EdgeInsets.symmetric(horizontal: 10)),
         child: const Text('Réactiver', style: TextStyle(fontSize: 11)),
       );
-    } else {
-      action = OutlinedButton(
-        onPressed: () => showComingSoon(context),
-        style: OutlinedButton.styleFrom(minimumSize: const Size(0, 30), padding: const EdgeInsets.symmetric(horizontal: 10)),
-        child: const Text('Réinit. mdp', style: TextStyle(fontSize: 11)),
-      );
     }
+
+    final action = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ?primaryAction,
+        PopupMenuButton<String>(
+          icon: const Icon(Icons.more_vert, size: 18, color: AppColors.acierClair),
+          onSelected: (value) => _onMenuAction(context, comptesState, u, value),
+          itemBuilder: (context) => [
+            if (u.isActive && !u.suspendu) const PopupMenuItem(value: 'suspendre', child: Text('Suspendre')),
+            const PopupMenuItem(value: 'reinit', child: Text('Réinitialiser le mot de passe')),
+            if (isAdmin) const PopupMenuItem(value: 'supprimer', child: Text('Supprimer le compte')),
+          ],
+        ),
+      ],
+    );
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 9),

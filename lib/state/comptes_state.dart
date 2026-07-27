@@ -49,6 +49,13 @@ class ComptesState extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> reinitialiserMotDePasse(User user, String password) => _api.reinitialiserMotDePasse(user.id, password);
+
+  Future<void> modifierProfil(User user, {String? nom, String? prenom, String? email, String? mobile, String? societe}) async {
+    final data = await _api.updateCompte(user.id, nom: nom, prenom: prenom, email: email, mobile: mobile, societe: societe);
+    _replace(User.fromJson(data['user'] as Map<String, dynamic>));
+  }
+
   void _replace(User updated) {
     final index = _installateurs.indexWhere((u) => u.id == updated.id);
     if (index != -1) {

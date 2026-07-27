@@ -18,6 +18,16 @@ class _LoginScreenState extends State<LoginScreen> {
   final _identifierController = TextEditingController();
   final _passwordController = TextEditingController();
 
+  Future<void> _submit() async {
+    final authState = context.read<AuthState>();
+    final success = await authState.login(_identifierController.text, _passwordController.text);
+    if (!success && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(authState.lastError ?? 'Identifiants incorrects')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = context.watch<AuthState>();
@@ -35,6 +45,7 @@ class _LoginScreenState extends State<LoginScreen> {
               
               TextField(
                 controller: _identifierController,
+                textInputAction: TextInputAction.next,
                 decoration: const InputDecoration(
                   labelText: 'Mobile ou email',
                   hintText: 'ex: 06 52 41 78 90',
@@ -44,24 +55,19 @@ class _LoginScreenState extends State<LoginScreen> {
               TextField(
                 controller: _passwordController,
                 obscureText: true,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _submit(),
                 decoration: const InputDecoration(
                   labelText: 'Mot de passe',
                 ),
               ),
               const SizedBox(height: 24),
-              
+
               if (authState.isLoading)
                 const CircularProgressIndicator(color: AppColors.orange)
               else
                 ElevatedButton(
-                  onPressed: () async {
-                    final success = await authState.login(_identifierController.text, _passwordController.text);
-                    if (!success && context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(authState.lastError ?? 'Identifiants incorrects')),
-                      );
-                    }
-                  },
+                  onPressed: _submit,
                   child: const Text('Se connecter'),
                 ),
               

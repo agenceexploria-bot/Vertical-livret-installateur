@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { prisma } from '../prisma';
 import { serializeUser } from '../serializers';
@@ -60,6 +61,28 @@ comptesRouter.delete('/:id', requireAuth, requireRole('admin'), async (req: Auth
   res.status(204).send();
 });
 
+const resetPasswordSchema = z.object({ password: z.string().min(6) });
+
+// Réinitialisation du mot de passe d'un installateur par le CA/Admin — le
+// nouveau mot de passe est choisi par le CA/Admin et communiqué ensuite à
+// l'installateur (pas de flux d'email de réinitialisation dans cette V1).
+comptesRouter.post(
+  '/:id/reinitialiser-mot-de-passe',
+  requireAuth,
+  requireRole('chargeAffaires', 'direction', 'admin'),
+  async (req, res) => {
+    const parsed = resetPasswordSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+    const existing = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ error: 'Compte introuvable' });
+
+    const passwordHash = await bcrypt.hash(parsed.data.password, 10);
+    await prisma.user.update({ where: { id: req.params.id }, data: { passwordHash } });
+    res.status(204).send();
+  },
+);
+
 const updateProfileSchema = z.object({
   nom: z.string().min(1).optional(),
   prenom: z.string().min(1).optional(),
@@ -87,6 +110,32 @@ comptesRouter.patch('/moi', requireAuth, async (req: AuthedRequest, res) => {
 
   const user = await prisma.user.update({
     where: { id: req.auth!.userId },
+    data: parsed.data,
+    include: { habilitations: true },
+  });
+  res.json({ user: serializeUser(user) });
+});
+
+// Le CA/Admin modifie le profil d'un installateur depuis le back-office
+// (distinct de /moi, réservé à l'auto-modification) — pas de changement de
+// mot de passe ni de rôle ici non plus.
+comptesRouter.patch('/:id', requireAuth, requireRole('chargeAffaires', 'direction', 'admin'), async (req, res) => {
+  const parsed = updateProfileSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  const { email, mobile } = parsed.data;
+
+  if (email || mobile) {
+    const existing = await prisma.user.findFirst({
+      where: {
+        id: { not: req.params.id },
+        OR: [...(email ? [{ email }] : []), ...(mobile ? [{ mobile }] : [])],
+      },
+    });
+    if (existing) return res.status(409).json({ error: 'Cet email ou ce mobile est déjà utilisé par un autre compte' });
+  }
+
+  const user = await prisma.user.update({
+    where: { id: req.params.id },
     data: parsed.data,
     include: { habilitations: true },
   });

@@ -105,6 +105,8 @@ class _BoAccessRequestScreenState extends State<BoAccessRequestScreen> {
         TextField(
           controller: controller,
           obscureText: obscure,
+          textInputAction: TextInputAction.next,
+          onSubmitted: (_) => _submit(context),
           decoration: InputDecoration(
             hintText: hint,
           ),

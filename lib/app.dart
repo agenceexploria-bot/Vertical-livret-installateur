@@ -81,6 +81,19 @@ class _RouterHostState extends State<_RouterHost> {
       theme: AppTheme.lightTheme,
       debugShowCheckedModeBanner: false,
       routerConfig: _router,
+      // Beaucoup de textes du back-office (tableaux denses) utilisent des
+      // tailles fixes assez petites (9.5-11.5px) — un boost global du texte
+      // (au lieu de retoucher chaque style un par un) les rend plus lisibles
+      // partout d'un coup. Multiplie l'échelle système plutôt que de la
+      // remplacer, pour respecter les réglages d'accessibilité de l'appareil.
+      builder: (context, child) {
+        final mediaQuery = MediaQuery.of(context);
+        final boosted = TextScaler.linear(mediaQuery.textScaler.scale(1.0) * 1.12);
+        return MediaQuery(
+          data: mediaQuery.copyWith(textScaler: boosted),
+          child: child!,
+        );
+      },
     );
   }
 }

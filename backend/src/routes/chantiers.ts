@@ -129,6 +129,24 @@ chantiersRouter.post('/:reference/rattacher', requireAuth, requireRole('chargeAf
   res.json({ chantier: serializeChantier(updated!) });
 });
 
+// Détache un installateur d'un chantier (retire le rattachement) — CA/Direction/Admin.
+chantiersRouter.delete(
+  '/:reference/rattacher/:userId',
+  requireAuth,
+  requireRole('chargeAffaires', 'direction', 'admin'),
+  async (req, res) => {
+    const chantier = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
+    if (!chantier) return res.status(404).json({ error: 'Chantier introuvable' });
+
+    await prisma.chantierInstallateur.deleteMany({
+      where: { chantierId: chantier.id, userId: req.params.userId },
+    });
+
+    const updated = await prisma.chantier.findUnique({ where: { id: chantier.id }, include: CHANTIER_INCLUDE });
+    res.json({ chantier: serializeChantier(updated!) });
+  },
+);
+
 const updateChantierSchema = z.object({
   client: z.string().min(1).optional(),
   adresse: z.string().min(1).optional(),
