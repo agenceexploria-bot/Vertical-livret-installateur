@@ -164,6 +164,7 @@ model DocumentTerrain {
 }
 
 enum TypeDocumentChantier {
+  ficheChantier
   securite
   technique
 }

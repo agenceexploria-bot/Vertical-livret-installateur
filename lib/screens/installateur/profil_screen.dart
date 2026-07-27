@@ -213,11 +213,11 @@ class _AddCertificatDialogState extends State<_AddCertificatDialog> {
   }
 
   Future<void> _choisirFichier() async {
-    final file = await DocumentCapture.pickFile();
-    if (file == null) return;
+    final picked = await DocumentCapture.pickFile();
+    if (picked == null) return;
     setState(() {
-      _file = file;
-      _fileLabel = file.startsWith('data:application/pdf') ? 'PDF sélectionné' : 'Image sélectionnée';
+      _file = picked.dataUrl;
+      _fileLabel = picked.fileName;
     });
   }
 

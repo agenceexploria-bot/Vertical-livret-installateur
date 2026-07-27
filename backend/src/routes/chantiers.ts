@@ -368,7 +368,7 @@ chantiersRouter.post('/:reference/documents', requireAuth, requireRattachement, 
 });
 
 const documentChantierSchema = z.object({
-  type: z.enum(['securite', 'technique']),
+  type: z.enum(['ficheChantier', 'securite', 'technique']),
   nom: z.string().min(1),
   file: z.string().min(1, 'Un fichier (photo ou PDF) est requis'),
 });

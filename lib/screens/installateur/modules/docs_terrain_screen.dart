@@ -135,9 +135,9 @@ class _DocsTerrainScreenState extends State<DocsTerrainScreen> {
     }
 
     setState(() => _isCapturing = true);
-    final file = await DocumentCapture.pickFile();
+    final picked = await DocumentCapture.pickFile();
     if (!context.mounted) return;
-    if (file == null) {
+    if (picked == null) {
       setState(() => _isCapturing = false);
       return;
     }
@@ -145,12 +145,17 @@ class _DocsTerrainScreenState extends State<DocsTerrainScreen> {
     final isOnline = context.read<NetworkState>().isOnline;
     final chantierState = context.read<ChantierState>();
     final reference = chantierState.currentChantier!.reference;
-    final titre = '${_categories.firstWhere((c) => c.$2 == categorie).$1} — ${DateFormat('HH:mm').format(DateTime.now())}';
     final auteur = context.read<AuthState>().currentUser?.fullName;
 
     // Le repository tente le réseau et, en cas d'échec, met l'envoi en file
     // d'attente locale (PendingOperations) — rejoué automatiquement au retour réseau.
-    await chantierState.addDocument(reference, titre: titre, categorie: categorie.name, file: file, auteurName: auteur);
+    await chantierState.addDocument(
+      reference,
+      titre: picked.fileName,
+      categorie: categorie.name,
+      file: picked.dataUrl,
+      auteurName: auteur,
+    );
 
     if (!context.mounted) return;
     if (!isOnline) {

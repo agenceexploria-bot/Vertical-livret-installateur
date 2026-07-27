@@ -133,7 +133,7 @@ class BoChantierDetailScreen extends StatelessWidget {
           ),
         ),
         BoPanel(
-          title: 'Documents chantier (PPSPS, plans, notices...)',
+          title: 'Documents chantier — Modules 1 à 3',
           child: _buildDocumentsChantier(context, chantier),
         ),
         BoPanel(
@@ -153,17 +153,33 @@ class BoChantierDetailScreen extends StatelessWidget {
     );
   }
 
+  static const _modulesDocuments = [
+    (TypeDocumentChantier.ficheChantier, 'Module 1 - Fiche chantier'),
+    (TypeDocumentChantier.securite, 'Module 2 - Sécurité'),
+    (TypeDocumentChantier.technique, 'Module 3 - Technique'),
+  ];
+
   Widget _buildDocumentsChantier(BuildContext context, Chantier chantier) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (chantier.documentsChantier.isEmpty)
-          const Padding(
-            padding: EdgeInsets.only(bottom: 8),
-            child: Text('Aucun document déposé pour l\'instant.', style: TextStyle(fontSize: 11, color: AppColors.acierClair)),
-          ),
-        for (final d in chantier.documentsChantier) _documentChantierRow(d),
-        const SizedBox(height: 8),
+        for (final (type, label) in _modulesDocuments) ...[
+          Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.acier)),
+          const SizedBox(height: 4),
+          () {
+            final docs = chantier.documentsChantier.where((d) => d.type == type).toList();
+            if (docs.isEmpty) {
+              return const Padding(
+                padding: EdgeInsets.only(bottom: 12),
+                child: Text('Aucun document.', style: TextStyle(fontSize: 11, color: AppColors.acierClair)),
+              );
+            }
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Column(children: [for (final d in docs) _documentChantierRow(d)]),
+            );
+          }(),
+        ],
         ElevatedButton(
           onPressed: () => _openAjouterDocumentDialog(context, chantier),
           style: ElevatedButton.styleFrom(minimumSize: const Size(0, 32), padding: const EdgeInsets.symmetric(horizontal: 14)),
@@ -216,6 +232,11 @@ class BoChantierDetailScreen extends StatelessWidget {
   }
 
   Widget _documentChantierRow(DocumentChantier d) {
+    final icon = switch (d.type) {
+      TypeDocumentChantier.securite => Icons.shield_outlined,
+      TypeDocumentChantier.ficheChantier => Icons.assignment_outlined,
+      TypeDocumentChantier.technique => Icons.description_outlined,
+    };
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 6),
       decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFEEF1F3)))),
@@ -223,14 +244,9 @@ class BoChantierDetailScreen extends StatelessWidget {
         onTap: () => launchUrl(Uri.parse(d.filePath)),
         child: Row(
           children: [
-            Icon(d.type == TypeDocumentChantier.securite ? Icons.shield_outlined : Icons.description_outlined,
-                size: 16, color: AppColors.acierClair),
+            Icon(icon, size: 16, color: AppColors.acierClair),
             const SizedBox(width: 8),
             Expanded(child: Text(d.nom, style: const TextStyle(fontSize: 11.5))),
-            StatusIndicator(
-              label: d.type == TypeDocumentChantier.securite ? 'Sécurité' : 'Technique',
-              type: StatusType.factuel,
-            ),
           ],
         ),
       ),
@@ -424,9 +440,8 @@ class _AjouterDocumentChantierDialog extends StatefulWidget {
 
 class _AjouterDocumentChantierDialogState extends State<_AjouterDocumentChantierDialog> {
   final _nomController = TextEditingController();
-  TypeDocumentChantier _type = TypeDocumentChantier.securite;
-  String? _file;
-  String? _fileLabel;
+  TypeDocumentChantier _type = TypeDocumentChantier.ficheChantier;
+  PickedDocument? _picked;
   bool _isSubmitting = false;
 
   @override
@@ -435,14 +450,17 @@ class _AjouterDocumentChantierDialogState extends State<_AjouterDocumentChantier
     super.dispose();
   }
 
-  bool get _peutEnvoyer => _nomController.text.trim().isNotEmpty && _file != null;
+  bool get _peutEnvoyer => _nomController.text.trim().isNotEmpty && _picked != null;
 
   Future<void> _choisirFichier() async {
-    final file = await DocumentCapture.pickFile();
-    if (file == null) return;
+    final picked = await DocumentCapture.pickFile();
+    if (picked == null) return;
     setState(() {
-      _file = file;
-      _fileLabel = file.startsWith('data:application/pdf') ? 'PDF sélectionné' : 'Image sélectionnée';
+      _picked = picked;
+      // Le nom réel du fichier pré-remplit le champ — le CA peut le corriger
+      // s'il veut un intitulé différent, mais part d'un nom reconnaissable
+      // plutôt que de devoir tout taper lui-même.
+      if (_nomController.text.trim().isEmpty) _nomController.text = picked.fileName;
     });
   }
 
@@ -452,7 +470,7 @@ class _AjouterDocumentChantierDialogState extends State<_AjouterDocumentChantier
           widget.reference,
           type: _type.name,
           nom: _nomController.text.trim(),
-          file: _file!,
+          file: _picked!.dataUrl,
         );
     if (!mounted) return;
     Navigator.of(context).pop();
@@ -481,8 +499,9 @@ class _AjouterDocumentChantierDialogState extends State<_AjouterDocumentChantier
               decoration: BoxDecoration(border: Border.all(color: AppColors.lignes, width: 1.5), borderRadius: BorderRadius.circular(8)),
               child: Row(
                 children: [
-                  Expanded(child: _typeButton('Sécurité', TypeDocumentChantier.securite)),
-                  Expanded(child: _typeButton('Technique', TypeDocumentChantier.technique)),
+                  Expanded(child: _typeButton('Module 1\nFiche chantier', TypeDocumentChantier.ficheChantier)),
+                  Expanded(child: _typeButton('Module 2\nSécurité', TypeDocumentChantier.securite)),
+                  Expanded(child: _typeButton('Module 3\nTechnique', TypeDocumentChantier.technique)),
                 ],
               ),
             ),
@@ -490,7 +509,7 @@ class _AjouterDocumentChantierDialogState extends State<_AjouterDocumentChantier
             OutlinedButton.icon(
               onPressed: _choisirFichier,
               icon: const Icon(Icons.attach_file),
-              label: Text(_fileLabel ?? 'Choisir un fichier (PDF ou image)'),
+              label: Text(_picked?.fileName ?? 'Choisir un fichier (PDF ou image)'),
             ),
           ],
         ),
@@ -515,7 +534,11 @@ class _AjouterDocumentChantierDialogState extends State<_AjouterDocumentChantier
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(color: isOn ? AppColors.encre : Colors.white),
         alignment: Alignment.center,
-        child: Text(label, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: isOn ? Colors.white : AppColors.acier)),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isOn ? Colors.white : AppColors.acier),
+        ),
       ),
     );
   }

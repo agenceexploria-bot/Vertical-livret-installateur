@@ -1,4 +1,4 @@
-enum TypeDocumentChantier { securite, technique }
+enum TypeDocumentChantier { ficheChantier, securite, technique }
 
 TypeDocumentChantier typeDocumentChantierFromJson(String value) =>
     TypeDocumentChantier.values.firstWhere((t) => t.name == value);

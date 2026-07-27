@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/coming_soon.dart';
 import '../../../core/theme.dart';
 import '../../../core/widgets/glass_app_bar.dart';
 import '../../../core/widgets/responsive_layout.dart';
+import '../../../core/widgets/app_card.dart';
+import '../../../data/models/chantier.dart';
+import '../../../data/models/document_chantier.dart';
 import '../../../state/chantier_state.dart';
 
 class FicheChantierScreen extends StatelessWidget {
@@ -110,9 +114,44 @@ class FicheChantierScreen extends StatelessWidget {
               _buildRow('Niveaux', '${chantier.niveaux}'),
               _buildRow('Réf. Affaire', chantier.referenceAffaire),
             ]),
+            const SizedBox(height: 16),
+            _buildDocuments(context, chantier),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildDocuments(BuildContext context, Chantier chantier) {
+    final docs = chantier.documentsChantier
+        .where((d) => d.type == TypeDocumentChantier.ficheChantier)
+        .toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Documents', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 12),
+        if (docs.isEmpty)
+          const Text(
+            'Aucun document déposé pour ce chantier.',
+            style: TextStyle(color: AppColors.acierClair, fontSize: 13),
+          )
+        else
+          for (final doc in docs) ...[
+            AppCard(
+              onTap: () => launchUrl(Uri.parse(doc.filePath)),
+              child: Row(
+                children: [
+                  const Icon(Icons.assignment_outlined, color: AppColors.encre, size: 28),
+                  const SizedBox(width: 16),
+                  Expanded(child: Text(doc.nom, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                  const Icon(Icons.chevron_right, color: AppColors.acierClair),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+      ],
     );
   }
 
