@@ -54,6 +54,20 @@ class ChantierState extends ChangeNotifier {
     _replaceInList(updated);
   }
 
+  /// Modification et suppression d'un chantier (Admin uniquement — voir la
+  /// refonte des rôles back-office).
+  Future<void> updateChantier(String reference, Map<String, dynamic> body) async {
+    final updated = await _repository.updateChantier(reference, body);
+    _replaceInList(updated);
+  }
+
+  Future<void> deleteChantier(String reference) async {
+    await _repository.deleteChantier(reference);
+    _chantiers = _chantiers.where((c) => c.reference != reference).toList();
+    if (_currentChantier?.reference == reference) _currentChantier = null;
+    notifyListeners();
+  }
+
   Future<void> addDocumentChantier(String reference, {required String type, required String nom, required String file}) async {
     final updated = await _repository.addDocumentChantier(reference, type: type, nom: nom, file: file);
     _replaceInList(updated);

@@ -140,12 +140,16 @@ const signupInterneSchema = z.object({
     .email('Email invalide')
     .refine((e) => e.toLowerCase().endsWith('@actiwork.fr'), 'Email professionnel @actiwork.fr requis'),
   password: z.string().min(6),
-  role: z.enum(['chargeAffaires', 'qualite']),
+  // Le rôle Qualité a été fusionné dans l'espace CA (refonte des rôles
+  // back-office) — il n'est plus proposé à l'inscription, seul chargeAffaires
+  // l'est. L'enum du schéma Prisma garde 'qualite' pour ne pas casser un
+  // compte déjà existant avec ce rôle (redirigé côté front vers l'espace CA).
+  role: z.enum(['chargeAffaires']),
 });
 
-// Demande d'accès pour un compte interne (CA / Qualité) : créé immédiatement
-// mais isActive=false — le compte ne peut se connecter au back-office tant
-// qu'un Admin ne l'a pas validé (voir /admin/comptes-internes).
+// Demande d'accès pour un compte interne (CA) : créé immédiatement mais
+// isActive=false — le compte ne peut se connecter au back-office tant qu'un
+// Admin ne l'a pas validé (voir /admin/comptes-internes).
 authRouter.post('/signup-interne', async (req, res) => {
   const parsed = signupInterneSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });

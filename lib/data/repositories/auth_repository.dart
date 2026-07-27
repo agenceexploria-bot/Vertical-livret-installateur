@@ -1,14 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/jwt.dart';
 import '../api_client.dart';
 import '../local/app_database.dart';
+import '../local/session_storage.dart';
 import '../models/user.dart';
 
 class AuthRepository {
   final ApiClient _api;
   final AppDatabase _db;
+  final SessionStorage _storage = createSessionStorage();
   static const String _keyRefreshToken = 'refresh_token';
   static const String _keyUser = 'cached_user';
 
@@ -105,9 +106,8 @@ class AuthRepository {
 
   Future<void> logout() async {
     await _api.logout();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_keyRefreshToken);
-    await prefs.remove(_keyUser);
+    await _storage.remove(_keyRefreshToken);
+    await _storage.remove(_keyUser);
     // Évite qu'un autre installateur se connectant sur le même appareil voie
     // les chantiers mis en cache pour la session précédente.
     await _db.clearChantierCache();
@@ -121,20 +121,19 @@ class AuthRepository {
   /// est tenté en tâche de fond, sans jamais bloquer ni déconnecter en cas
   /// d'échec (pas de réseau, serveur injoignable).
   Future<User?> tryAutoLogin() async {
-    final prefs = await SharedPreferences.getInstance();
-    final refreshToken = prefs.getString(_keyRefreshToken);
+    final refreshToken = await _storage.getString(_keyRefreshToken);
     if (refreshToken == null) return null;
 
     final expiry = jwtExpiry(refreshToken);
     if (expiry != null && expiry.isBefore(DateTime.now())) {
-      await prefs.remove(_keyRefreshToken);
-      await prefs.remove(_keyUser);
+      await _storage.remove(_keyRefreshToken);
+      await _storage.remove(_keyUser);
       return null;
     }
 
     _api.setTokens(refreshToken: refreshToken);
 
-    final cachedJson = prefs.getString(_keyUser);
+    final cachedJson = await _storage.getString(_keyUser);
     if (cachedJson != null) {
       unawaited(_refreshInBackground(refreshToken));
       return User.fromJson(jsonDecode(cachedJson) as Map<String, dynamic>);
@@ -148,8 +147,7 @@ class AuthRepository {
   /// Expiration du jeton de rafraîchissement — utilisée pour afficher jusqu'à
   /// quand la session hors-ligne reste valable.
   Future<DateTime?> getSessionExpiry() async {
-    final prefs = await SharedPreferences.getInstance();
-    final refreshToken = prefs.getString(_keyRefreshToken);
+    final refreshToken = await _storage.getString(_keyRefreshToken);
     return refreshToken == null ? null : jwtExpiry(refreshToken);
   }
 
@@ -182,12 +180,10 @@ class AuthRepository {
   }
 
   Future<void> _persistRefreshToken(String token) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyRefreshToken, token);
+    await _storage.setString(_keyRefreshToken, token);
   }
 
   Future<void> _persistUser(User user) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyUser, jsonEncode(user.toJson()));
+    await _storage.setString(_keyUser, jsonEncode(user.toJson()));
   }
 }

@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/status_indicator.dart';
 import '../../data/models/user.dart';
+import '../../state/auth_state.dart';
 import '../../state/chantier_state.dart';
 import '../../state/comptes_state.dart';
 import 'widgets/bo_shell.dart';
@@ -35,6 +36,9 @@ class BoInstallateurDetailScreen extends StatelessWidget {
         : !installateur.isActive
             ? ('En attente', StatusType.enCours)
             : ('Actif', StatusType.conforme);
+    // Suppression définitive réservée à l'Admin (voir la refonte des rôles
+    // back-office) — le CA n'a pas ce droit.
+    final isAdmin = context.watch<AuthState>().currentUser?.role == UserRole.admin;
 
     return BoShell(
       activeNav: 'comptes',
@@ -46,6 +50,18 @@ class BoInstallateurDetailScreen extends StatelessWidget {
               Text(installateur.fullName, style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(width: 10),
               StatusIndicator(label: compteLabel, type: compteType),
+              const Spacer(),
+              if (isAdmin)
+                OutlinedButton(
+                  onPressed: () => _confirmerSuppression(context, installateur),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 34),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    foregroundColor: AppColors.rouge,
+                    side: const BorderSide(color: AppColors.rouge),
+                  ),
+                  child: const Text('Supprimer le compte', style: TextStyle(fontSize: 12)),
+                ),
             ],
           ),
           const SizedBox(height: 16),
@@ -60,6 +76,30 @@ class BoInstallateurDetailScreen extends StatelessWidget {
                 children: [Expanded(child: left), const SizedBox(width: 20), Expanded(child: right)],
               );
             },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmerSuppression(BuildContext context, User installateur) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Supprimer ce compte ?'),
+        content: Text(
+          'Le compte de ${installateur.fullName} sera supprimé définitivement, avec ses habilitations et documents terrain. Cette action est irréversible.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Annuler')),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppColors.rouge),
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              await context.read<ComptesState>().supprimer(installateur);
+              if (context.mounted) context.go('/backoffice/ca/comptes');
+            },
+            child: const Text('Supprimer définitivement'),
           ),
         ],
       ),

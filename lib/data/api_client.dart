@@ -73,6 +73,9 @@ class ApiClient {
       case 'PATCH':
         response = await http.patch(uri, headers: headers, body: encoded);
         break;
+      case 'DELETE':
+        response = await http.delete(uri, headers: headers, body: encoded);
+        break;
       default:
         throw UnsupportedError('Méthode HTTP non supportée : $method');
     }
@@ -204,6 +207,10 @@ class ApiClient {
   Future<Map<String, dynamic>> suspendreCompte(String id) => _request('POST', '/comptes/$id/suspendre');
   Future<Map<String, dynamic>> reactiverCompte(String id) => _request('POST', '/comptes/$id/reactiver');
 
+  /// Suppression définitive — réservée à l'Admin côté back-office (voir la
+  /// refonte des rôles) ; le backend rejette la requête pour tout autre rôle.
+  Future<void> supprimerCompte(String id) => _request('DELETE', '/comptes/$id');
+
   Future<Map<String, dynamic>> updateProfile({String? nom, String? prenom, String? email, String? mobile, String? societe}) {
     return _request('PATCH', '/comptes/moi', body: {
       'nom': ?nom,
@@ -285,4 +292,12 @@ class ApiClient {
   Future<Map<String, dynamic>> addDocumentChantier(String reference, {required String type, required String nom, required String file}) {
     return _request('POST', '/chantiers/$reference/documents-chantier', body: {'type': type, 'nom': nom, 'file': file});
   }
+
+  /// Modification et suppression d'un chantier — réservées à l'Admin côté
+  /// back-office (voir la refonte des rôles) ; le backend rejette la requête
+  /// pour tout autre rôle.
+  Future<Map<String, dynamic>> updateChantier(String reference, Map<String, dynamic> body) =>
+      _request('PATCH', '/chantiers/$reference', body: body);
+
+  Future<void> deleteChantier(String reference) => _request('DELETE', '/chantiers/$reference');
 }

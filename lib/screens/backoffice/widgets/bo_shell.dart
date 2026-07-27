@@ -21,19 +21,27 @@ class _BoSpace {
   const _BoSpace(this.name, this.tabs);
 }
 
-const _caSpace = _BoSpace('Espace Chargé d\'Affaires', [
+const _caTabs = [
   _BoNavTab('Chantiers', '/backoffice/ca', 'chantiers'),
   _BoNavTab('Comptes', '/backoffice/ca/comptes', 'comptes'),
-]);
+];
+const _caSpace = _BoSpace('Espace Chargé d\'Affaires', _caTabs);
 
-/// Un espace back-office par rôle, strictement cloisonné : chacun ne voit que
-/// son nom d'espace et ses propres onglets (le garde côté routeur empêche
-/// déjà la navigation croisée — voir router.dart / _boHomeFor).
+/// Un espace back-office par rôle, utilisé pour le nom affiché et les onglets
+/// de navigation (le garde côté routeur empêche déjà la navigation croisée —
+/// voir router.dart / _boAllowedPrefixesFor). L'Admin est "super-CA" : en plus
+/// de son propre tableau de bord, il a aussi les onglets Chantiers/Comptes de
+/// l'espace CA. Le rôle Qualité n'a plus d'espace dédié depuis sa fusion dans
+/// l'espace CA — l'entrée reste ici en filet de sécurité si un compte encore
+/// marqué `qualite` en base atteint malgré tout cet écran.
 const _spaces = <UserRole, _BoSpace>{
-  UserRole.admin: _BoSpace('Espace Administration', []),
+  UserRole.admin: _BoSpace('Espace Administration', [
+    _BoNavTab('Tableau de bord', '/backoffice/admin', 'admin'),
+    ..._caTabs,
+  ]),
   UserRole.chargeAffaires: _caSpace,
   UserRole.direction: _caSpace,
-  UserRole.qualite: _BoSpace('Espace Qualité', []),
+  UserRole.qualite: _caSpace,
 };
 
 class BoShell extends StatelessWidget {
@@ -73,11 +81,14 @@ class BoShell extends StatelessWidget {
         ? '?'
         : '${user.prenom.isNotEmpty ? user.prenom[0] : ''}${user.nom.isNotEmpty ? user.nom[0] : ''}';
 
-    // Chaque espace ne charge que les données dont il a besoin : l'Admin n'a
-    // pas accès aux chantiers ni aux comptes installateurs, inutile de les
-    // récupérer pour lui (l'API les refuserait de toute façon pour /comptes).
-    final needsChantiers = user?.role == UserRole.chargeAffaires || user?.role == UserRole.direction;
-    final needsComptes = needsChantiers || user?.role == UserRole.qualite;
+    // L'Admin a maintenant aussi accès aux chantiers et aux comptes
+    // installateurs (voir la refonte des rôles : l'Admin a toutes les
+    // fonctionnalités du CA en plus des siennes), donc il précharge les mêmes
+    // données que le CA/Direction.
+    final needsChantiers = user?.role == UserRole.chargeAffaires ||
+        user?.role == UserRole.direction ||
+        user?.role == UserRole.admin;
+    final needsComptes = needsChantiers;
 
     if (needsChantiers) {
       final chantierState = context.watch<ChantierState>();

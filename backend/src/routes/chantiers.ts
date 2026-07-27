@@ -43,9 +43,6 @@ async function requireRattachement(req: ChantierScopedRequest, res: Response, ne
 
 chantiersRouter.get('/', requireAuth, async (req: AuthedRequest, res) => {
   const { userId, role } = req.auth!;
-  // L'Admin n'a pas accès aux chantiers (son périmètre est le flux
-  // d'activité et la validation des comptes internes, voir /admin).
-  if (role === 'admin') return res.status(403).json({ error: 'Accès refusé' });
 
   const chantiers = await prisma.chantier.findMany({
     where: role === 'installateur' ? { installateurs: { some: { userId } } } : undefined,
@@ -72,7 +69,7 @@ const createSchema = z.object({
   referenceAffaire: z.string().min(1),
 });
 
-chantiersRouter.post('/', requireAuth, requireRole('chargeAffaires', 'direction'), async (req, res) => {
+chantiersRouter.post('/', requireAuth, requireRole('chargeAffaires', 'direction', 'admin'), async (req, res) => {
   const parsed = createSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
   const d = parsed.data;
@@ -115,7 +112,7 @@ chantiersRouter.get('/:reference', requireAuth, async (req, res) => {
   res.json({ chantier: serializeChantier(chantier) });
 });
 
-chantiersRouter.post('/:reference/rattacher', requireAuth, requireRole('chargeAffaires', 'direction'), async (req, res) => {
+chantiersRouter.post('/:reference/rattacher', requireAuth, requireRole('chargeAffaires', 'direction', 'admin'), async (req, res) => {
   const { userId } = req.body ?? {};
   if (!userId) return res.status(400).json({ error: 'userId requis' });
 
@@ -130,6 +127,66 @@ chantiersRouter.post('/:reference/rattacher', requireAuth, requireRole('chargeAf
 
   const updated = await prisma.chantier.findUnique({ where: { id: chantier.id }, include: CHANTIER_INCLUDE });
   res.json({ chantier: serializeChantier(updated!) });
+});
+
+const updateChantierSchema = z.object({
+  client: z.string().min(1).optional(),
+  adresse: z.string().min(1).optional(),
+  ville: z.string().min(1).optional(),
+  dateDebut: z.string().optional(),
+  dateFin: z.string().optional(),
+  contactNom: z.string().min(1).optional(),
+  contactTel: z.string().min(1).optional(),
+  horaires: z.string().min(1).optional(),
+  consignes: z.array(z.string()).optional(),
+  typeMonteCharge: z.string().min(1).optional(),
+  capacite: z.string().min(1).optional(),
+  niveaux: z.number().int().positive().optional(),
+  referenceAffaire: z.string().min(1).optional(),
+});
+
+// Modification des informations d'un chantier — réservé à l'Admin (le CA n'a
+// pas ce droit, voir la refonte des rôles back-office : seul l'Admin peut
+// corriger/supprimer un chantier une fois créé).
+chantiersRouter.patch('/:reference', requireAuth, requireRole('admin'), async (req, res) => {
+  const parsed = updateChantierSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  const d = parsed.data;
+
+  const existing = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
+  if (!existing) return res.status(404).json({ error: 'Chantier introuvable' });
+
+  const chantier = await prisma.chantier.update({
+    where: { reference: req.params.reference },
+    data: {
+      client: d.client,
+      adresse: d.adresse,
+      ville: d.ville,
+      dateDebut: d.dateDebut ? new Date(d.dateDebut) : undefined,
+      dateFin: d.dateFin ? new Date(d.dateFin) : undefined,
+      contactNom: d.contactNom,
+      contactTel: d.contactTel,
+      horaires: d.horaires,
+      consignes: d.consignes ? JSON.stringify(d.consignes) : undefined,
+      typeMonteCharge: d.typeMonteCharge,
+      capacite: d.capacite,
+      niveaux: d.niveaux,
+      referenceAffaire: d.referenceAffaire,
+    },
+    include: CHANTIER_INCLUDE,
+  });
+  res.json({ chantier: serializeChantier(chantier) });
+});
+
+// Suppression d'un chantier — réservé à l'Admin. Les points de contrôle,
+// rattachements, documents terrain et documents chantier sont supprimés en
+// cascade (voir onDelete: Cascade sur ces relations dans schema.prisma).
+chantiersRouter.delete('/:reference', requireAuth, requireRole('admin'), async (req, res) => {
+  const existing = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
+  if (!existing) return res.status(404).json({ error: 'Chantier introuvable' });
+
+  await prisma.chantier.delete({ where: { reference: req.params.reference } });
+  res.status(204).send();
 });
 
 // Vérification de la veille (EX-22) : l'installateur ouvre son livret.
@@ -304,7 +361,7 @@ const documentChantierSchema = z.object({
 chantiersRouter.post(
   '/:reference/documents-chantier',
   requireAuth,
-  requireRole('chargeAffaires', 'direction'),
+  requireRole('chargeAffaires', 'direction', 'admin'),
   async (req, res) => {
     const parsed = documentChantierSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });

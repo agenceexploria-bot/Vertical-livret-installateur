@@ -7,7 +7,7 @@ import { saveBase64File } from '../lib/imageStorage';
 
 export const comptesRouter = Router();
 
-const INTERNAL_ROLES = ['chargeAffaires', 'qualite', 'direction'];
+const INTERNAL_ROLES = ['chargeAffaires', 'qualite', 'direction', 'admin'];
 
 comptesRouter.get('/', requireAuth, requireRole(...INTERNAL_ROLES), async (_req, res) => {
   const users = await prisma.user.findMany({
@@ -18,7 +18,7 @@ comptesRouter.get('/', requireAuth, requireRole(...INTERNAL_ROLES), async (_req,
   res.json({ installateurs: users.map(serializeUser) });
 });
 
-comptesRouter.post('/:id/valider', requireAuth, requireRole('chargeAffaires', 'direction'), async (req, res) => {
+comptesRouter.post('/:id/valider', requireAuth, requireRole('chargeAffaires', 'direction', 'admin'), async (req, res) => {
   const user = await prisma.user.update({
     where: { id: req.params.id },
     data: { isActive: true, suspendu: false },
@@ -27,7 +27,7 @@ comptesRouter.post('/:id/valider', requireAuth, requireRole('chargeAffaires', 'd
   res.json({ user: serializeUser(user) });
 });
 
-comptesRouter.post('/:id/suspendre', requireAuth, requireRole('chargeAffaires', 'direction'), async (req, res) => {
+comptesRouter.post('/:id/suspendre', requireAuth, requireRole('chargeAffaires', 'direction', 'admin'), async (req, res) => {
   const user = await prisma.user.update({
     where: { id: req.params.id },
     data: { suspendu: true },
@@ -36,13 +36,28 @@ comptesRouter.post('/:id/suspendre', requireAuth, requireRole('chargeAffaires', 
   res.json({ user: serializeUser(user) });
 });
 
-comptesRouter.post('/:id/reactiver', requireAuth, requireRole('chargeAffaires', 'direction'), async (req, res) => {
+comptesRouter.post('/:id/reactiver', requireAuth, requireRole('chargeAffaires', 'direction', 'admin'), async (req, res) => {
   const user = await prisma.user.update({
     where: { id: req.params.id },
     data: { isActive: true, suspendu: false },
     include: { habilitations: true },
   });
   res.json({ user: serializeUser(user) });
+});
+
+// Suppression définitive d'un compte — réservée à l'Admin (nouvelle capacité
+// de la refonte des rôles back-office, distincte de la suspension qui reste
+// réversible). Un Admin ne peut pas se supprimer lui-même via cette route.
+comptesRouter.delete('/:id', requireAuth, requireRole('admin'), async (req: AuthedRequest, res) => {
+  if (req.params.id === req.auth!.userId) {
+    return res.status(400).json({ error: 'Vous ne pouvez pas supprimer votre propre compte' });
+  }
+
+  const existing = await prisma.user.findUnique({ where: { id: req.params.id } });
+  if (!existing) return res.status(404).json({ error: 'Compte introuvable' });
+
+  await prisma.user.delete({ where: { id: req.params.id } });
+  res.status(204).send();
 });
 
 const updateProfileSchema = z.object({

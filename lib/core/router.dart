@@ -28,23 +28,26 @@ import '../screens/backoffice/bo_new_chantier_screen.dart';
 import '../screens/backoffice/bo_chantier_detail_screen.dart';
 import '../screens/backoffice/bo_comptes_screen.dart';
 import '../screens/backoffice/bo_installateur_detail_screen.dart';
-import '../screens/backoffice/bo_qualite_screen.dart';
 import '../screens/backoffice/bo_admin_dashboard_screen.dart';
 
-/// Espace back-office dédié à chaque rôle interne — utilisé par le garde de
-/// redirection ci-dessous pour cloisonner strictement Admin / CA / Qualité.
-/// `null` signifie "pas d'espace back-office" (ex. installateur).
-String? _boHomeFor(UserRole role) {
+/// Préfixes de back-office accessibles à chaque rôle interne — utilisé par le
+/// garde de redirection ci-dessous. Le premier élément est la destination par
+/// défaut (atterrissage). Liste vide = pas d'espace back-office (installateur).
+///
+/// Il n'y a plus que deux espaces (CA et Admin) depuis la fusion du rôle
+/// Qualité dans l'espace CA — un compte encore marqué `qualite` en base est
+/// donc simplement redirigé vers `/backoffice/ca` comme un CA. L'Admin est
+/// "super-CA" : il a accès à son propre tableau de bord ET à tout l'espace CA.
+List<String> _boAllowedPrefixesFor(UserRole role) {
   switch (role) {
     case UserRole.admin:
-      return '/backoffice/admin';
+      return ['/backoffice/admin', '/backoffice/ca'];
     case UserRole.chargeAffaires:
     case UserRole.direction:
-      return '/backoffice/ca';
     case UserRole.qualite:
-      return '/backoffice/qualite';
+      return ['/backoffice/ca'];
     case UserRole.installateur:
-      return null;
+      return [];
   }
 }
 
@@ -82,12 +85,14 @@ class AppRouter {
           if (authState.isLoading) return null;
           if (!authState.isAuthenticated) return '/backoffice/login';
 
-          // Cloisonnement strict des 3 espaces internes : un CA qui tape
-          // /backoffice/admin (ou tout autre espace qui n'est pas le sien)
-          // est renvoyé vers son propre espace, quelle que soit l'URL visée.
-          final home = _boHomeFor(authState.currentUser!.role);
-          if (home == null) return '/backoffice/login';
-          if (!state.matchedLocation.startsWith(home)) return home;
+          // Cloisonnement : un CA qui tape /backoffice/admin est renvoyé vers
+          // son propre espace. L'Admin, lui, est autorisé sur les deux
+          // préfixes (son tableau de bord + tout l'espace CA, voir
+          // _boAllowedPrefixesFor) — il n'est donc jamais rejeté hors de /ca.
+          final allowed = _boAllowedPrefixesFor(authState.currentUser!.role);
+          if (allowed.isEmpty) return '/backoffice/login';
+          final isAllowed = allowed.any((prefix) => state.matchedLocation.startsWith(prefix));
+          if (!isAllowed) return allowed.first;
           return null;
         }
 
@@ -183,22 +188,22 @@ class AppRouter {
         GoRoute(path: '/confirmation', builder: (context, state) => const ConfirmationScreen()),
         GoRoute(path: '/profil', builder: (context, state) => const ProfilScreen()),
 
-        // Back-office web — 3 espaces cloisonnés (Admin / CA / Qualité), voir
-        // le garde de redirection ci-dessus pour l'accès exclusif par rôle.
+        // Back-office web — 2 espaces (CA et Admin, ce dernier ayant aussi
+        // accès à l'espace CA), voir le garde de redirection ci-dessus.
         GoRoute(path: '/backoffice/login', builder: (context, state) => const BoLoginScreen()),
         GoRoute(path: '/backoffice/acces', builder: (context, state) => const BoAccessRequestScreen()),
 
-        // Espace Chargé d'Affaires : chantiers (création, suivi, PV) + validation des installateurs.
+        // Espace Chargé d'Affaires : chantiers (création, suivi, PV), auto-
+        // contrôles/REX/anomalies/habilitations (ex-espace Qualité, fusionné
+        // ici) + validation des installateurs. Accessible aussi à l'Admin.
         GoRoute(path: '/backoffice/ca', builder: (context, state) => const BoCaChantiersScreen()),
         GoRoute(path: '/backoffice/ca/chantiers/nouveau', builder: (context, state) => const BoNewChantierScreen()),
         GoRoute(path: '/backoffice/ca/chantiers/:ref', builder: (context, state) => const BoChantierDetailScreen()),
         GoRoute(path: '/backoffice/ca/comptes', builder: (context, state) => const BoComptesScreen()),
         GoRoute(path: '/backoffice/ca/comptes/:id', builder: (context, state) => const BoInstallateurDetailScreen()),
 
-        // Espace Qualité : auto-contrôles, REX, anomalies, habilitations.
-        GoRoute(path: '/backoffice/qualite', builder: (context, state) => const BoQualiteScreen()),
-
-        // Espace Administration : flux d'activité + validation des comptes internes.
+        // Espace Administration : flux d'activité + validation des comptes
+        // internes — en plus de l'espace CA ci-dessus, auquel l'Admin a aussi accès.
         GoRoute(path: '/backoffice/admin', builder: (context, state) => const BoAdminDashboardScreen()),
       ],
     );

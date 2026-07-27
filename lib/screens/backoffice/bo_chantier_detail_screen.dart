@@ -3,7 +3,6 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../core/coming_soon.dart';
 import '../../core/document_capture.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/status_indicator.dart';
@@ -11,6 +10,7 @@ import '../../data/models/chantier.dart';
 import '../../data/models/document_chantier.dart';
 import '../../data/models/document_terrain.dart';
 import '../../data/models/user.dart';
+import '../../state/auth_state.dart';
 import '../../state/chantier_state.dart';
 import '../../state/comptes_state.dart';
 import 'widgets/bo_shell.dart';
@@ -31,6 +31,9 @@ class BoChantierDetailScreen extends StatelessWidget {
 
     final livretOk = chantier.installateursRattaches.isNotEmpty &&
         chantier.installateursRattaches.every((u) => chantier.livretsOuverts.contains(u.id));
+    // Modifier/Supprimer un chantier est réservé à l'Admin (voir la refonte
+    // des rôles back-office) — le CA n'a pas ce droit, seulement l'Admin.
+    final isAdmin = context.watch<AuthState>().currentUser?.role == UserRole.admin;
 
     return BoShell(
       activeNav: 'chantiers',
@@ -46,11 +49,24 @@ class BoChantierDetailScreen extends StatelessWidget {
                 type: livretOk ? StatusType.conforme : StatusType.enCours,
               ),
               const Spacer(),
-              OutlinedButton(
-                onPressed: () => showComingSoon(context),
-                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 34), padding: const EdgeInsets.symmetric(horizontal: 16)),
-                child: const Text('Modifier', style: TextStyle(fontSize: 12)),
-              ),
+              if (isAdmin) ...[
+                OutlinedButton(
+                  onPressed: () => _openModifierDialog(context, chantier),
+                  style: OutlinedButton.styleFrom(minimumSize: const Size(0, 34), padding: const EdgeInsets.symmetric(horizontal: 16)),
+                  child: const Text('Modifier', style: TextStyle(fontSize: 12)),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton(
+                  onPressed: () => _confirmerSuppression(context, chantier),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 34),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    foregroundColor: AppColors.rouge,
+                    side: const BorderSide(color: AppColors.rouge),
+                  ),
+                  child: const Text('Supprimer', style: TextStyle(fontSize: 12)),
+                ),
+              ],
             ],
           ),
           const SizedBox(height: 16),
@@ -281,6 +297,37 @@ class BoChantierDetailScreen extends StatelessWidget {
     );
   }
 
+  void _openModifierDialog(BuildContext context, Chantier chantier) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => _ModifierChantierDialog(chantier: chantier),
+    );
+  }
+
+  void _confirmerSuppression(BuildContext context, Chantier chantier) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Supprimer ce chantier ?'),
+        content: Text(
+          'Le chantier ${chantier.reference} (${chantier.client}) sera supprimé définitivement, avec tous ses points de contrôle, documents et rattachements. Cette action est irréversible.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Annuler')),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppColors.rouge),
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              await context.read<ChantierState>().deleteChantier(chantier.reference);
+              if (context.mounted) context.go('/backoffice/ca');
+            },
+            child: const Text('Supprimer définitivement'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildRightColumn(Chantier chantier) {
     return BoPanel(
       title: 'Avancement des 8 modules',
@@ -441,6 +488,107 @@ class _AjouterDocumentChantierDialogState extends State<_AjouterDocumentChantier
         alignment: Alignment.center,
         child: Text(label, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: isOn ? Colors.white : AppColors.acier)),
       ),
+    );
+  }
+}
+
+/// Modification des informations d'un chantier — réservée à l'Admin (voir la
+/// refonte des rôles back-office). Couvre les champs descriptifs principaux ;
+/// les dates et consignes ne sont pas éditables ici pour l'instant.
+class _ModifierChantierDialog extends StatefulWidget {
+  final Chantier chantier;
+  const _ModifierChantierDialog({required this.chantier});
+
+  @override
+  State<_ModifierChantierDialog> createState() => _ModifierChantierDialogState();
+}
+
+class _ModifierChantierDialogState extends State<_ModifierChantierDialog> {
+  late final _clientController = TextEditingController(text: widget.chantier.client);
+  late final _adresseController = TextEditingController(text: widget.chantier.adresse);
+  late final _villeController = TextEditingController(text: widget.chantier.ville);
+  late final _contactNomController = TextEditingController(text: widget.chantier.contactNom);
+  late final _contactTelController = TextEditingController(text: widget.chantier.contactTel);
+  late final _horairesController = TextEditingController(text: widget.chantier.horaires);
+  late final _typeMonteChargeController = TextEditingController(text: widget.chantier.typeMonteCharge);
+  late final _capaciteController = TextEditingController(text: widget.chantier.capacite);
+  late final _referenceAffaireController = TextEditingController(text: widget.chantier.referenceAffaire);
+  bool _isSubmitting = false;
+
+  @override
+  void dispose() {
+    _clientController.dispose();
+    _adresseController.dispose();
+    _villeController.dispose();
+    _contactNomController.dispose();
+    _contactTelController.dispose();
+    _horairesController.dispose();
+    _typeMonteChargeController.dispose();
+    _capaciteController.dispose();
+    _referenceAffaireController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _enregistrer() async {
+    setState(() => _isSubmitting = true);
+    try {
+      await context.read<ChantierState>().updateChantier(widget.chantier.reference, {
+        'client': _clientController.text.trim(),
+        'adresse': _adresseController.text.trim(),
+        'ville': _villeController.text.trim(),
+        'contactNom': _contactNomController.text.trim(),
+        'contactTel': _contactTelController.text.trim(),
+        'horaires': _horairesController.text.trim(),
+        'typeMonteCharge': _typeMonteChargeController.text.trim(),
+        'capacite': _capaciteController.text.trim(),
+        'referenceAffaire': _referenceAffaireController.text.trim(),
+      });
+      if (mounted) Navigator.of(context).pop();
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('Modifier ${widget.chantier.reference}'),
+      content: SizedBox(
+        width: 380,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: _clientController, decoration: const InputDecoration(labelText: 'Client')),
+              const SizedBox(height: 10),
+              TextField(controller: _adresseController, decoration: const InputDecoration(labelText: 'Adresse')),
+              const SizedBox(height: 10),
+              TextField(controller: _villeController, decoration: const InputDecoration(labelText: 'Ville')),
+              const SizedBox(height: 10),
+              TextField(controller: _contactNomController, decoration: const InputDecoration(labelText: 'Contact — nom')),
+              const SizedBox(height: 10),
+              TextField(controller: _contactTelController, decoration: const InputDecoration(labelText: 'Contact — téléphone')),
+              const SizedBox(height: 10),
+              TextField(controller: _horairesController, decoration: const InputDecoration(labelText: 'Horaires')),
+              const SizedBox(height: 10),
+              TextField(controller: _typeMonteChargeController, decoration: const InputDecoration(labelText: 'Type de monte-charge')),
+              const SizedBox(height: 10),
+              TextField(controller: _capaciteController, decoration: const InputDecoration(labelText: 'Capacité')),
+              const SizedBox(height: 10),
+              TextField(controller: _referenceAffaireController, decoration: const InputDecoration(labelText: 'Référence affaire (ERP)')),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Annuler')),
+        ElevatedButton(
+          onPressed: _isSubmitting ? null : _enregistrer,
+          child: _isSubmitting
+              ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Text('Enregistrer'),
+        ),
+      ],
     );
   }
 }

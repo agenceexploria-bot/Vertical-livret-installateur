@@ -42,6 +42,13 @@ class ComptesState extends ChangeNotifier {
     _replace(User.fromJson(data['user'] as Map<String, dynamic>));
   }
 
+  /// Suppression définitive (Admin uniquement — voir la refonte des rôles).
+  Future<void> supprimer(User user) async {
+    await _api.supprimerCompte(user.id);
+    _installateurs = _installateurs.where((u) => u.id != user.id).toList();
+    notifyListeners();
+  }
+
   void _replace(User updated) {
     final index = _installateurs.indexWhere((u) => u.id == updated.id);
     if (index != -1) {

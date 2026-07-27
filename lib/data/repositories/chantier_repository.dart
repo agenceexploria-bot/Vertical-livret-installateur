@@ -48,6 +48,15 @@ class ChantierRepository {
     return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
   }
 
+  /// Modification et suppression d'un chantier — réservées à l'Admin (voir la
+  /// refonte des rôles back-office) ; le backend rejette la requête sinon.
+  Future<Chantier> updateChantier(String reference, Map<String, dynamic> body) async {
+    final data = await _api.updateChantier(reference, body);
+    return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
+  }
+
+  Future<void> deleteChantier(String reference) => _api.deleteChantier(reference);
+
   /// Dépôt d'un document de référence (PPSPS, plan...) par le CA — action
   /// back-office web, pas de file d'attente hors-ligne (comme [createChantier]
   /// et [rattacher], qui supposent déjà un réseau disponible).

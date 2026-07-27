@@ -19,10 +19,7 @@ class _BoAccessRequestScreenState extends State<BoAccessRequestScreen> {
   final _fonctionController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
-  int _roleIndex = 0;
   bool _isSubmitting = false;
-
-  static const _roleValues = ['chargeAffaires', 'qualite'];
 
   @override
   Widget build(BuildContext context) {
@@ -55,16 +52,6 @@ class _BoAccessRequestScreenState extends State<BoAccessRequestScreen> {
                 _field('Téléphone mobile', _mobileController, hint: '06 12 34 56 78'),
                 const SizedBox(height: 12),
                 _field('Fonction', _fonctionController, hint: 'Chargé d\'affaires'),
-                const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text('Rôle demandé', style: Theme.of(context).textTheme.bodySmall),
-                ),
-                const SizedBox(height: 4),
-                _RoleSegment(
-                  selectedIndex: _roleIndex,
-                  onChanged: (i) => setState(() => _roleIndex = i),
-                ),
                 const SizedBox(height: 12),
                 _field('Mot de passe', _passwordController, obscure: true),
                 const SizedBox(height: 12),
@@ -146,7 +133,7 @@ class _BoAccessRequestScreenState extends State<BoAccessRequestScreen> {
       mobile: _mobileController.text,
       password: _passwordController.text,
       email: _emailController.text,
-      role: _roleValues[_roleIndex],
+      role: 'chargeAffaires',
     );
 
     // Le compte est créé mais non validé : on se déconnecte immédiatement,
@@ -167,43 +154,5 @@ class _BoAccessRequestScreenState extends State<BoAccessRequestScreen> {
       const SnackBar(content: Text('Demande envoyée — un administrateur doit valider votre compte avant activation.')),
     );
     context.pop();
-  }
-}
-
-class _RoleSegment extends StatelessWidget {
-  final int selectedIndex;
-  final ValueChanged<int> onChanged;
-
-  const _RoleSegment({required this.selectedIndex, required this.onChanged});
-
-  static const _labels = ['Chargé d\'affaires', 'Qualité'];
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: AppColors.lignes, width: 1.5),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: List.generate(_labels.length, (i) {
-          final isOn = i == selectedIndex;
-          return Expanded(
-            child: GestureDetector(
-              onTap: () => onChanged(i),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(color: isOn ? AppColors.encre : Colors.white),
-                alignment: Alignment.center,
-                child: Text(
-                  _labels[i],
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isOn ? Colors.white : AppColors.acier),
-                ),
-              ),
-            ),
-          );
-        }),
-      ),
-    );
   }
 }

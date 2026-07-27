@@ -410,8 +410,8 @@ describe('Sécurité — rattachement obligatoire pour un installateur (bug 3B)'
   });
 });
 
-describe('Sécurité — GET /chantiers filtré par rôle (bug 3A)', () => {
-  it("refuse à l'Admin l'accès à la liste des chantiers", async () => {
+describe("Rôles back-office — l'Admin a toutes les fonctionnalités du CA", () => {
+  it("permet à l'Admin d'accéder à la liste des chantiers (super-CA, depuis la fusion des rôles)", async () => {
     const passwordHash = await bcrypt.hash('demodemo', 10);
     await prisma.user.create({
       data: {
@@ -422,7 +422,7 @@ describe('Sécurité — GET /chantiers filtré par rôle (bug 3A)', () => {
     const login = await request(app).post('/auth/login').send({ identifier: 'admin@actiwork.fr', password: 'demodemo' });
 
     const res = await request(app).get('/chantiers').set('Authorization', `Bearer ${login.body.accessToken}`);
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
   });
 });
 
