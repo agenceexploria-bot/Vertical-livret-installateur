@@ -15,7 +15,7 @@ class VerticalLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SvgPicture.asset(
-      'assets/logo/Vertical.svg',
+      'assets/images/Vertical.svg',
       height: height,
       fit: BoxFit.contain,
       // On compense l'espace vide interne du SVG par un transform ou un alignement
