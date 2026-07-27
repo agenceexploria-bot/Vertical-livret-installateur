@@ -72,6 +72,20 @@ class ChantierRepository {
     return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
   }
 
+  /// Suppression et remplacement du fichier d'un document chantier — en base
+  /// ET sur Vercel Blob côté serveur (voir la route backend), pour ne pas
+  /// laisser de fichiers orphelins stockés indéfiniment.
+  Future<Chantier> deleteDocumentChantier(String reference, String docId) async {
+    final data = await _api.deleteDocumentChantier(reference, docId);
+    return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
+  }
+
+  Future<Chantier> replaceDocumentChantier(String reference, String docId,
+      {required String file, String? nomFichierOriginal}) async {
+    final data = await _api.replaceDocumentChantier(reference, docId, file: file, nomFichierOriginal: nomFichierOriginal);
+    return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
+  }
+
   /// Applique la même mutation qu'une action réussie directement sur le
   /// chantier mis en cache (Drift), pour que l'écran reflète l'action
   /// immédiatement même hors-ligne — sans ça, le prochain [getChantier]

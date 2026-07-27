@@ -1,4 +1,4 @@
-import { put } from '@vercel/blob';
+import { put, del } from '@vercel/blob';
 
 const EXTENSION_BY_MIME: Record<string, string> = {
   'application/pdf': 'pdf',
@@ -20,4 +20,16 @@ export async function saveBase64File(dataUrl: string, prefix: string): Promise<s
     contentType: mime || undefined,
   });
   return blob.url;
+}
+
+/// Supprime un fichier de Vercel Blob par son URL publique — utilisé quand un
+/// document est supprimé ou remplacé, pour ne pas laisser de fichiers
+/// orphelins facturés indéfiniment. Silencieux si le fichier n'existe déjà
+/// plus (ex. suppression relancée après un échec réseau partiel).
+export async function deleteBlobFile(url: string): Promise<void> {
+  try {
+    await del(url);
+  } catch {
+    // Déjà supprimé ou URL invalide : pas bloquant pour l'action en cours.
+  }
 }

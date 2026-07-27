@@ -173,7 +173,7 @@ class FicheChantierScreen extends StatelessWidget {
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppColors.blanc,
             borderRadius: BorderRadius.circular(9),
             border: Border.all(color: AppColors.lignes),
           ),

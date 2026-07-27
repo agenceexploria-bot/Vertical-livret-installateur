@@ -114,14 +114,9 @@ class BoShell extends StatelessWidget {
           _TopBar(activeNav: activeNav, initials: initials, space: space ?? const _BoSpace('', [])),
           Expanded(
             child: SingleChildScrollView(
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1200),
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: child,
-                  ),
-                ),
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: child,
               ),
             ),
           ),
@@ -146,7 +141,7 @@ class _TopBar extends StatelessWidget {
     final leftCluster = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const SizedBox(height: 28, child: VerticalLogo(height: 28, onDarkBackground: true)),
+        const SizedBox(height: 46, child: VerticalLogo(height: 46, onDarkBackground: true)),
         const SizedBox(width: 20),
         Container(
           margin: const EdgeInsets.only(right: 8),
@@ -171,58 +166,53 @@ class _TopBar extends StatelessWidget {
     return Container(
       color: AppColors.encre,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1200),
-          child: Row(
+      child: Row(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: leftCluster,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Stack(
+            clipBehavior: Clip.none,
             children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: leftCluster,
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppColors.acierClair, width: 1.5),
+                  borderRadius: BorderRadius.circular(6),
                 ),
+                child: const Icon(Icons.notifications_outlined, color: Colors.white, size: 16),
               ),
-              const SizedBox(width: 16),
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  Container(
-                    width: 30,
-                    height: 30,
-                    decoration: BoxDecoration(
-                      border: Border.all(color: AppColors.acierClair, width: 1.5),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: const Icon(Icons.notifications_outlined, color: Colors.white, size: 16),
-                  ),
-                  Positioned(
-                    top: -6,
-                    right: -6,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                      decoration: BoxDecoration(color: AppColors.orange, borderRadius: BorderRadius.circular(99)),
-                      child: const Text('3', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Colors.white)),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(width: 16),
-              PopupMenuButton<String>(
-                onSelected: (value) {
-                  if (value == 'logout') context.read<AuthState>().logout();
-                },
-                itemBuilder: (context) => const [
-                  PopupMenuItem(value: 'logout', child: Text('Déconnexion')),
-                ],
-                child: CircleAvatar(
-                  radius: 15,
-                  backgroundColor: AppColors.acier,
-                  child: Text(initials, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+              Positioned(
+                top: -6,
+                right: -6,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  decoration: BoxDecoration(color: AppColors.orange, borderRadius: BorderRadius.circular(99)),
+                  child: const Text('3', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Colors.white)),
                 ),
               ),
             ],
           ),
-        ),
+          const SizedBox(width: 16),
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'logout') context.read<AuthState>().logout();
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: 'logout', child: Text('Déconnexion')),
+            ],
+            child: CircleAvatar(
+              radius: 15,
+              backgroundColor: AppColors.acier,
+              child: Text(initials, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ],
       ),
     );
   }

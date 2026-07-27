@@ -15,7 +15,6 @@ class ConfirmationScreen extends StatelessWidget {
     final chantier = context.watch<ChantierState>().currentChantier;
 
     return ResponsiveLayout(
-      backgroundColor: Colors.white,
       child: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(

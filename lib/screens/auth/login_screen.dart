@@ -33,7 +33,6 @@ class _LoginScreenState extends State<LoginScreen> {
     final authState = context.watch<AuthState>();
 
     return ResponsiveLayout(
-      backgroundColor: Colors.white,
       child: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24.0),

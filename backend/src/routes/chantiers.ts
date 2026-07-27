@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { prisma } from '../prisma';
 import { serializeChantier } from '../serializers';
 import { requireAuth, requireRole, AuthedRequest } from '../middleware/auth';
-import { saveBase64File } from '../lib/imageStorage';
+import { saveBase64File, deleteBlobFile } from '../lib/imageStorage';
 import { RECEPTION_POINTS, AUTO_CONTROLE_POINTS } from '../lib/checklistDefaults';
 
 export const chantiersRouter = Router();
@@ -402,5 +402,61 @@ chantiersRouter.post(
 
     const updated = await prisma.chantier.findUnique({ where: { id: chantier.id }, include: CHANTIER_INCLUDE });
     res.status(201).json({ chantier: serializeChantier(updated!) });
+  },
+);
+
+// Supprime un document chantier — en base ET sur Vercel Blob (sans ça, le
+// fichier reste stocké et facturé indéfiniment sans qu'aucune UI n'y renvoie).
+chantiersRouter.delete(
+  '/:reference/documents-chantier/:docId',
+  requireAuth,
+  requireRole('chargeAffaires', 'direction', 'admin'),
+  async (req, res) => {
+    const chantier = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
+    if (!chantier) return res.status(404).json({ error: 'Chantier introuvable' });
+
+    const doc = await prisma.documentChantier.findUnique({ where: { id: req.params.docId } });
+    if (!doc || doc.chantierId !== chantier.id) return res.status(404).json({ error: 'Document introuvable' });
+
+    await deleteBlobFile(doc.filePath);
+    await prisma.documentChantier.delete({ where: { id: doc.id } });
+
+    const updated = await prisma.chantier.findUnique({ where: { id: chantier.id }, include: CHANTIER_INCLUDE });
+    res.json({ chantier: serializeChantier(updated!) });
+  },
+);
+
+const replaceDocumentChantierSchema = z.object({
+  file: z.string().min(1, 'Un fichier (photo ou PDF) est requis'),
+  nomFichierOriginal: z.string().min(1).optional(),
+});
+
+// Remplace le fichier d'un document chantier existant (même titre/catégorie,
+// nouveau contenu) — l'ancien fichier est supprimé de Vercel Blob pour ne pas
+// laisser de version périmée stockée en double.
+chantiersRouter.put(
+  '/:reference/documents-chantier/:docId',
+  requireAuth,
+  requireRole('chargeAffaires', 'direction', 'admin'),
+  async (req, res) => {
+    const parsed = replaceDocumentChantierSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+    const chantier = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
+    if (!chantier) return res.status(404).json({ error: 'Chantier introuvable' });
+
+    const doc = await prisma.documentChantier.findUnique({ where: { id: req.params.docId } });
+    if (!doc || doc.chantierId !== chantier.id) return res.status(404).json({ error: 'Document introuvable' });
+
+    const newFilePath = await saveBase64File(parsed.data.file, `doc-chantier-${chantier.id}`);
+    await deleteBlobFile(doc.filePath);
+
+    await prisma.documentChantier.update({
+      where: { id: doc.id },
+      data: { filePath: newFilePath, nomFichierOriginal: parsed.data.nomFichierOriginal ?? doc.nomFichierOriginal },
+    });
+
+    const updated = await prisma.chantier.findUnique({ where: { id: chantier.id }, include: CHANTIER_INCLUDE });
+    res.json({ chantier: serializeChantier(updated!) });
   },
 );

@@ -11,7 +11,10 @@ class AppColors {
   static const Color acier = Color(0xFF4C5E6E);
   static const Color acierClair = Color(0xFF98A3AE);
   static const Color lignes = Color(0xFFD8DDE2);
-  static const Color fond = Color(0xFFF7F8F9);
+  // Fond à peine teinté (à peine plus gris qu'un blanc pur) plutôt qu'un
+  // thème sombre — le blanc franc était jugé trop agressif, mais un vrai
+  // fond sombre était trop marqué. Confort visuel discret.
+  static const Color fond = Color(0xFFF2F0ED);
   static const Color blanc = Color(0xFFFFFFFF);
 
   // Couleurs d'état
@@ -55,12 +58,16 @@ BoxDecoration appButtonDecoration(Set<WidgetState> states, {double radius = 16})
 }
 
 class AppTheme {
+  // Tailles nettement augmentées par rapport à la base précédente (17/15/13/13/11)
+  // pour rester lisible de loin, notamment dans les tableaux et menus du
+  // back-office — vient s'ajouter au boost global de MediaQuery.textScaler
+  // (voir app.dart) pour les tailles codées en dur écran par écran.
   static TextTheme get _textTheme => TextTheme(
-        titleLarge: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.bold, color: AppColors.encre),
-        titleMedium: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.bold, color: AppColors.encre),
-        bodyLarge: GoogleFonts.outfit(fontSize: 13, color: AppColors.encre),
-        bodyMedium: GoogleFonts.outfit(fontSize: 13, color: AppColors.acier),
-        bodySmall: GoogleFonts.outfit(fontSize: 11, color: AppColors.acierClair),
+        titleLarge: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.bold, color: AppColors.encre),
+        titleMedium: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.encre),
+        bodyLarge: GoogleFonts.outfit(fontSize: 17, color: AppColors.encre),
+        bodyMedium: GoogleFonts.outfit(fontSize: 17, color: AppColors.acier),
+        bodySmall: GoogleFonts.outfit(fontSize: 14, color: AppColors.acierClair),
       );
 
   static ThemeData get lightTheme {
@@ -83,7 +90,7 @@ class AppTheme {
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
         centerTitle: false,
-        titleTextStyle: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white),
+        titleTextStyle: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
       ),
       // AppCard peint ses propres ombres/dégradés (voir app_card.dart) — ce
       // thème ne sert que de filet de sécurité pour un éventuel `Card` brut.
@@ -117,15 +124,15 @@ class AppTheme {
           borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
           borderSide: BorderSide(color: AppColors.rouge, width: 2.4),
         ),
-        labelStyle: GoogleFonts.outfit(color: AppColors.acier, fontSize: 13),
+        labelStyle: GoogleFonts.outfit(color: AppColors.acier, fontSize: 16),
         floatingLabelStyle: WidgetStateTextStyle.resolveWith((states) {
           return GoogleFonts.outfit(
-            fontSize: 13,
+            fontSize: 16,
             fontWeight: FontWeight.w600,
             color: states.contains(WidgetState.focused) ? AppColors.orange : AppColors.acier,
           );
         }),
-        hintStyle: GoogleFonts.outfit(color: AppColors.acierClair, fontSize: 13),
+        hintStyle: GoogleFonts.outfit(color: AppColors.acierClair, fontSize: 16),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ButtonStyle(
@@ -133,10 +140,10 @@ class AppTheme {
           shadowColor: const WidgetStatePropertyAll(Colors.transparent),
           backgroundColor: const WidgetStatePropertyAll(Colors.transparent),
           foregroundColor: const WidgetStatePropertyAll(Colors.white),
-          minimumSize: const WidgetStatePropertyAll(Size(double.infinity, 48)),
+          minimumSize: const WidgetStatePropertyAll(Size(double.infinity, 52)),
           padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 16)),
           shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-          textStyle: WidgetStatePropertyAll(GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.bold)),
+          textStyle: WidgetStatePropertyAll(GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.bold)),
           backgroundBuilder: (context, states, child) {
             return Container(
               decoration: appButtonDecoration(states),
@@ -151,11 +158,11 @@ class AppTheme {
           foregroundColor: AppColors.encre,
           side: const BorderSide(color: AppColors.lignes, width: 1),
           elevation: 0,
-          minimumSize: const Size(double.infinity, 48),
+          minimumSize: const Size(double.infinity, 52),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-          textStyle: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.bold),
+          textStyle: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.bold),
         ),
       ),
     );

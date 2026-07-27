@@ -179,7 +179,7 @@ class BoChantierDetailScreen extends StatelessWidget {
             }
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: Column(children: [for (final d in docs) _documentChantierRow(d)]),
+              child: Column(children: [for (final d in docs) _documentChantierRow(context, chantier, d)]),
             );
           }(),
         ],
@@ -234,7 +234,7 @@ class BoChantierDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _documentChantierRow(DocumentChantier d) {
+  Widget _documentChantierRow(BuildContext context, Chantier chantier, DocumentChantier d) {
     final icon = switch (d.type) {
       TypeDocumentChantier.securite => Icons.shield_outlined,
       TypeDocumentChantier.ficheChantier => Icons.assignment_outlined,
@@ -243,27 +243,89 @@ class BoChantierDetailScreen extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 6),
       decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFEEF1F3)))),
-      child: InkWell(
-        onTap: () => launchUrl(Uri.parse(d.filePath)),
-        child: Row(
-          children: [
-            Icon(icon, size: 16, color: AppColors.acierClair),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        children: [
+          Expanded(
+            child: InkWell(
+              onTap: () => launchUrl(Uri.parse(d.filePath)),
+              child: Row(
                 children: [
-                  Text(d.nom, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
-                  if (d.nomFichierOriginal != null && d.nomFichierOriginal != d.nom)
-                    Text(
-                      d.nomFichierOriginal!,
-                      style: const TextStyle(fontSize: 10, color: AppColors.acierClair),
+                  Icon(icon, size: 16, color: AppColors.acierClair),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(d.nom, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
+                        if (d.nomFichierOriginal != null && d.nomFichierOriginal != d.nom)
+                          Text(
+                            d.nomFichierOriginal!,
+                            style: const TextStyle(fontSize: 10, color: AppColors.acierClair),
+                          ),
+                      ],
                     ),
+                  ),
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, size: 18, color: AppColors.acierClair),
+            onSelected: (value) => _onDocumentChantierAction(context, chantier, d, value),
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: 'remplacer', child: Text('Remplacer le fichier')),
+              PopupMenuItem(value: 'supprimer', child: Text('Supprimer')),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _onDocumentChantierAction(BuildContext context, Chantier chantier, DocumentChantier d, String value) {
+    switch (value) {
+      case 'remplacer':
+        _remplacerFichier(context, chantier, d);
+        break;
+      case 'supprimer':
+        _confirmerSuppressionDocument(context, chantier, d);
+        break;
+    }
+  }
+
+  Future<void> _remplacerFichier(BuildContext context, Chantier chantier, DocumentChantier d) async {
+    final picked = await DocumentCapture.pickFile();
+    if (picked == null || !context.mounted) return;
+    await context.read<ChantierState>().replaceDocumentChantier(
+          chantier.reference,
+          d.id,
+          file: picked.dataUrl,
+          nomFichierOriginal: picked.fileName,
+        );
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Fichier de « ${d.nom} » remplacé.')),
+      );
+    }
+  }
+
+  void _confirmerSuppressionDocument(BuildContext context, Chantier chantier, DocumentChantier d) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Supprimer ce document ?'),
+        content: Text('« ${d.nom} » sera supprimé définitivement, y compris le fichier stocké. Cette action est irréversible.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Annuler')),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppColors.rouge),
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              context.read<ChantierState>().deleteDocumentChantier(chantier.reference, d.id);
+            },
+            child: const Text('Supprimer définitivement'),
+          ),
+        ],
       ),
     );
   }

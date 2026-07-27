@@ -56,7 +56,7 @@ class _AutoControleScreenState extends State<AutoControleScreen> {
   Widget _buildTabs(List<String> categories) {
     return Container(
       padding: const EdgeInsets.all(8),
-      color: Colors.white,
+      color: AppColors.blanc,
       child: Row(
         children: List.generate(categories.length, (i) => Expanded(
           child: GestureDetector(

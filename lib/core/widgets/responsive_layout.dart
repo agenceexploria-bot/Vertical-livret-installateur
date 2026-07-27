@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme.dart';
 
 class ResponsiveLayout extends StatelessWidget {
   final Widget child;
@@ -20,7 +21,7 @@ class ResponsiveLayout extends StatelessWidget {
   Widget build(BuildContext context) {
     // Layout pour simuler un écran mobile centré sur le Web
     Widget mobileScreen = Scaffold(
-      backgroundColor: backgroundColor ?? Colors.white,
+      backgroundColor: backgroundColor ?? AppColors.fond,
       appBar: appBar,
       body: child,
       bottomNavigationBar: bottomNavigationBar,

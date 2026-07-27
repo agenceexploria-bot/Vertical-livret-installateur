@@ -145,7 +145,7 @@ class ProfilScreen extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.blanc,
         borderRadius: BorderRadius.circular(9),
         border: Border.all(color: AppColors.lignes),
       ),

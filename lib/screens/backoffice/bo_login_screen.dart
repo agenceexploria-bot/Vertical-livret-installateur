@@ -35,7 +35,7 @@ class _BoLoginScreenState extends State<BoLoginScreen> {
             ),
             child: Column(
               children: [
-                const SizedBox(height: 80, child: VerticalLogo(height: 80)),
+                const SizedBox(height: 110, child: VerticalLogo(height: 110)),
                 const SizedBox(height: 10),
                 const Text(
                   'LIVRET INSTALLATEUR — ESPACE INTERNE',

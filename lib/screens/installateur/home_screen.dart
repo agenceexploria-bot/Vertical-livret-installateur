@@ -57,7 +57,7 @@ class _InstallateurHomeScreenState extends State<InstallateurHomeScreen> {
       bottomNavigationBar: Container(
         padding: const EdgeInsets.all(16),
         decoration: const BoxDecoration(
-          color: Colors.white,
+          color: AppColors.blanc,
           border: Border(top: BorderSide(color: AppColors.lignes)),
         ),
         child: Text(

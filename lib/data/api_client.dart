@@ -73,6 +73,9 @@ class ApiClient {
       case 'PATCH':
         response = await http.patch(uri, headers: headers, body: encoded);
         break;
+      case 'PUT':
+        response = await http.put(uri, headers: headers, body: encoded);
+        break;
       case 'DELETE':
         response = await http.delete(uri, headers: headers, body: encoded);
         break;
@@ -316,6 +319,17 @@ class ApiClient {
       'nom': nom,
       'nomFichierOriginal': ?nomFichierOriginal,
       'file': file,
+    });
+  }
+
+  Future<Map<String, dynamic>> deleteDocumentChantier(String reference, String docId) =>
+      _request('DELETE', '/chantiers/$reference/documents-chantier/$docId');
+
+  Future<Map<String, dynamic>> replaceDocumentChantier(String reference, String docId,
+      {required String file, String? nomFichierOriginal}) {
+    return _request('PUT', '/chantiers/$reference/documents-chantier/$docId', body: {
+      'file': file,
+      'nomFichierOriginal': ?nomFichierOriginal,
     });
   }
 

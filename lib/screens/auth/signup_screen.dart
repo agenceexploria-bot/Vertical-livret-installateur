@@ -108,7 +108,6 @@ class _SignupScreenState extends State<SignupScreen> {
   @override
   Widget build(BuildContext context) {
     return ResponsiveLayout(
-      backgroundColor: Colors.white,
       child: SafeArea(
         child: Column(
           children: [
