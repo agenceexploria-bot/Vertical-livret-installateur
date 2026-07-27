@@ -173,11 +173,17 @@ enum TypeDocumentChantier {
 // consultés en lecture seule par l'installateur (Modules 1-3), à ne pas
 // confondre avec DocumentTerrain (dépôts de l'installateur lui-même sur site).
 model DocumentChantier {
-  id         String               @id @default(cuid())
-  chantier   Chantier             @relation(fields: [chantierId], references: [id], onDelete: Cascade)
-  chantierId String
-  type       TypeDocumentChantier
-  nom        String
-  filePath   String
-  createdAt  DateTime             @default(now())
+  id                 String               @id @default(cuid())
+  chantier           Chantier             @relation(fields: [chantierId], references: [id], onDelete: Cascade)
+  chantierId         String
+  type               TypeDocumentChantier
+  nom                String
+  // Nom du fichier tel qu'il existait sur l'ordinateur de la personne qui l'a
+  // déposé (ex. "Plan_2024.pdf") — distinct de `nom` (le titre libre donné
+  // par le CA), conservé pour qu'on puisse toujours identifier le fichier
+  // réel même si `nom` a été renommé. Nullable : les documents déposés avant
+  // ce champ n'ont pas cette information.
+  nomFichierOriginal String?
+  filePath           String
+  createdAt          DateTime             @default(now())
 }

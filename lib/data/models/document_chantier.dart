@@ -10,6 +10,10 @@ class DocumentChantier {
   final String id;
   final TypeDocumentChantier type;
   final String nom;
+  /// Nom du fichier tel qu'il existait sur l'ordinateur de la personne qui l'a
+  /// déposé (ex. "Plan_2024.pdf") — distinct de [nom] (le titre libre donné
+  /// par le CA). Null pour les documents déposés avant ce champ.
+  final String? nomFichierOriginal;
   final String filePath;
   final DateTime createdAt;
 
@@ -17,6 +21,7 @@ class DocumentChantier {
     required this.id,
     required this.type,
     required this.nom,
+    this.nomFichierOriginal,
     required this.filePath,
     required this.createdAt,
   });
@@ -25,6 +30,7 @@ class DocumentChantier {
         id: json['id'] as String,
         type: typeDocumentChantierFromJson(json['type'] as String),
         nom: json['nom'] as String,
+        nomFichierOriginal: json['nomFichierOriginal'] as String?,
         filePath: json['filePath'] as String,
         createdAt: DateTime.parse(json['createdAt'] as String),
       );
@@ -33,6 +39,7 @@ class DocumentChantier {
         'id': id,
         'type': type.name,
         'nom': nom,
+        'nomFichierOriginal': nomFichierOriginal,
         'filePath': filePath,
         'createdAt': createdAt.toIso8601String(),
       };

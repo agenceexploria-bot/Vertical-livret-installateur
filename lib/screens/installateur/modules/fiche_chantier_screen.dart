@@ -144,7 +144,16 @@ class FicheChantierScreen extends StatelessWidget {
                 children: [
                   const Icon(Icons.assignment_outlined, color: AppColors.encre, size: 28),
                   const SizedBox(width: 16),
-                  Expanded(child: Text(doc.nom, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(doc.nom, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        if (doc.nomFichierOriginal != null && doc.nomFichierOriginal != doc.nom)
+                          Text(doc.nomFichierOriginal!, style: const TextStyle(fontSize: 11, color: AppColors.acierClair)),
+                      ],
+                    ),
+                  ),
                   const Icon(Icons.chevron_right, color: AppColors.acierClair),
                 ],
               ),

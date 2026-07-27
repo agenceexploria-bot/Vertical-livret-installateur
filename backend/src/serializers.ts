@@ -49,7 +49,14 @@ export function serializeDocumentTerrain(d: DocumentTerrain & { auteur?: User })
 }
 
 export function serializeDocumentChantier(d: DocumentChantier) {
-  return { id: d.id, type: d.type, nom: d.nom, filePath: d.filePath, createdAt: d.createdAt };
+  return {
+    id: d.id,
+    type: d.type,
+    nom: d.nom,
+    nomFichierOriginal: d.nomFichierOriginal,
+    filePath: d.filePath,
+    createdAt: d.createdAt,
+  };
 }
 
 export function serializeChantier(

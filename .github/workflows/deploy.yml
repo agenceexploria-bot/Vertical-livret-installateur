@@ -16,6 +16,14 @@ jobs:
           channel: stable
 
       - run: flutter pub get
+
+      # Invalide le cache du service worker PWA à chaque déploiement (voir
+      # web/pwa_cache_worker.js) en y injectant le SHA du commit — sans ça,
+      # les visiteurs déjà passés sur le site peuvent continuer à voir une
+      # version périmée de l'app indéfiniment.
+      - name: Injecte le SHA du commit dans le cache PWA
+        run: sed -i "s/const CACHE_VERSION = 'dev';/const CACHE_VERSION = '${{ github.sha }}';/" web/pwa_cache_worker.js
+
       - run: flutter build web --release
 
       - name: Déploiement Vercel

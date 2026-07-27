@@ -309,8 +309,14 @@ class ApiClient {
     return _request('POST', '/chantiers/$reference/documents', body: {'titre': titre, 'categorie': categorie, 'file': file});
   }
 
-  Future<Map<String, dynamic>> addDocumentChantier(String reference, {required String type, required String nom, required String file}) {
-    return _request('POST', '/chantiers/$reference/documents-chantier', body: {'type': type, 'nom': nom, 'file': file});
+  Future<Map<String, dynamic>> addDocumentChantier(String reference,
+      {required String type, required String nom, String? nomFichierOriginal, required String file}) {
+    return _request('POST', '/chantiers/$reference/documents-chantier', body: {
+      'type': type,
+      'nom': nom,
+      'nomFichierOriginal': ?nomFichierOriginal,
+      'file': file,
+    });
   }
 
   /// Modification et suppression d'un chantier — réservées à l'Admin côté

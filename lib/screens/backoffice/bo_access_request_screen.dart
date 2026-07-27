@@ -152,9 +152,6 @@ class _BoAccessRequestScreenState extends State<BoAccessRequestScreen> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Demande envoyée — un administrateur doit valider votre compte avant activation.')),
-    );
-    context.pop();
+    context.go('/backoffice/acces/confirmation');
   }
 }

@@ -31,9 +31,11 @@ class BoChantierDetailScreen extends StatelessWidget {
 
     final livretOk = chantier.installateursRattaches.isNotEmpty &&
         chantier.installateursRattaches.every((u) => chantier.livretsOuverts.contains(u.id));
-    // Modifier/Supprimer un chantier est réservé à l'Admin (voir la refonte
-    // des rôles back-office) — le CA n'a pas ce droit, seulement l'Admin.
-    final isAdmin = context.watch<AuthState>().currentUser?.role == UserRole.admin;
+    // Modifier un chantier est ouvert au CA et à l'Admin ; la suppression
+    // reste réservée à l'Admin (capacité destructive supplémentaire).
+    final role = context.watch<AuthState>().currentUser?.role;
+    final isAdmin = role == UserRole.admin;
+    final canModifier = isAdmin || role == UserRole.chargeAffaires || role == UserRole.direction;
 
     return BoShell(
       activeNav: 'chantiers',
@@ -49,13 +51,15 @@ class BoChantierDetailScreen extends StatelessWidget {
                 type: livretOk ? StatusType.conforme : StatusType.enCours,
               ),
               const Spacer(),
-              if (isAdmin) ...[
+              if (canModifier) ...[
                 OutlinedButton(
                   onPressed: () => _openModifierDialog(context, chantier),
                   style: OutlinedButton.styleFrom(minimumSize: const Size(0, 34), padding: const EdgeInsets.symmetric(horizontal: 16)),
                   child: const Text('Modifier', style: TextStyle(fontSize: 12)),
                 ),
                 const SizedBox(width: 8),
+              ],
+              if (isAdmin)
                 OutlinedButton(
                   onPressed: () => _confirmerSuppression(context, chantier),
                   style: OutlinedButton.styleFrom(
@@ -66,7 +70,6 @@ class BoChantierDetailScreen extends StatelessWidget {
                   ),
                   child: const Text('Supprimer', style: TextStyle(fontSize: 12)),
                 ),
-              ],
             ],
           ),
           const SizedBox(height: 16),
@@ -246,7 +249,19 @@ class BoChantierDetailScreen extends StatelessWidget {
           children: [
             Icon(icon, size: 16, color: AppColors.acierClair),
             const SizedBox(width: 8),
-            Expanded(child: Text(d.nom, style: const TextStyle(fontSize: 11.5))),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(d.nom, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
+                  if (d.nomFichierOriginal != null && d.nomFichierOriginal != d.nom)
+                    Text(
+                      d.nomFichierOriginal!,
+                      style: const TextStyle(fontSize: 10, color: AppColors.acierClair),
+                    ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -470,6 +485,7 @@ class _AjouterDocumentChantierDialogState extends State<_AjouterDocumentChantier
           widget.reference,
           type: _type.name,
           nom: _nomController.text.trim(),
+          nomFichierOriginal: _picked!.fileName,
           file: _picked!.dataUrl,
         );
     if (!mounted) return;

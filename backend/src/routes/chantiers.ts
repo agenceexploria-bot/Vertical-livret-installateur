@@ -163,10 +163,10 @@ const updateChantierSchema = z.object({
   referenceAffaire: z.string().min(1).optional(),
 });
 
-// Modification des informations d'un chantier — réservé à l'Admin (le CA n'a
-// pas ce droit, voir la refonte des rôles back-office : seul l'Admin peut
-// corriger/supprimer un chantier une fois créé).
-chantiersRouter.patch('/:reference', requireAuth, requireRole('admin'), async (req, res) => {
+// Modification des informations d'un chantier — CA/Direction/Admin. La
+// suppression, elle, reste réservée à l'Admin (capacité destructive
+// supplémentaire, voir la route DELETE ci-dessous).
+chantiersRouter.patch('/:reference', requireAuth, requireRole('chargeAffaires', 'direction', 'admin'), async (req, res) => {
   const parsed = updateChantierSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
   const d = parsed.data;
@@ -370,6 +370,7 @@ chantiersRouter.post('/:reference/documents', requireAuth, requireRattachement, 
 const documentChantierSchema = z.object({
   type: z.enum(['ficheChantier', 'securite', 'technique']),
   nom: z.string().min(1),
+  nomFichierOriginal: z.string().min(1).optional(),
   file: z.string().min(1, 'Un fichier (photo ou PDF) est requis'),
 });
 
@@ -390,7 +391,13 @@ chantiersRouter.post(
     const filePath = await saveBase64File(parsed.data.file, `doc-chantier-${chantier.id}`);
 
     await prisma.documentChantier.create({
-      data: { chantierId: chantier.id, type: parsed.data.type, nom: parsed.data.nom, filePath },
+      data: {
+        chantierId: chantier.id,
+        type: parsed.data.type,
+        nom: parsed.data.nom,
+        nomFichierOriginal: parsed.data.nomFichierOriginal,
+        filePath,
+      },
     });
 
     const updated = await prisma.chantier.findUnique({ where: { id: chantier.id }, include: CHANTIER_INCLUDE });

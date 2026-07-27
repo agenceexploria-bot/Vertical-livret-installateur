@@ -23,6 +23,7 @@ import '../screens/charge_affaires/ca_home_screen.dart';
 import '../screens/charge_affaires/ca_validation_screen.dart';
 import '../screens/backoffice/bo_login_screen.dart';
 import '../screens/backoffice/bo_access_request_screen.dart';
+import '../screens/backoffice/bo_access_confirmation_screen.dart';
 import '../screens/backoffice/bo_ca_chantiers_screen.dart';
 import '../screens/backoffice/bo_new_chantier_screen.dart';
 import '../screens/backoffice/bo_chantier_detail_screen.dart';
@@ -80,7 +81,8 @@ class AppRouter {
 
           final isBoLogin = state.matchedLocation == '/backoffice/login';
           final isBoAcces = state.matchedLocation == '/backoffice/acces';
-          if (isBoLogin || isBoAcces) return null;
+          final isBoAccesConfirmation = state.matchedLocation == '/backoffice/acces/confirmation';
+          if (isBoLogin || isBoAcces || isBoAccesConfirmation) return null;
 
           if (authState.isLoading) return null;
           if (!authState.isAuthenticated) return '/backoffice/login';
@@ -192,6 +194,7 @@ class AppRouter {
         // accès à l'espace CA), voir le garde de redirection ci-dessus.
         GoRoute(path: '/backoffice/login', builder: (context, state) => const BoLoginScreen()),
         GoRoute(path: '/backoffice/acces', builder: (context, state) => const BoAccessRequestScreen()),
+        GoRoute(path: '/backoffice/acces/confirmation', builder: (context, state) => const BoAccessConfirmationScreen()),
 
         // Espace Chargé d'Affaires : chantiers (création, suivi, PV), auto-
         // contrôles/REX/anomalies/habilitations (ex-espace Qualité, fusionné

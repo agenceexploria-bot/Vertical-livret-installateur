@@ -65,8 +65,10 @@ class ChantierRepository {
   /// Dépôt d'un document de référence (PPSPS, plan...) par le CA — action
   /// back-office web, pas de file d'attente hors-ligne (comme [createChantier]
   /// et [rattacher], qui supposent déjà un réseau disponible).
-  Future<Chantier> addDocumentChantier(String reference, {required String type, required String nom, required String file}) async {
-    final data = await _api.addDocumentChantier(reference, type: type, nom: nom, file: file);
+  Future<Chantier> addDocumentChantier(String reference,
+      {required String type, required String nom, String? nomFichierOriginal, required String file}) async {
+    final data = await _api.addDocumentChantier(reference,
+        type: type, nom: nom, nomFichierOriginal: nomFichierOriginal, file: file);
     return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
   }
 

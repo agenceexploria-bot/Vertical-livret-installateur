@@ -73,8 +73,10 @@ class ChantierState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> addDocumentChantier(String reference, {required String type, required String nom, required String file}) async {
-    final updated = await _repository.addDocumentChantier(reference, type: type, nom: nom, file: file);
+  Future<void> addDocumentChantier(String reference,
+      {required String type, required String nom, String? nomFichierOriginal, required String file}) async {
+    final updated = await _repository.addDocumentChantier(reference,
+        type: type, nom: nom, nomFichierOriginal: nomFichierOriginal, file: file);
     _replaceInList(updated);
   }
 

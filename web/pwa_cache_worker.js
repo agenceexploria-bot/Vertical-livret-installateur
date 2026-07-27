@@ -11,8 +11,12 @@
 // l'app démarre instantanément même sans réseau, avant que Drift ne prenne
 // le relais pour les données.
 //
-// Incrémenter CACHE_VERSION à chaque déploiement pour invalider l'ancien cache.
-const CACHE_VERSION = 'v1';
+// Remplacé automatiquement par le SHA du commit à chaque déploiement CI (voir
+// .github/workflows/deploy.yml) pour invalider le cache de l'app shell à
+// chaque nouvelle version — jusqu'ici resté figé sur 'dev' sur tous les
+// déploiements précédents, ce qui pouvait servir une version périmée aux
+// visiteurs déjà passés sur le site.
+const CACHE_VERSION = 'dev';
 const CACHE_NAME = `vertical-app-shell-${CACHE_VERSION}`;
 
 const APP_SHELL = [

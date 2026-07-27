@@ -47,7 +47,14 @@ class DocsAdminScreen extends StatelessWidget {
                       const Icon(Icons.shield_outlined, color: AppColors.rouge, size: 28),
                       const SizedBox(width: 16),
                       Expanded(
-                        child: Text(doc.nom, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(doc.nom, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                            if (doc.nomFichierOriginal != null && doc.nomFichierOriginal != doc.nom)
+                              Text(doc.nomFichierOriginal!, style: const TextStyle(fontSize: 11, color: AppColors.acierClair)),
+                          ],
+                        ),
                       ),
                       // Ce document fait partie du chantier mis en cache par
                       // Drift : consultable même sans réseau, dès que le
