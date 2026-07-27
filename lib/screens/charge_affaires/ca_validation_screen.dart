@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme.dart';
+import '../../core/widgets/glass_app_bar.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../core/widgets/app_card.dart';
 import '../../data/models/user.dart';
@@ -15,7 +16,7 @@ class CaValidationScreen extends StatelessWidget {
     final pending = comptesState.installateurs.where((u) => !u.isActive).toList();
 
     return ResponsiveLayout(
-      appBar: AppBar(
+      appBar: GlassAppBar(
         title: const Text('Valider des inscriptions'),
         backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,

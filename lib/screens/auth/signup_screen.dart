@@ -218,7 +218,7 @@ class _SignupScreenState extends State<SignupScreen> {
                 keyboardType: TextInputType.number,
                 maxLength: 6,
                 style: const TextStyle(fontSize: 24, letterSpacing: 8, fontWeight: FontWeight.bold),
-                decoration: const InputDecoration(counterText: '', border: OutlineInputBorder()),
+                decoration: const InputDecoration(counterText: ''),
               ),
             ),
             const SizedBox(height: 24),
@@ -269,7 +269,6 @@ class _SignupScreenState extends State<SignupScreen> {
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(9))),
       ),
     );
   }

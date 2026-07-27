@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/document_capture.dart';
 import '../../core/theme.dart';
+import '../../core/widgets/glass_app_bar.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../data/models/user.dart';
 import '../../state/auth_state.dart';
@@ -18,7 +19,7 @@ class ProfilScreen extends StatelessWidget {
     final offlineExpiry = authState.offlineExpiry;
 
     return ResponsiveLayout(
-      appBar: AppBar(
+      appBar: GlassAppBar(
         title: const Text('Profil'),
         backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,
@@ -247,7 +248,6 @@ class _AddCertificatDialogState extends State<_AddCertificatDialog> {
               decoration: const InputDecoration(
                 labelText: 'Titre',
                 hintText: 'Habilitation électrique BR',
-                border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(7))),
               ),
             ),
             const SizedBox(height: 12),
@@ -336,19 +336,19 @@ class _EditProfilDialogState extends State<_EditProfilDialog> {
             TextField(
               controller: _prenomController,
               onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(labelText: 'Prénom', border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(7)))),
+              decoration: const InputDecoration(labelText: 'Prénom'),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _nomController,
               onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(labelText: 'Nom', border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(7)))),
+              decoration: const InputDecoration(labelText: 'Nom'),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _emailController,
               onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(7)))),
+              decoration: const InputDecoration(labelText: 'Email'),
             ),
             const SizedBox(height: 12),
             TextField(
@@ -356,7 +356,6 @@ class _EditProfilDialogState extends State<_EditProfilDialog> {
               decoration: const InputDecoration(
                 labelText: 'Mobile',
                 hintText: 'Facultatif',
-                border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(7))),
               ),
             ),
           ],

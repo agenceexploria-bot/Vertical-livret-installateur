@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme.dart';
+import '../../../core/widgets/glass_app_bar.dart';
 import '../../../core/photo_capture.dart';
 import '../../../core/widgets/responsive_layout.dart';
 import '../../../core/widgets/app_card.dart';
@@ -30,7 +31,7 @@ class _AutoControleScreenState extends State<AutoControleScreen> {
         : chantier.autoControle.where((p) => p.categorie == categories[tabIndex]).toList();
 
     return ResponsiveLayout(
-      appBar: AppBar(
+      appBar: GlassAppBar(
         title: const Text('Auto-contrôle'),
         backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,

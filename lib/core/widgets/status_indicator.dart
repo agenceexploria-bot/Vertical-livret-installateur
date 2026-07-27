@@ -48,11 +48,14 @@ class StatusIndicator extends StatelessWidget {
       children: [
         if (showDot) ...[
           Container(
-            width: 7,
-            height: 7,
+            width: 9,
+            height: 9,
             decoration: BoxDecoration(
               color: dotColor,
               shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(color: dotColor.withValues(alpha: 0.65), blurRadius: 8, spreadRadius: 1),
+              ],
             ),
           ),
           const SizedBox(width: 8),

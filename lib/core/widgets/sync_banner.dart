@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../theme.dart';
 
@@ -15,42 +16,36 @@ class SyncBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (isOnline) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-        color: AppColors.vert.withValues(alpha: 0.1),
-        child: Row(
-          children: [
-            const Icon(Icons.check_circle, color: AppColors.vert, size: 16),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Synchronisé — session hors-ligne valable jusqu\'au $offlineUntil',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.vert),
+    final color = isOnline ? AppColors.vert : AppColors.orange;
+    final icon = isOnline ? Icons.check_circle : Icons.cloud_off;
+    final text = isOnline
+        ? 'Synchronisé — session hors-ligne valable jusqu\'au $offlineUntil'
+        : 'Hors-ligne — $pendingCount saisie(s) en attente';
+
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            border: Border(bottom: BorderSide(color: color.withValues(alpha: 0.18), width: 1)),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: color, size: 16),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  text,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: color, fontWeight: FontWeight.w600),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      );
-    } else {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-        color: AppColors.orange.withValues(alpha: 0.1),
-        child: Row(
-          children: [
-            const Icon(Icons.cloud_off, color: AppColors.orange, size: 16),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Hors-ligne — $pendingCount saisie(s) en attente',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.orange),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
+      ),
+    );
   }
 }

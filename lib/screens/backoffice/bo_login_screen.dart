@@ -51,7 +51,6 @@ class _BoLoginScreenState extends State<BoLoginScreen> {
                   controller: _emailController,
                   decoration: const InputDecoration(
                     hintText: 's.martin@actiwork.fr',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(7))),
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -63,9 +62,7 @@ class _BoLoginScreenState extends State<BoLoginScreen> {
                 TextField(
                   controller: _passwordController,
                   obscureText: true,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(7))),
-                  ),
+                  decoration: const InputDecoration(),
                 ),
                 const SizedBox(height: 20),
                 if (authState.isLoading)

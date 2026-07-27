@@ -235,7 +235,6 @@ class _BoNewChantierScreenState extends State<BoNewChantierScreen> {
             decoration: const InputDecoration(
               hintText: 'LD91245',
               isDense: true,
-              border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(7))),
             ),
           ),
         ),
@@ -316,7 +315,6 @@ class _BoNewChantierScreenState extends State<BoNewChantierScreen> {
               decoration: const InputDecoration(
                 isDense: true,
                 contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(6))),
               ),
             ),
           ),

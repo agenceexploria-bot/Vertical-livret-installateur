@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme.dart';
 import '../../../core/photo_capture.dart';
+import '../../../core/widgets/glass_app_bar.dart';
 import '../../../core/widgets/responsive_layout.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../state/auth_state.dart';
@@ -19,7 +20,7 @@ class ReceptionMarchandisesScreen extends StatelessWidget {
     final points = chantier.receptionMarchandises;
 
     return ResponsiveLayout(
-      appBar: AppBar(
+      appBar: GlassAppBar(
         title: const Text('Réception des marchandises'),
         backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,

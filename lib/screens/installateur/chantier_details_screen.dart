@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/app_card.dart';
+import '../../core/widgets/glass_app_bar.dart';
 import '../../core/widgets/sync_banner.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../state/auth_state.dart';
@@ -91,7 +92,7 @@ class ChantierDetailsScreen extends StatelessWidget {
     ];
 
     return ResponsiveLayout(
-      appBar: AppBar(
+      appBar: GlassAppBar(
         title: Text('${chantier.reference} — ${chantier.client}'),
         backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,

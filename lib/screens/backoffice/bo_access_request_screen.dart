@@ -120,7 +120,6 @@ class _BoAccessRequestScreenState extends State<BoAccessRequestScreen> {
           obscureText: obscure,
           decoration: InputDecoration(
             hintText: hint,
-            border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(7))),
           ),
         ),
       ],

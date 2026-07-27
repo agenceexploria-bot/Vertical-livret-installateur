@@ -38,7 +38,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 decoration: const InputDecoration(
                   labelText: 'Mobile ou email',
                   hintText: 'ex: 06 52 41 78 90',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(9))),
                 ),
               ),
               const SizedBox(height: 16),
@@ -47,7 +46,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 obscureText: true,
                 decoration: const InputDecoration(
                   labelText: 'Mot de passe',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(9))),
                 ),
               ),
               const SizedBox(height: 24),

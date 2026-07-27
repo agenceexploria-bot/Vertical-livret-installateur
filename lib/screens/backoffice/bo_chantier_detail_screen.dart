@@ -398,7 +398,6 @@ class _AjouterDocumentChantierDialogState extends State<_AjouterDocumentChantier
               decoration: const InputDecoration(
                 labelText: 'Nom du document',
                 hintText: 'PPSPS, Plan de coupe, Notice de montage...',
-                border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(7))),
               ),
             ),
             const SizedBox(height: 12),

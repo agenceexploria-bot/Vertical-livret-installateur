@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/coming_soon.dart';
 import '../../../core/theme.dart';
+import '../../../core/widgets/glass_app_bar.dart';
 import '../../../core/widgets/responsive_layout.dart';
 import '../../../state/chantier_state.dart';
 
@@ -15,7 +16,7 @@ class FicheChantierScreen extends StatelessWidget {
     if (chantier == null) return const Scaffold();
 
     return ResponsiveLayout(
-      appBar: AppBar(
+      appBar: GlassAppBar(
         title: const Text('Fiche chantier'),
         backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,

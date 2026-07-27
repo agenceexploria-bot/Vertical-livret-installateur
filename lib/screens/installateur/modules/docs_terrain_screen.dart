@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/document_capture.dart';
 import '../../../core/theme.dart';
+import '../../../core/widgets/glass_app_bar.dart';
 import '../../../core/widgets/responsive_layout.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../state/auth_state.dart';
@@ -37,7 +38,7 @@ class _DocsTerrainScreenState extends State<DocsTerrainScreen> {
     final docs = chantier.docsTerrain;
 
     return ResponsiveLayout(
-      appBar: AppBar(
+      appBar: GlassAppBar(
         title: const Text('Documents terrain'),
         backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,

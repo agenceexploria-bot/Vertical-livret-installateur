@@ -4,6 +4,7 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'dart:async';
 import 'dart:math' as math;
 import '../../../core/theme.dart';
+import '../../../core/widgets/glass_app_bar.dart';
 import '../../../core/voice_recorder.dart';
 import '../../../core/widgets/responsive_layout.dart';
 import '../../../state/chantier_state.dart';
@@ -154,7 +155,7 @@ class _RexScreenState extends State<RexScreen> with SingleTickerProviderStateMix
   @override
   Widget build(BuildContext context) {
     return ResponsiveLayout(
-      appBar: AppBar(
+      appBar: GlassAppBar(
         title: const Text('Retour d\'expérience'),
         backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,
@@ -276,7 +277,6 @@ class _RexScreenState extends State<RexScreen> with SingleTickerProviderStateMix
             maxLines: 4,
             decoration: const InputDecoration(
               hintText: 'Aucune transcription — l\'audio seul sera envoyé.',
-              border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(9))),
             ),
           ),
         ],
@@ -291,7 +291,6 @@ class _RexScreenState extends State<RexScreen> with SingleTickerProviderStateMix
       onChanged: (_) => setState(() {}),
       decoration: const InputDecoration(
         hintText: 'Le montage s\'est bien déroulé, RAS. Attention au réglage des fins de course...',
-        border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(9))),
       ),
     );
   }

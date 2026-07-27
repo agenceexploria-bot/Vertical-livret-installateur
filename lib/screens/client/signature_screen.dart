@@ -5,6 +5,7 @@ import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme.dart';
+import '../../core/widgets/glass_app_bar.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../data/api_client.dart';
 import '../../state/chantier_state.dart';
@@ -24,7 +25,7 @@ class _SignatureScreenState extends State<SignatureScreen> {
   @override
   Widget build(BuildContext context) {
     return ResponsiveLayout(
-      appBar: AppBar(
+      appBar: GlassAppBar(
         title: const Text('Signature du procès-verbal'),
         backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,
@@ -42,7 +43,6 @@ class _SignatureScreenState extends State<SignatureScreen> {
               controller: _nameController,
               decoration: const InputDecoration(
                 labelText: 'Nom et fonction du signataire',
-                border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(9))),
               ),
             ),
             const SizedBox(height: 24),

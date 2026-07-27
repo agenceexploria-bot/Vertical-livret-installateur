@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/app_card.dart';
+import '../../core/widgets/glass_app_bar.dart';
 import '../../core/widgets/status_indicator.dart';
 import '../../core/widgets/sync_banner.dart';
 import '../../core/widgets/responsive_layout.dart';
@@ -40,7 +41,7 @@ class _InstallateurHomeScreenState extends State<InstallateurHomeScreen> {
     final offlineExpiry = authState.offlineExpiry;
 
     return ResponsiveLayout(
-      appBar: AppBar(
+      appBar: GlassAppBar(
         title: const Text('Mes chantiers'),
         backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,
