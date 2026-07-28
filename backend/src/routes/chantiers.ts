@@ -5,6 +5,7 @@ import { prisma } from '../prisma';
 import { serializeChantier } from '../serializers';
 import { requireAuth, requireRole, AuthedRequest } from '../middleware/auth';
 import { saveBase64File, deleteBlobFile, isAllowedFileDataUrl } from '../lib/imageStorage';
+import { sendRelanceSms } from '../lib/sms';
 import { RECEPTION_POINTS, AUTO_CONTROLE_POINTS } from '../lib/checklistDefaults';
 
 export const chantiersRouter = Router();
@@ -144,6 +145,37 @@ chantiersRouter.delete(
 
     const updated = await prisma.chantier.findUnique({ where: { id: chantier.id }, include: CHANTIER_INCLUDE });
     res.json({ chantier: serializeChantier(updated!) });
+  },
+);
+
+// Envoie un vrai SMS de relance à un installateur rattaché qui n'a pas
+// encore ouvert son livret — CA/Direction/Admin. Le rattachement au chantier
+// est vérifié pour ne pas permettre d'envoyer un SMS à un installateur
+// arbitraire via son seul id.
+chantiersRouter.post(
+  '/:reference/relance-sms/:userId',
+  requireAuth,
+  requireRole('chargeAffaires', 'direction', 'admin'),
+  async (req, res) => {
+    const chantier = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
+    if (!chantier) return res.status(404).json({ error: 'Chantier introuvable' });
+
+    const rattache = await prisma.chantierInstallateur.findUnique({
+      where: { chantierId_userId: { chantierId: chantier.id, userId: req.params.userId } },
+      include: { user: true },
+    });
+    if (!rattache) return res.status(404).json({ error: "Cet installateur n'est pas rattaché à ce chantier" });
+
+    const { mobile } = rattache.user;
+    if (!mobile) return res.status(400).json({ error: 'Aucun numéro de mobile enregistré pour cet installateur' });
+
+    try {
+      await sendRelanceSms(mobile);
+    } catch {
+      return res.status(502).json({ error: "Échec de l'envoi du SMS" });
+    }
+
+    res.json({ ok: true, mobile });
   },
 );
 

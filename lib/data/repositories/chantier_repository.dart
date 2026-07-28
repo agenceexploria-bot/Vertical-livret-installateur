@@ -110,6 +110,15 @@ class ChantierRepository {
     }
   }
 
+  /// Action back-office web, pas de file d'attente hors-ligne (comme
+  /// [addDocumentChantier] et [rattacher]) : envoyer un SMS suppose un réseau
+  /// disponible, ça n'a pas de sens de le mettre en attente. Retourne le
+  /// numéro de mobile utilisé, pour le message de confirmation.
+  Future<String> relancerSms(String reference, String userId) async {
+    final data = await _api.relanceSms(reference, userId);
+    return data['mobile'] as String;
+  }
+
   /// [status] et/ou [photo] (JPEG compressé, en data URL base64) sont
   /// horodatés côté client (heure réelle de l'action terrain) plutôt que côté
   /// serveur, qui ne les recevra parfois que bien plus tard si l'installateur

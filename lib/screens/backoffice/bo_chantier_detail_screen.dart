@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/document_capture.dart';
 import '../../core/theme.dart';
+import '../../data/api_client.dart';
 import '../../core/widgets/status_indicator.dart';
 import '../../data/models/chantier.dart';
 import '../../data/models/document_chantier.dart';
@@ -108,22 +109,10 @@ class BoChantierDetailScreen extends StatelessWidget {
                 ),
               for (final u in chantier.installateursRattaches) _installateurRow(context, chantier, u),
               const SizedBox(height: 8),
-              Row(
-                children: [
-                  ElevatedButton(
-                    onPressed: () => _openRattacherDialog(context, chantier),
-                    style: ElevatedButton.styleFrom(minimumSize: const Size(0, 32), padding: const EdgeInsets.symmetric(horizontal: 14)),
-                    child: const Text('+ Rattacher', style: TextStyle(fontSize: 11.5)),
-                  ),
-                  const SizedBox(width: 8),
-                  OutlinedButton(
-                    onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('SMS de relance envoyé')),
-                    ),
-                    style: OutlinedButton.styleFrom(minimumSize: const Size(0, 32), padding: const EdgeInsets.symmetric(horizontal: 14)),
-                    child: const Text('Relancer par SMS', style: TextStyle(fontSize: 11.5)),
-                  ),
-                ],
+              ElevatedButton(
+                onPressed: () => _openRattacherDialog(context, chantier),
+                style: ElevatedButton.styleFrom(minimumSize: const Size(0, 32), padding: const EdgeInsets.symmetric(horizontal: 14)),
+                child: const Text('+ Rattacher', style: TextStyle(fontSize: 11.5)),
               ),
             ],
           ),
@@ -353,6 +342,15 @@ class BoChantierDetailScreen extends StatelessWidget {
             type: ouvert ? StatusType.conforme : StatusType.nonConforme,
           ),
           const SizedBox(width: 8),
+          if (!ouvert)
+            IconButton(
+              onPressed: () => _relancerSms(context, chantier, u),
+              icon: const Icon(Icons.sms_outlined, size: 16, color: AppColors.acierClair),
+              tooltip: 'Envoyer un SMS de relance à ${u.fullName}',
+              visualDensity: VisualDensity.compact,
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              padding: EdgeInsets.zero,
+            ),
           IconButton(
             onPressed: () => _confirmerDetachement(context, chantier, u),
             icon: const Icon(Icons.link_off, size: 16, color: AppColors.acierClair),
@@ -364,6 +362,27 @@ class BoChantierDetailScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _relancerSms(BuildContext context, Chantier chantier, User u) async {
+    final chantierState = context.read<ChantierState>();
+    try {
+      final mobile = await chantierState.relancerSms(chantier.reference, u.id);
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('SMS envoyé à $mobile')),
+      );
+    } on ApiException catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Échec de l\'envoi du SMS : ${e.message}')),
+      );
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Échec de l\'envoi du SMS.')),
+      );
+    }
   }
 
   void _confirmerDetachement(BuildContext context, Chantier chantier, User u) {

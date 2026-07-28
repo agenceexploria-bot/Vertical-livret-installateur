@@ -286,6 +286,11 @@ class ApiClient {
   Future<void> markLivretOuvert(String reference) =>
       _request('POST', '/chantiers/$reference/livret-ouvert');
 
+  /// Renvoie le numéro de mobile utilisé (`mobile`), affiché ensuite dans le
+  /// message de confirmation.
+  Future<Map<String, dynamic>> relanceSms(String reference, String userId) =>
+      _request('POST', '/chantiers/$reference/relance-sms/$userId');
+
   Future<void> updatePoint(String reference, String pointId, {String? status, String? photo, String? clientValidatedAt}) {
     return _request('PATCH', '/chantiers/$reference/points/$pointId', body: {
       'status': ?status,
