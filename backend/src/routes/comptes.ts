@@ -5,6 +5,7 @@ import { prisma } from '../prisma';
 import { serializeUser } from '../serializers';
 import { requireAuth, requireRole, AuthedRequest } from '../middleware/auth';
 import { saveBase64File, isAllowedFileDataUrl } from '../lib/imageStorage';
+import { isValidMobileInput, normalizePhoneInput, MOBILE_FORMAT_ERROR } from '../lib/sms';
 
 export const comptesRouter = Router();
 
@@ -101,7 +102,12 @@ const updateProfileSchema = z.object({
   nom: z.string().min(1).optional(),
   prenom: z.string().min(1).optional(),
   email: z.string().email('Email invalide').optional(),
-  mobile: z.string().min(6).optional(),
+  mobile: z
+    .string()
+    .min(6)
+    .refine((v) => isValidMobileInput(normalizePhoneInput(v)), MOBILE_FORMAT_ERROR)
+    .transform(normalizePhoneInput)
+    .optional(),
   societe: z.string().optional().nullable(),
 });
 

@@ -15,6 +15,7 @@ import {
 } from '../auth/tokens';
 import { requireAuth, AuthedRequest } from '../middleware/auth';
 import { sendVerificationCodeEmail } from '../lib/mailer';
+import { isValidMobileInput, normalizePhoneInput, MOBILE_FORMAT_ERROR } from '../lib/sms';
 
 export const authRouter = Router();
 
@@ -37,7 +38,7 @@ function hashToken(token: string): string {
 }
 
 function normalizeMobile(value: string | undefined): string | undefined {
-  return value ? value.replace(/\D/g, '') : undefined;
+  return value ? normalizePhoneInput(value) : undefined;
 }
 
 const CODE_TTL_MINUTES = 10;
@@ -102,7 +103,7 @@ authRouter.post('/verify-email-code', async (req, res) => {
 const signupSchema = z.object({
   nom: z.string().min(1),
   prenom: z.string().min(1),
-  mobile: z.string().min(6).optional(),
+  mobile: z.string().min(6).refine((v) => isValidMobileInput(normalizePhoneInput(v)), MOBILE_FORMAT_ERROR).optional(),
   email: z.string().email('Email invalide'),
   password: z.string().min(6),
   sousTraitant: z.boolean().optional().default(false),
@@ -153,7 +154,7 @@ authRouter.post('/signup', async (req, res) => {
 const signupInterneSchema = z.object({
   nom: z.string().min(1),
   prenom: z.string().min(1),
-  mobile: z.string().min(6),
+  mobile: z.string().min(6).refine((v) => isValidMobileInput(normalizePhoneInput(v)), MOBILE_FORMAT_ERROR),
   email: z
     .string()
     .email('Email invalide')

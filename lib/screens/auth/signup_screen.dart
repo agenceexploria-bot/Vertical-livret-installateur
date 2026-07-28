@@ -172,7 +172,12 @@ class _SignupScreenState extends State<SignupScreen> {
             const SizedBox(height: 16),
             _buildField('Nom', _nomController),
             const SizedBox(height: 16),
-            _buildField('Téléphone mobile', _mobileController, hint: 'Facultatif'),
+            _buildField(
+              'Téléphone mobile',
+              _mobileController,
+              hint: 'Facultatif — avec l\'indicatif pays, ex : +33612345678',
+              keyboardType: TextInputType.phone,
+            ),
             const SizedBox(height: 16),
             _buildField('Email', _emailController, hint: 'Sert aussi à vous connecter'),
             const SizedBox(height: 24),
@@ -263,11 +268,18 @@ class _SignupScreenState extends State<SignupScreen> {
     }
   }
 
-  Widget _buildField(String label, TextEditingController ctrl, {String? hint, bool obscure = false}) {
+  Widget _buildField(
+    String label,
+    TextEditingController ctrl, {
+    String? hint,
+    bool obscure = false,
+    TextInputType? keyboardType,
+  }) {
     return TextField(
       controller: ctrl,
       obscureText: obscure,
       textInputAction: TextInputAction.next,
+      keyboardType: keyboardType,
       onSubmitted: (_) => _nextStep(),
       decoration: InputDecoration(
         labelText: label,

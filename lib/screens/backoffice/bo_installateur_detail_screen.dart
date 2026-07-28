@@ -131,7 +131,14 @@ class BoInstallateurDetailScreen extends StatelessWidget {
                 const SizedBox(height: 10),
                 TextField(controller: emailController, decoration: const InputDecoration(labelText: 'Email')),
                 const SizedBox(height: 10),
-                TextField(controller: mobileController, decoration: const InputDecoration(labelText: 'Mobile')),
+                TextField(
+                  controller: mobileController,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    labelText: 'Mobile',
+                    hintText: 'Avec l\'indicatif pays, ex : +33612345678',
+                  ),
+                ),
               ],
             ),
           ),

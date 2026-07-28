@@ -353,9 +353,10 @@ class _EditProfilDialogState extends State<_EditProfilDialog> {
             const SizedBox(height: 12),
             TextField(
               controller: _mobileController,
+              keyboardType: TextInputType.phone,
               decoration: const InputDecoration(
                 labelText: 'Mobile',
-                hintText: 'Facultatif',
+                hintText: 'Facultatif — avec l\'indicatif pays, ex : +33612345678',
               ),
             ),
           ],

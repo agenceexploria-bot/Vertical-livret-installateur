@@ -171,8 +171,9 @@ chantiersRouter.post(
 
     try {
       await sendRelanceSms(mobile);
-    } catch {
-      return res.status(502).json({ error: "Échec de l'envoi du SMS" });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Échec de l'envoi du SMS";
+      return res.status(502).json({ error: message });
     }
 
     res.json({ ok: true, mobile });
