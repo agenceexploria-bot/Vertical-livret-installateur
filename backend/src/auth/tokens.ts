@@ -17,7 +17,7 @@ export function signAccessToken(payload: AccessTokenPayload): string {
 }
 
 export function verifyAccessToken(token: string): AccessTokenPayload {
-  return jwt.verify(token, ACCESS_SECRET) as AccessTokenPayload;
+  return jwt.verify(token, ACCESS_SECRET, { algorithms: ['HS256'] }) as AccessTokenPayload;
 }
 
 export function signRefreshToken(payload: AccessTokenPayload): string {
@@ -27,7 +27,7 @@ export function signRefreshToken(payload: AccessTokenPayload): string {
 }
 
 export function verifyRefreshToken(token: string): AccessTokenPayload {
-  return jwt.verify(token, REFRESH_SECRET) as AccessTokenPayload;
+  return jwt.verify(token, REFRESH_SECRET, { algorithms: ['HS256'] }) as AccessTokenPayload;
 }
 
 export interface EmailVerificationTicketPayload {
@@ -44,5 +44,5 @@ export function signEmailVerificationTicket(email: string): string {
 }
 
 export function verifyEmailVerificationTicket(token: string): EmailVerificationTicketPayload {
-  return jwt.verify(token, ACCESS_SECRET) as EmailVerificationTicketPayload;
+  return jwt.verify(token, ACCESS_SECRET, { algorithms: ['HS256'] }) as EmailVerificationTicketPayload;
 }

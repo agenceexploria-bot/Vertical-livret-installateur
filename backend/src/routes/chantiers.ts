@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { prisma } from '../prisma';
 import { serializeChantier } from '../serializers';
 import { requireAuth, requireRole, AuthedRequest } from '../middleware/auth';
-import { saveBase64File, deleteBlobFile } from '../lib/imageStorage';
+import { saveBase64File, deleteBlobFile, isAllowedFileDataUrl } from '../lib/imageStorage';
 import { RECEPTION_POINTS, AUTO_CONTROLE_POINTS } from '../lib/checklistDefaults';
 
 export const chantiersRouter = Router();
@@ -103,7 +103,7 @@ chantiersRouter.post('/', requireAuth, requireRole('chargeAffaires', 'direction'
   res.status(201).json({ chantier: serializeChantier(chantier) });
 });
 
-chantiersRouter.get('/:reference', requireAuth, async (req, res) => {
+chantiersRouter.get('/:reference', requireAuth, requireRattachement, async (req: ChantierScopedRequest, res) => {
   const chantier = await prisma.chantier.findUnique({
     where: { reference: req.params.reference },
     include: CHANTIER_INCLUDE,
@@ -208,9 +208,8 @@ chantiersRouter.delete('/:reference', requireAuth, requireRole('admin'), async (
 });
 
 // Vérification de la veille (EX-22) : l'installateur ouvre son livret.
-chantiersRouter.post('/:reference/livret-ouvert', requireAuth, async (req: AuthedRequest, res) => {
-  const chantier = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
-  if (!chantier) return res.status(404).json({ error: 'Chantier introuvable' });
+chantiersRouter.post('/:reference/livret-ouvert', requireAuth, requireRattachement, async (req: ChantierScopedRequest, res) => {
+  const chantier = req.chantier!;
 
   const opened = new Set(JSON.parse(chantier.livretsOuvertsJson) as string[]);
   opened.add(req.auth!.userId);
@@ -238,6 +237,10 @@ chantiersRouter.patch('/:reference/points/:pointId', requireAuth, requireRattach
   // point du chantier B en devinant/réutilisant son id.
   if (!point || point.chantierId !== req.chantier!.id) {
     return res.status(404).json({ error: 'Point de contrôle introuvable' });
+  }
+
+  if (parsed.data.photo && !isAllowedFileDataUrl(parsed.data.photo)) {
+    return res.status(400).json({ error: 'Type de fichier non autorisé' });
   }
 
   const photoPath = parsed.data.photo
@@ -284,6 +287,10 @@ chantiersRouter.post('/:reference/rex', requireAuth, requireRattachement, async 
   const parsed = rexSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
+  if (parsed.data.audio && !isAllowedFileDataUrl(parsed.data.audio)) {
+    return res.status(400).json({ error: 'Type de fichier non autorisé' });
+  }
+
   let rexAudioPath: string | undefined;
   if (parsed.data.audio) {
     rexAudioPath = await saveBase64File(parsed.data.audio, `rex-${req.params.reference}`);
@@ -322,6 +329,10 @@ chantiersRouter.post('/:reference/pv', requireAuth, requireRattachement, async (
     return res.status(400).json({ error: "L'auto-contrôle doit être complet avant de signer le PV" });
   }
 
+  if (parsed.data.signatureImage && !isAllowedFileDataUrl(parsed.data.signatureImage)) {
+    return res.status(400).json({ error: 'Type de fichier non autorisé' });
+  }
+
   let pvSignatureImagePath: string | undefined;
   if (parsed.data.signatureImage) {
     pvSignatureImagePath = await saveBase64File(parsed.data.signatureImage, `signature-${existing.id}`);
@@ -350,6 +361,10 @@ const documentSchema = z.object({
 chantiersRouter.post('/:reference/documents', requireAuth, requireRattachement, async (req: ChantierScopedRequest, res) => {
   const parsed = documentSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  if (!isAllowedFileDataUrl(parsed.data.file)) {
+    return res.status(400).json({ error: 'Type de fichier non autorisé' });
+  }
 
   const chantier = req.chantier!;
   const filePath = await saveBase64File(parsed.data.file, `doc-${chantier.id}`);
@@ -384,6 +399,10 @@ chantiersRouter.post(
   async (req, res) => {
     const parsed = documentChantierSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+    if (!isAllowedFileDataUrl(parsed.data.file)) {
+      return res.status(400).json({ error: 'Type de fichier non autorisé' });
+    }
 
     const chantier = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
     if (!chantier) return res.status(404).json({ error: 'Chantier introuvable' });
@@ -441,6 +460,10 @@ chantiersRouter.put(
   async (req, res) => {
     const parsed = replaceDocumentChantierSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+    if (!isAllowedFileDataUrl(parsed.data.file)) {
+      return res.status(400).json({ error: 'Type de fichier non autorisé' });
+    }
 
     const chantier = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
     if (!chantier) return res.status(404).json({ error: 'Chantier introuvable' });

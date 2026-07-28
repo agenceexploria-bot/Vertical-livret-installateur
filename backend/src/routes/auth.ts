@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
-import { randomInt } from 'crypto';
+import { randomInt, createHash } from 'crypto';
+import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { prisma } from '../prisma';
 import { serializeUser } from '../serializers';
@@ -17,6 +18,24 @@ import { sendVerificationCodeEmail } from '../lib/mailer';
 
 export const authRouter = Router();
 
+// Défense en profondeur contre le brute-force (mot de passe, code à 6
+// chiffres) — protection partielle seulement en environnement serverless
+// (état en mémoire non partagé entre invocations froides), la protection
+// robuste relève plutôt du pare-feu/WAF de la plateforme.
+const authRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === 'test',
+});
+
+// Un refresh token qui fuiterait depuis la base ne doit pas être directement
+// utilisable — seul le hash est stocké/recherché, jamais la valeur brute du JWT.
+function hashToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
+
 function normalizeMobile(value: string | undefined): string | undefined {
   return value ? value.replace(/\D/g, '') : undefined;
 }
@@ -29,7 +48,7 @@ const requestEmailCodeSchema = z.object({ email: z.string().email('Email invalid
 // Étape 1/2 de l'inscription (EX-2FA) : envoie un code à 6 chiffres par email
 // — bloque immédiatement si l'email est déjà pris, avant même de faire
 // saisir un mot de passe à quelqu'un qui a déjà un compte.
-authRouter.post('/request-email-code', async (req, res) => {
+authRouter.post('/request-email-code', authRateLimit, async (req, res) => {
   const parsed = requestEmailCodeSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
   const { email } = parsed.data;
@@ -173,7 +192,22 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
-authRouter.post('/login', async (req, res) => {
+// Rôles internes soumis à validation par un Admin avant de pouvoir se
+// connecter (voir bo_login_screen.dart, même liste côté front) — Direction et
+// Admin sont créés déjà actifs, hors de ce circuit. Un installateur non
+// encore validé, lui, peut se connecter (redirigé vers /pending) : seule sa
+// liste de chantiers reste vide tant qu'il n'est rattaché à rien.
+const INTERNAL_ROLES_SOUMIS_VALIDATION = ['chargeAffaires', 'qualite'];
+
+function rejectIfBlocked(user: { role: string; isActive: boolean; suspendu: boolean }): string | null {
+  if (user.suspendu) return 'Ce compte a été suspendu — contactez un administrateur.';
+  if (INTERNAL_ROLES_SOUMIS_VALIDATION.includes(user.role) && !user.isActive) {
+    return 'Compte en attente de validation par un administrateur.';
+  }
+  return null;
+}
+
+authRouter.post('/login', authRateLimit, async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
   const { identifier, password } = parsed.data;
@@ -187,6 +221,9 @@ authRouter.post('/login', async (req, res) => {
 
   const valid = await bcrypt.compare(password, user.passwordHash);
   if (!valid) return res.status(401).json({ error: 'Identifiants incorrects' });
+
+  const blockedReason = rejectIfBlocked(user);
+  if (blockedReason) return res.status(403).json({ error: blockedReason });
 
   const tokens = await issueTokens(user.id, user.role);
   res.json({ user: serializeUser(user), ...tokens });
@@ -205,13 +242,19 @@ authRouter.post('/refresh', async (req, res) => {
     return res.status(401).json({ error: 'Session hors-ligne expirée, reconnexion nécessaire' });
   }
 
-  const stored = await prisma.refreshToken.findUnique({ where: { token: refreshToken } });
+  const stored = await prisma.refreshToken.findUnique({ where: { token: hashToken(refreshToken) } });
   if (!stored || stored.expiresAt < new Date()) {
     return res.status(401).json({ error: 'Session hors-ligne expirée, reconnexion nécessaire' });
   }
 
   const user = await prisma.user.findUnique({ where: { id: stored.userId } });
   if (!user) return res.status(401).json({ error: 'Compte introuvable' });
+
+  // Un compte suspendu après coup ne doit pas pouvoir continuer à rafraîchir
+  // son accès pendant les 30 jours de validité restants du refresh token.
+  if (rejectIfBlocked(user)) {
+    return res.status(401).json({ error: 'Session hors-ligne expirée, reconnexion nécessaire' });
+  }
 
   const accessToken = signAccessToken({ userId: user.id, role: user.role });
   res.json({ accessToken });
@@ -220,7 +263,7 @@ authRouter.post('/refresh', async (req, res) => {
 authRouter.post('/logout', async (req, res) => {
   const { refreshToken } = req.body ?? {};
   if (refreshToken) {
-    await prisma.refreshToken.deleteMany({ where: { token: refreshToken } });
+    await prisma.refreshToken.deleteMany({ where: { token: hashToken(refreshToken) } });
   }
   res.status(204).send();
 });
@@ -238,6 +281,6 @@ async function issueTokens(userId: string, role: string) {
   const accessToken = signAccessToken({ userId, role });
   const refreshToken = signRefreshToken({ userId, role });
   const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
-  await prisma.refreshToken.create({ data: { token: refreshToken, userId, expiresAt } });
+  await prisma.refreshToken.create({ data: { token: hashToken(refreshToken), userId, expiresAt } });
   return { accessToken, refreshToken };
 }

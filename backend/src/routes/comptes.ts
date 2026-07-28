@@ -4,11 +4,20 @@ import { z } from 'zod';
 import { prisma } from '../prisma';
 import { serializeUser } from '../serializers';
 import { requireAuth, requireRole, AuthedRequest } from '../middleware/auth';
-import { saveBase64File } from '../lib/imageStorage';
+import { saveBase64File, isAllowedFileDataUrl } from '../lib/imageStorage';
 
 export const comptesRouter = Router();
 
 const INTERNAL_ROLES = ['chargeAffaires', 'qualite', 'direction', 'admin'];
+
+// Ce routeur ne gère que les comptes installateurs (voir GET / ci-dessous, qui
+// ne liste qu'eux) — sans cette vérification, un CA/Direction pouvait valider,
+// suspendre, réactiver ou réinitialiser le mot de passe d'un AUTRE compte
+// interne (y compris un Admin) en appelant directement l'API avec son id.
+async function findInstallateurOrNull(id: string) {
+  const user = await prisma.user.findUnique({ where: { id } });
+  return user && user.role === 'installateur' ? user : null;
+}
 
 comptesRouter.get('/', requireAuth, requireRole(...INTERNAL_ROLES), async (_req, res) => {
   const users = await prisma.user.findMany({
@@ -20,6 +29,8 @@ comptesRouter.get('/', requireAuth, requireRole(...INTERNAL_ROLES), async (_req,
 });
 
 comptesRouter.post('/:id/valider', requireAuth, requireRole('chargeAffaires', 'direction', 'admin'), async (req, res) => {
+  if (!(await findInstallateurOrNull(req.params.id))) return res.status(404).json({ error: 'Compte introuvable' });
+
   const user = await prisma.user.update({
     where: { id: req.params.id },
     data: { isActive: true, suspendu: false },
@@ -29,6 +40,8 @@ comptesRouter.post('/:id/valider', requireAuth, requireRole('chargeAffaires', 'd
 });
 
 comptesRouter.post('/:id/suspendre', requireAuth, requireRole('chargeAffaires', 'direction', 'admin'), async (req, res) => {
+  if (!(await findInstallateurOrNull(req.params.id))) return res.status(404).json({ error: 'Compte introuvable' });
+
   const user = await prisma.user.update({
     where: { id: req.params.id },
     data: { suspendu: true },
@@ -38,6 +51,8 @@ comptesRouter.post('/:id/suspendre', requireAuth, requireRole('chargeAffaires', 
 });
 
 comptesRouter.post('/:id/reactiver', requireAuth, requireRole('chargeAffaires', 'direction', 'admin'), async (req, res) => {
+  if (!(await findInstallateurOrNull(req.params.id))) return res.status(404).json({ error: 'Compte introuvable' });
+
   const user = await prisma.user.update({
     where: { id: req.params.id },
     data: { isActive: true, suspendu: false },
@@ -74,8 +89,7 @@ comptesRouter.post(
     const parsed = resetPasswordSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-    const existing = await prisma.user.findUnique({ where: { id: req.params.id } });
-    if (!existing) return res.status(404).json({ error: 'Compte introuvable' });
+    if (!(await findInstallateurOrNull(req.params.id))) return res.status(404).json({ error: 'Compte introuvable' });
 
     const passwordHash = await bcrypt.hash(parsed.data.password, 10);
     await prisma.user.update({ where: { id: req.params.id }, data: { passwordHash } });
@@ -124,6 +138,8 @@ comptesRouter.patch('/:id', requireAuth, requireRole('chargeAffaires', 'directio
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
   const { email, mobile } = parsed.data;
 
+  if (!(await findInstallateurOrNull(req.params.id))) return res.status(404).json({ error: 'Compte introuvable' });
+
   if (email || mobile) {
     const existing = await prisma.user.findFirst({
       where: {
@@ -155,6 +171,10 @@ const habilitationSchema = z.object({
 comptesRouter.post('/moi/habilitations', requireAuth, async (req: AuthedRequest, res) => {
   const parsed = habilitationSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  if (!isAllowedFileDataUrl(parsed.data.file)) {
+    return res.status(400).json({ error: 'Type de fichier non autorisé' });
+  }
 
   const filePath = await saveBase64File(parsed.data.file, `habilitation-${req.auth!.userId}`);
 

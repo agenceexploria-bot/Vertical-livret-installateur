@@ -4,6 +4,18 @@ const EXTENSION_BY_MIME: Record<string, string> = {
   'application/pdf': 'pdf',
 };
 
+/// Types de fichiers réellement produits par l'app (photos JPEG, certificats/
+/// documents PDF, signatures PNG, notes vocales webm) — toute autre valeur
+/// déclarée dans le data URL est refusée avant stockage, pour empêcher le
+/// dépôt d'un fichier HTML/SVG malveillant servi ensuite publiquement avec
+/// son content-type d'origine.
+const ALLOWED_MIME_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png', 'audio/webm']);
+
+export function isAllowedFileDataUrl(dataUrl: string): boolean {
+  const match = dataUrl.match(/^data:([\w-]+\/[\w.+-]+);base64,/);
+  return !!match && ALLOWED_MIME_TYPES.has(match[1]);
+}
+
 /// Décode un fichier encodé en data URL base64 (ex. "data:image/jpeg;base64,...",
 /// "data:application/pdf;base64,...", "data:audio/webm;base64,...") et le
 /// dépose sur Vercel Blob (le système de fichiers des functions serverless est
