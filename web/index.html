@@ -31,6 +31,18 @@
 
   <title>vertical_app</title>
   <link rel="manifest" href="manifest.json">
+
+  <!--
+    Fond de la page identique au fond de l'app (AppColors.fond, voir
+    lib/core/theme.dart) au lieu du blanc par défaut du navigateur — sans ça,
+    un flash blanc est visible le temps que le moteur Flutter charge et
+    peigne le premier écran.
+  -->
+  <style>
+    html, body {
+      background-color: #F2F0ED;
+    }
+  </style>
 </head>
 <body>
   <!--

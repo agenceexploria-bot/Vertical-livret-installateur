@@ -26,7 +26,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   // rendu plus vivant qu'un simple linéaire.
   late final AnimationController _entrance = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 750),
+    duration: const Duration(milliseconds: 1200),
   );
   late final Animation<double> _entranceFade = CurvedAnimation(parent: _entrance, curve: Curves.easeOut);
   late final Animation<double> _entranceScale = Tween<double>(begin: 0.6, end: 1.0).animate(
@@ -38,7 +38,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
   // écran vivant plutôt qu'un logo figé.
   late final AnimationController _pulse = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 1100),
+    duration: const Duration(milliseconds: 1400),
   );
   late final Animation<double> _pulseScale = Tween<double>(begin: 1.0, end: 1.06).animate(
     CurvedAnimation(parent: _pulse, curve: Curves.easeInOut),
@@ -55,10 +55,10 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     _entrance.forward().whenComplete(() {
       if (mounted) _pulse.repeat(reverse: true);
     });
-    // Durée fixe indépendante de l'animation — même si l'appareil est lent et
-    // que l'entrée n'est pas terminée, l'utilisateur n'attend jamais plus de
-    // 3 secondes avant d'atterrir sur le bon écran.
-    _redirectTimer = Timer(const Duration(milliseconds: 2600), () {
+    // Durée fixe indépendante de l'animation — au moins 3 secondes d'affichage
+    // pour laisser l'effet (entrée + une respiration complète) bien visible,
+    // même si l'appareil est lent et que l'entrée n'est pas terminée.
+    _redirectTimer = Timer(const Duration(milliseconds: 3400), () {
       if (mounted) context.go('/');
     });
   }
