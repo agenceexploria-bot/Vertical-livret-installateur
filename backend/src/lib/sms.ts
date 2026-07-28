@@ -50,9 +50,26 @@ export async function sendRelanceSms(mobile: string): Promise<void> {
   }
 
   const client = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
-  await client.messages.create({
-    to: toE164(mobile),
-    from: TWILIO_PHONE_NUMBER,
-    body: `Bonjour, veuillez ouvrir votre livret chantier sur l'application Vertical. Lien : ${APP_URL}`,
-  });
+  const to = toE164(mobile);
+  try {
+    await client.messages.create({
+      to,
+      from: TWILIO_PHONE_NUMBER,
+      body: `Bonjour, veuillez ouvrir votre livret chantier sur l'application Vertical. Lien : ${APP_URL}`,
+    });
+  } catch (err) {
+    // Twilio lève une RestException avec code/status/moreInfo spécifiques
+    // (ex. 21211 = numéro invalide, 21608 = numéro non vérifié en mode
+    // essai) — indispensable pour diagnostiquer un échec depuis les logs
+    // Vercel, le message générique renvoyé au client ne suffit pas.
+    const twilioErr = err as { status?: number; code?: number; message?: string; moreInfo?: string };
+    console.error('[sms] Échec envoi Twilio', {
+      to,
+      status: twilioErr?.status,
+      code: twilioErr?.code,
+      message: twilioErr?.message,
+      moreInfo: twilioErr?.moreInfo,
+    });
+    throw err;
+  }
 }
