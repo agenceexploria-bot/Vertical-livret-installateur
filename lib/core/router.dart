@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'platform/mobile_detector.dart';
 import '../state/auth_state.dart';
 import '../data/models/user.dart';
+import '../screens/splash_screen.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/signup_screen.dart';
 import '../screens/auth/pending_screen.dart';
@@ -59,9 +60,15 @@ class AppRouter {
   /// déconnexion, validation d'un compte) — l'écran affiché resterait figé.
   static GoRouter build(AuthState authState) {
     return GoRouter(
-      initialLocation: '/',
+      initialLocation: '/splash',
       refreshListenable: authState,
       redirect: (context, state) {
+        // L'écran de lancement gère lui-même sa temporisation puis appelle
+        // context.go('/') — sans cette sortie précoce, le moindre changement
+        // d'état de authState (ex. fin du chargement de la session) le
+        // court-circuiterait immédiatement via refreshListenable.
+        if (state.matchedLocation == '/splash') return null;
+
         // Le back-office Web (BoShell, tableaux denses, plusieurs colonnes)
         // n'est pas conçu pour un écran de téléphone — le CA y a sa propre
         // interface mobile dédiée (CaHomeScreen/CaValidationScreen, atteinte
@@ -143,6 +150,7 @@ class AppRouter {
         return null;
       },
       routes: [
+        GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
         GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
         GoRoute(path: '/signup', builder: (context, state) => const SignupScreen()),
         GoRoute(path: '/pending', builder: (context, state) => const PendingScreen()),
