@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -54,16 +53,6 @@ List<String> _boAllowedPrefixesFor(UserRole role) {
   }
 }
 
-/// L'écran de lancement animé n'a de sens que sur un build natif mobile — sur
-/// Web (y compris depuis un navigateur mobile), l'app doit s'ouvrir
-/// directement, sans ce détour. kIsWeb est vérifié en premier : sur Web,
-/// defaultTargetPlatform reflète l'OS hôte et non le navigateur, il ne suffit
-/// pas seul à exclure ce cas.
-bool _isNativeMobilePlatform() {
-  if (kIsWeb) return false;
-  return defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS;
-}
-
 class AppRouter {
   /// Construit le routeur une seule fois, avec [authState] comme
   /// `refreshListenable` : sans ça, la redirection ne se ré-évalue jamais
@@ -71,7 +60,13 @@ class AppRouter {
   /// déconnexion, validation d'un compte) — l'écran affiché resterait figé.
   static GoRouter build(AuthState authState) {
     return GoRouter(
-      initialLocation: _isNativeMobilePlatform() ? '/splash' : '/',
+      // isMobileDevice() couvre à la fois le natif (Android/iOS) et le mobile
+      // Web (PWA Safari sur iPhone comprise, via le vrai user-agent — voir
+      // mobile_detector.dart) : c'est le même critère déjà utilisé plus bas
+      // pour distinguer back-office Web vs interface mobile, donc l'écran de
+      // lancement suit exactement la même définition de "mobile" que le reste
+      // du routeur.
+      initialLocation: isMobileDevice() ? '/splash' : '/',
       refreshListenable: authState,
       redirect: (context, state) {
         // L'écran de lancement gère lui-même sa temporisation puis appelle
