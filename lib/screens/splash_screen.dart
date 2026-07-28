@@ -58,7 +58,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     // Durée fixe indépendante de l'animation — au moins 3 secondes d'affichage
     // pour laisser l'effet (entrée + une respiration complète) bien visible,
     // même si l'appareil est lent et que l'entrée n'est pas terminée.
-    _redirectTimer = Timer(const Duration(milliseconds: 3400), () {
+    _redirectTimer = Timer(const Duration(milliseconds: 4000), () {
       if (mounted) context.go('/');
     });
   }
