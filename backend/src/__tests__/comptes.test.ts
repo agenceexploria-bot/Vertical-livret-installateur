@@ -79,6 +79,27 @@ describe('Cycle de vie des comptes installateurs (EX-01 à EX-06)', () => {
   });
 });
 
+describe('comptes.ts ne doit agir que sur des comptes installateurs', () => {
+  it('refuse à un CA de suspendre un autre compte interne (ex. un Admin)', async () => {
+    const caToken = await createCa();
+    const passwordHash = await bcrypt.hash('demodemo', 10);
+    const admin = await prisma.user.create({
+      data: {
+        nom: 'Lefebvre', prenom: 'Admin', mobile: '0102030407', email: 'admin@actiwork.fr',
+        passwordHash, role: 'admin', isActive: true,
+      },
+    });
+
+    const res = await request(app)
+      .post(`/comptes/${admin.id}/suspendre`)
+      .set('Authorization', `Bearer ${caToken}`);
+    expect(res.status).toBe(404);
+
+    const stillActive = await prisma.user.findUnique({ where: { id: admin.id } });
+    expect(stillActive?.suspendu).toBe(false);
+  });
+});
+
 describe('POST /comptes/moi/habilitations (EX-13)', () => {
   it('téléverse un vrai certificat et enregistre le fichier sur le stockage distant', async () => {
     const token = await createInstallateur();

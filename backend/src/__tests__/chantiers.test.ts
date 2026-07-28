@@ -320,6 +320,18 @@ describe('POST /chantiers/:reference/documents', () => {
       .send({ titre: 'Sans fichier', categorie: 'constat' });
     expect(res.status).toBe(400);
   });
+
+  it('refuse un dépôt dont le type MIME n\'est pas autorisé (ex. SVG)', async () => {
+    const ca = await createCa();
+    await createChantier(ca.accessToken);
+
+    const svg = Buffer.from('<svg onload="alert(1)"></svg>').toString('base64');
+    const res = await request(app)
+      .post('/chantiers/LD64397/documents')
+      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .send({ titre: 'Fichier suspect', categorie: 'constat', file: `data:image/svg+xml;base64,${svg}` });
+    expect(res.status).toBe(400);
+  });
 });
 
 describe('Sécurité — rattachement obligatoire pour un installateur (bug 3B)', () => {
@@ -387,6 +399,17 @@ describe('Sécurité — rattachement obligatoire pour un installateur (bug 3B)'
       .set('Authorization', `Bearer ${installateur.accessToken}`)
       .send({ status: 'conforme' });
     expect(res.status).toBe(200);
+  });
+
+  it('refuse à un installateur non rattaché de consulter le détail d\'un chantier (GET /:reference)', async () => {
+    const ca = await createCa();
+    await createChantier(ca.accessToken);
+    const etranger = await createInstallateur({ isActive: true });
+
+    const res = await request(app)
+      .get('/chantiers/LD64397')
+      .set('Authorization', `Bearer ${etranger.accessToken}`);
+    expect(res.status).toBe(403);
   });
 
   it("refuse d'accéder à un point de contrôle appartenant à un autre chantier", async () => {

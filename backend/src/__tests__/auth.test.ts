@@ -193,6 +193,28 @@ describe('POST /auth/login', () => {
   });
 });
 
+describe('Comptes suspendus', () => {
+  it('refuse la connexion d\'un compte suspendu', async () => {
+    const signup = await doSignup(app, {
+      nom: 'Roux', prenom: 'Thomas', mobile: '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo',
+    });
+    await prisma.user.update({ where: { id: signup.body.user.id }, data: { suspendu: true } });
+
+    const res = await request(app).post('/auth/login').send({ identifier: 't.roux@elevpro.fr', password: 'demodemo' });
+    expect(res.status).toBe(403);
+  });
+
+  it('refuse le refresh d\'un compte suspendu après coup, avant l\'expiration du refresh token', async () => {
+    const signup = await doSignup(app, {
+      nom: 'Roux', prenom: 'Thomas', mobile: '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo',
+    });
+    await prisma.user.update({ where: { id: signup.body.user.id }, data: { suspendu: true } });
+
+    const res = await request(app).post('/auth/refresh').send({ refreshToken: signup.body.refreshToken });
+    expect(res.status).toBe(401);
+  });
+});
+
 describe('GET /auth/me', () => {
   it('refuse sans jeton', async () => {
     const res = await request(app).get('/auth/me');
