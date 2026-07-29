@@ -25,3 +25,5 @@ local.properties
 
 .vercel
 .env*
+!.env.example
+!**/.env.example
