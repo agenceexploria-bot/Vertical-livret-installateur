@@ -121,15 +121,27 @@ class _SignupScreenState extends State<SignupScreen> {
             ),
             Padding(
               padding: const EdgeInsets.all(24),
-              child: ElevatedButton(
-                onPressed: context.watch<AuthState>().isLoading ? null : _nextStep,
-                child: context.watch<AuthState>().isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : Text(_step == 4 ? 'Terminer' : 'Continuer'),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ElevatedButton(
+                    onPressed: context.watch<AuthState>().isLoading ? null : _nextStep,
+                    child: context.watch<AuthState>().isLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : Text(_step == 4 ? 'Terminer' : 'Continuer'),
+                  ),
+                  if (_step == 1) ...[
+                    const SizedBox(height: 12),
+                    TextButton(
+                      onPressed: () => context.go('/login'),
+                      child: const Text('Vous avez déjà un compte ? Connectez-vous'),
+                    ),
+                  ],
+                ],
               ),
             ),
           ],
@@ -180,7 +192,7 @@ class _SignupScreenState extends State<SignupScreen> {
               keyboardType: TextInputType.phone,
             ),
             const SizedBox(height: 16),
-            _buildField('Email', _emailController, hint: 'Sert aussi à vous connecter'),
+            _buildField('Email', _emailController),
             const SizedBox(height: 24),
             const Text('Statut', style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
