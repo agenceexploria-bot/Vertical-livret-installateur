@@ -112,19 +112,24 @@ class _RexScreenState extends State<RexScreen> with SingleTickerProviderStateMix
     // Transcription en direct via la reconnaissance vocale native de
     // l'appareil (nécessite le réseau) — best-effort : si indisponible
     // (hors-ligne, navigateur non supporté), l'audio brut reste envoyé quand
-    // même via VoiceRecorder, qui lui fonctionne sans réseau.
+    // même via VoiceRecorder, qui lui fonctionne sans réseau. Une erreur ici
+    // ne doit pas empêcher l'enregistrement audio, déjà démarré, de continuer.
     if (_speechAvailable) {
-      await _speech.listen(
-        onResult: (result) {
-          if (mounted) setState(() => _liveText = result.recognizedWords);
-        },
-        listenOptions: stt.SpeechListenOptions(
-          listenMode: stt.ListenMode.dictation,
-          partialResults: true,
-          listenFor: const Duration(minutes: 5),
-          pauseFor: const Duration(seconds: 10),
-        ),
-      );
+      try {
+        await _speech.listen(
+          onResult: (result) {
+            if (mounted) setState(() => _liveText = result.recognizedWords);
+          },
+          listenOptions: stt.SpeechListenOptions(
+            listenMode: stt.ListenMode.dictation,
+            partialResults: true,
+            listenFor: const Duration(minutes: 5),
+            pauseFor: const Duration(seconds: 10),
+          ),
+        );
+      } catch (e) {
+        debugPrint('RexScreen: échec de la transcription en direct — $e');
+      }
     }
   }
 
