@@ -11,6 +11,7 @@ import '../../state/chantier_state.dart';
 import '../../state/comptes_state.dart';
 import 'widgets/bo_shell.dart';
 import 'widgets/bo_panel.dart';
+import 'widgets/bo_table_row.dart';
 
 class BoInstallateurDetailScreen extends StatelessWidget {
   const BoInstallateurDetailScreen({super.key});
@@ -273,9 +274,9 @@ class BoInstallateurDetailScreen extends StatelessWidget {
             ? ('Expire bientôt', StatusType.enCours)
             : ('À jour', StatusType.conforme);
 
-    return Container(
+    return BoTableRow(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFEEF1F3)))),
+      border: const Border(bottom: BorderSide(color: Color(0xFFEEF1F3))),
       child: Row(
         children: [
           Expanded(

@@ -13,6 +13,7 @@ import '../../state/comptes_state.dart';
 import 'widgets/bo_shell.dart';
 import 'widgets/bo_panel.dart';
 import 'widgets/bo_responsive_table.dart';
+import 'widgets/bo_table_row.dart';
 import 'widgets/pv_signature_panel.dart';
 
 /// Espace Chargé d'Affaires — gestion des chantiers (création, suivi, PV
@@ -161,20 +162,17 @@ class BoCaChantiersScreen extends StatelessWidget {
   Widget _dataRow(BuildContext context, Chantier c) {
     final livret = _livretBadge(c);
     final pv = _pvBadge(c);
-    return InkWell(
+    return BoTableRow(
       onTap: () => context.push('/backoffice/ca/chantiers/${c.reference}'),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 9),
-        decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.lignes))),
-        child: Row(
-          children: [
-            Expanded(flex: 3, child: Text(c.reference, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-            Expanded(flex: 3, child: Text(c.client, style: const TextStyle(fontSize: 12))),
-            Expanded(flex: 2, child: Text(DateFormat('dd/MM').format(c.dateDebut), style: const TextStyle(fontSize: 12))),
-            Expanded(flex: 4, child: StatusIndicator(label: livret.$1, type: livret.$2)),
-            Expanded(flex: 4, child: StatusIndicator(label: pv.$1, type: pv.$2)),
-          ],
-        ),
+      border: const Border(top: BorderSide(color: AppColors.lignes)),
+      child: Row(
+        children: [
+          Expanded(flex: 3, child: Text(c.reference, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+          Expanded(flex: 3, child: Text(c.client, style: const TextStyle(fontSize: 12))),
+          Expanded(flex: 2, child: Text(DateFormat('dd/MM').format(c.dateDebut), style: const TextStyle(fontSize: 12))),
+          Expanded(flex: 4, child: StatusIndicator(label: livret.$1, type: livret.$2)),
+          Expanded(flex: 4, child: StatusIndicator(label: pv.$1, type: pv.$2)),
+        ],
       ),
     );
   }
@@ -210,9 +208,9 @@ class BoCaChantiersScreen extends StatelessWidget {
         : type == StatusType.enCours
             ? AppColors.orange
             : AppColors.acierClair;
-    return Container(
+    return BoTableRow(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFEEF1F3)))),
+      border: const Border(bottom: BorderSide(color: Color(0xFFEEF1F3))),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -268,9 +266,8 @@ class BoCaChantiersScreen extends StatelessWidget {
         ? '${c.installateursRattaches.first.fullName}${c.pvSigne ? ' · ${DateFormat('dd/MM').format(c.dateFin)}' : ''}'
         : '—';
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 9),
-      decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.lignes))),
+    return BoTableRow(
+      border: const Border(top: BorderSide(color: AppColors.lignes)),
       child: Row(
         children: [
           Expanded(flex: 2, child: Text(c.reference, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
@@ -283,9 +280,9 @@ class BoCaChantiersScreen extends StatelessWidget {
   }
 
   Widget _rexRow(Chantier c) {
-    return Container(
+    return BoTableRow(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFEEF1F3)))),
+      border: const Border(bottom: BorderSide(color: Color(0xFFEEF1F3))),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -316,40 +313,38 @@ class BoCaChantiersScreen extends StatelessWidget {
   }
 
   Widget _pvRow(BuildContext context, Chantier c) {
-    return Container(
+    return BoTableRow(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFEEF1F3)))),
-      child: InkWell(
-        onTap: () => showDialog(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            title: Text('${c.reference} — ${c.client}'),
-            content: SizedBox(
-              width: 360,
-              child: PvSignaturePanel(
-                signataire: c.pvSigneur,
-                signeAt: c.pvSigneAt,
-                signatureImagePath: c.pvSignatureImagePath,
-              ),
+      border: const Border(bottom: BorderSide(color: Color(0xFFEEF1F3))),
+      onTap: () => showDialog(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text('${c.reference} — ${c.client}'),
+          content: SizedBox(
+            width: 360,
+            child: PvSignaturePanel(
+              signataire: c.pvSigneur,
+              signeAt: c.pvSigneAt,
+              signatureImagePath: c.pvSignatureImagePath,
             ),
-            actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Fermer'))],
           ),
+          actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Fermer'))],
         ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text('${c.reference} · ${c.client}', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
-            ),
-            Text(
-              c.pvSigneAt != null
-                  ? 'Signé par ${c.pvSigneur ?? 'le client'} · ${DateFormat('dd/MM HH:mm').format(c.pvSigneAt!)}'
-                  : '—',
-              style: const TextStyle(fontSize: 10.5, color: AppColors.acierClair),
-            ),
-            const SizedBox(width: 8),
-            const Icon(Icons.chevron_right, size: 16, color: AppColors.acierClair),
-          ],
-        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text('${c.reference} · ${c.client}', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
+          ),
+          Text(
+            c.pvSigneAt != null
+                ? 'Signé par ${c.pvSigneur ?? 'le client'} · ${DateFormat('dd/MM HH:mm').format(c.pvSigneAt!)}'
+                : '—',
+            style: const TextStyle(fontSize: 10.5, color: AppColors.acierClair),
+          ),
+          const SizedBox(width: 8),
+          const Icon(Icons.chevron_right, size: 16, color: AppColors.acierClair),
+        ],
       ),
     );
   }
@@ -371,9 +366,9 @@ class BoCaChantiersScreen extends StatelessWidget {
   }
 
   Widget _anomalieRow(Chantier c, PointControle p) {
-    return Container(
+    return BoTableRow(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFEEF1F3)))),
+      border: const Border(bottom: BorderSide(color: Color(0xFFEEF1F3))),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -425,9 +420,9 @@ class BoCaChantiersScreen extends StatelessWidget {
             ? ('Expire bientôt', StatusType.enCours)
             : ('À jour', StatusType.conforme);
 
-    return Container(
+    return BoTableRow(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFEEF1F3)))),
+      border: const Border(bottom: BorderSide(color: Color(0xFFEEF1F3))),
       child: Row(
         children: [
           Expanded(

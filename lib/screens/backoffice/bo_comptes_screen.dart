@@ -11,6 +11,7 @@ import '../../state/chantier_state.dart';
 import '../../state/comptes_state.dart';
 import 'widgets/bo_responsive_table.dart';
 import 'widgets/bo_shell.dart';
+import 'widgets/bo_table_row.dart';
 
 class BoComptesScreen extends StatelessWidget {
   const BoComptesScreen({super.key});
@@ -156,9 +157,8 @@ class BoComptesScreen extends StatelessWidget {
             ? ('En attente', StatusType.enCours)
             : ('Actif', StatusType.conforme);
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 9),
-      decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.lignes))),
+    return BoTableRow(
+      border: const Border(top: BorderSide(color: AppColors.lignes)),
       child: Row(
         children: [
           Expanded(flex: 3, child: Text(u.fullName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
@@ -380,19 +380,16 @@ class BoComptesScreen extends StatelessWidget {
       ],
     );
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 9),
-      decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.lignes))),
+    return BoTableRow(
+      onTap: () => context.push('/backoffice/ca/comptes/${u.id}'),
+      border: const Border(top: BorderSide(color: AppColors.lignes)),
       child: Row(
         children: [
           Expanded(
             flex: 3,
-            child: InkWell(
-              onTap: () => context.push('/backoffice/ca/comptes/${u.id}'),
-              child: Text(
-                u.fullName,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, decoration: TextDecoration.underline),
-              ),
+            child: Text(
+              u.fullName,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, decoration: TextDecoration.underline),
             ),
           ),
           Expanded(flex: 3, child: Text(statutLabel, style: const TextStyle(fontSize: 11.5, color: AppColors.acier))),

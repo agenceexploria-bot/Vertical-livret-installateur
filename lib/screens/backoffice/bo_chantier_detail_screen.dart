@@ -15,6 +15,7 @@ import '../../state/chantier_state.dart';
 import '../../state/comptes_state.dart';
 import 'widgets/bo_shell.dart';
 import 'widgets/bo_panel.dart';
+import 'widgets/bo_table_row.dart';
 import 'widgets/pv_signature_panel.dart';
 
 class BoChantierDetailScreen extends StatelessWidget {
@@ -195,29 +196,27 @@ class BoChantierDetailScreen extends StatelessWidget {
   }
 
   Widget _docTerrainRow(DocumentTerrain d) {
-    return Container(
+    return BoTableRow(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFEEF1F3)))),
-      child: InkWell(
-        onTap: d.filePath == null ? null : () => launchUrl(Uri.parse(d.filePath!)),
-        child: Row(
-          children: [
-            Icon(d.filePath != null ? Icons.description_outlined : Icons.image_outlined, size: 16, color: AppColors.acierClair),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(d.titre, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
-                  Text(
-                    '${d.categorieLabel} · ${DateFormat('dd/MM HH:mm').format(d.horodatage)} · ${d.auteur}',
-                    style: const TextStyle(fontSize: 10, color: AppColors.acierClair),
-                  ),
-                ],
-              ),
+      border: const Border(bottom: BorderSide(color: Color(0xFFEEF1F3))),
+      onTap: d.filePath == null ? null : () => launchUrl(Uri.parse(d.filePath!)),
+      child: Row(
+        children: [
+          Icon(d.filePath != null ? Icons.description_outlined : Icons.image_outlined, size: 16, color: AppColors.acierClair),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(d.titre, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
+                Text(
+                  '${d.categorieLabel} · ${DateFormat('dd/MM HH:mm').format(d.horodatage)} · ${d.auteur}',
+                  style: const TextStyle(fontSize: 10, color: AppColors.acierClair),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -228,33 +227,31 @@ class BoChantierDetailScreen extends StatelessWidget {
       TypeDocumentChantier.ficheChantier => Icons.assignment_outlined,
       TypeDocumentChantier.technique => Icons.description_outlined,
     };
-    return Container(
+    return BoTableRow(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFEEF1F3)))),
+      border: const Border(bottom: BorderSide(color: Color(0xFFEEF1F3))),
+      onTap: () => launchUrl(Uri.parse(d.filePath)),
       child: Row(
         children: [
           Expanded(
-            child: InkWell(
-              onTap: () => launchUrl(Uri.parse(d.filePath)),
-              child: Row(
-                children: [
-                  Icon(icon, size: 16, color: AppColors.acierClair),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(d.nom, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
-                        if (d.nomFichierOriginal != null && d.nomFichierOriginal != d.nom)
-                          Text(
-                            d.nomFichierOriginal!,
-                            style: const TextStyle(fontSize: 10, color: AppColors.acierClair),
-                          ),
-                      ],
-                    ),
+            child: Row(
+              children: [
+                Icon(icon, size: 16, color: AppColors.acierClair),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(d.nom, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
+                      if (d.nomFichierOriginal != null && d.nomFichierOriginal != d.nom)
+                        Text(
+                          d.nomFichierOriginal!,
+                          style: const TextStyle(fontSize: 10, color: AppColors.acierClair),
+                        ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
           PopupMenuButton<String>(
@@ -328,9 +325,9 @@ class BoChantierDetailScreen extends StatelessWidget {
   Widget _installateurRow(BuildContext context, Chantier chantier, User u) {
     final ouvert = chantier.livretsOuverts.contains(u.id);
     final initials = '${u.prenom.isNotEmpty ? u.prenom[0] : ''}${u.nom.isNotEmpty ? u.nom[0] : ''}';
-    return Container(
+    return BoTableRow(
       padding: const EdgeInsets.symmetric(vertical: 6),
-      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFEEF1F3)))),
+      border: const Border(bottom: BorderSide(color: Color(0xFFEEF1F3))),
       child: Row(
         children: [
           CircleAvatar(radius: 10, backgroundColor: AppColors.acier, child: Text(initials, style: const TextStyle(fontSize: 8, color: Colors.white, fontWeight: FontWeight.bold))),
