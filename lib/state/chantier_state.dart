@@ -59,9 +59,6 @@ class ChantierState extends ChangeNotifier {
     _replaceInList(updated);
   }
 
-  Future<String> relancerSms(String reference, String userId) =>
-      _repository.relancerSms(reference, userId);
-
   /// Modification et suppression d'un chantier (Admin uniquement — voir la
   /// refonte des rôles back-office).
   Future<void> updateChantier(String reference, Map<String, dynamic> body) async {
