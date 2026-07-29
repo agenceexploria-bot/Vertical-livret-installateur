@@ -1,7 +1,9 @@
 import { Router } from 'express';
+import bcrypt from 'bcryptjs';
+import { z } from 'zod';
 import { prisma } from '../prisma';
 import { serializeUser } from '../serializers';
-import { requireAuth, requireRole } from '../middleware/auth';
+import { requireAuth, requireRole, AuthedRequest } from '../middleware/auth';
 
 export const adminRouter = Router();
 
@@ -29,6 +31,79 @@ adminRouter.post('/comptes-internes/:id/valider', requireAuth, requireRole('admi
     include: { habilitations: true },
   });
   res.json({ user: serializeUser(user) });
+});
+
+// Gestion globale des comptes : contrairement à /comptes (comptes.ts), réservé
+// au CA/Direction/Admin et limité aux installateurs, l'Admin a ici le contrôle
+// total sur TOUS les comptes du système à l'exception des autres comptes
+// Admin — jamais touchable, ni même consultable via ces routes.
+async function findManageableAccountOrNull(id: string) {
+  const user = await prisma.user.findUnique({ where: { id } });
+  return user && user.role !== 'admin' ? user : null;
+}
+
+adminRouter.get('/comptes', requireAuth, requireRole('admin'), async (_req, res) => {
+  const users = await prisma.user.findMany({
+    where: { role: { not: 'admin' } },
+    include: { habilitations: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  res.json({ comptes: users.map(serializeUser) });
+});
+
+adminRouter.post('/comptes/:id/suspendre', requireAuth, requireRole('admin'), async (req, res) => {
+  if (!(await findManageableAccountOrNull(req.params.id))) return res.status(404).json({ error: 'Compte introuvable' });
+
+  const user = await prisma.user.update({
+    where: { id: req.params.id },
+    data: { suspendu: true },
+    include: { habilitations: true },
+  });
+  res.json({ user: serializeUser(user) });
+});
+
+adminRouter.post('/comptes/:id/reactiver', requireAuth, requireRole('admin'), async (req, res) => {
+  if (!(await findManageableAccountOrNull(req.params.id))) return res.status(404).json({ error: 'Compte introuvable' });
+
+  const user = await prisma.user.update({
+    where: { id: req.params.id },
+    data: { isActive: true, suspendu: false },
+    include: { habilitations: true },
+  });
+  res.json({ user: serializeUser(user) });
+});
+
+const adminResetPasswordSchema = z.object({ password: z.string().min(6) });
+
+// Réinitialisation par l'Admin — même logique que /comptes/:id/reinitialiser-
+// mot-de-passe (comptes.ts) mais ouverte à tout compte non-admin (CA compris).
+adminRouter.post(
+  '/comptes/:id/reinitialiser-mot-de-passe',
+  requireAuth,
+  requireRole('admin'),
+  async (req, res) => {
+    const parsed = adminResetPasswordSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    if (!(await findManageableAccountOrNull(req.params.id))) return res.status(404).json({ error: 'Compte introuvable' });
+
+    const passwordHash = await bcrypt.hash(parsed.data.password, 10);
+    await prisma.user.update({ where: { id: req.params.id }, data: { passwordHash } });
+    res.status(204).send();
+  },
+);
+
+// Suppression définitive — le contrôle du self-delete précède la recherche du
+// compte pour renvoyer un message explicite plutôt qu'un 404 générique (le
+// ciblé serait de toute façon exclu par findManageableAccountOrNull puisque
+// l'appelant est lui-même Admin).
+adminRouter.delete('/comptes/:id', requireAuth, requireRole('admin'), async (req: AuthedRequest, res) => {
+  if (req.params.id === req.auth!.userId) {
+    return res.status(400).json({ error: 'Vous ne pouvez pas supprimer votre propre compte' });
+  }
+  if (!(await findManageableAccountOrNull(req.params.id))) return res.status(404).json({ error: 'Compte introuvable' });
+
+  await prisma.user.delete({ where: { id: req.params.id } });
+  res.status(204).send();
 });
 
 // Tableau de bord d'activité : agrège les flux déjà présents en base

@@ -277,6 +277,21 @@ class ApiClient {
     return data['weeks'] as List<dynamic>;
   }
 
+  /// Gestion globale des comptes (Admin) — tous les rôles sauf Admin,
+  /// distinct de getComptes() qui ne renvoie que les installateurs.
+  Future<List<dynamic>> getTousLesComptes() async {
+    final data = await _request('GET', '/admin/comptes');
+    return data['comptes'] as List<dynamic>;
+  }
+
+  Future<Map<String, dynamic>> suspendreCompteAdmin(String id) => _request('POST', '/admin/comptes/$id/suspendre');
+  Future<Map<String, dynamic>> reactiverCompteAdmin(String id) => _request('POST', '/admin/comptes/$id/reactiver');
+
+  Future<void> reinitialiserMotDePasseAdmin(String id, String password) =>
+      _request('POST', '/admin/comptes/$id/reinitialiser-mot-de-passe', body: {'password': password});
+
+  Future<void> supprimerCompteAdmin(String id) => _request('DELETE', '/admin/comptes/$id');
+
   // ---- Chantiers ----
 
   Future<List<dynamic>> getChantiers() async {
@@ -297,11 +312,6 @@ class ApiClient {
 
   Future<void> markLivretOuvert(String reference) =>
       _request('POST', '/chantiers/$reference/livret-ouvert');
-
-  /// Renvoie le numéro de mobile utilisé (`mobile`), affiché ensuite dans le
-  /// message de confirmation.
-  Future<Map<String, dynamic>> relanceSms(String reference, String userId) =>
-      _request('POST', '/chantiers/$reference/relance-sms/$userId');
 
   Future<void> updatePoint(String reference, String pointId, {String? status, String? photo, String? clientValidatedAt}) {
     return _request('PATCH', '/chantiers/$reference/points/$pointId', body: {

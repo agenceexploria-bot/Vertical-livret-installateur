@@ -6,6 +6,7 @@ import '../data/models/user.dart';
 class AdminState extends ChangeNotifier {
   final ApiClient _api;
   List<User> _comptesInternes = [];
+  List<User> _tousLesComptes = [];
   ActivityFeed? _activityFeed;
   List<WeeklyStat> _weeklyStats = [];
   bool _isLoading = false;
@@ -13,6 +14,11 @@ class AdminState extends ChangeNotifier {
   AdminState(this._api);
 
   List<User> get comptesInternes => _comptesInternes;
+
+  /// Gestion globale des comptes (section "Gestion des comptes" du dashboard
+  /// Admin) — tous les rôles sauf Admin, distinct de [comptesInternes] qui ne
+  /// liste que les comptes CA/Qualité en attente de validation.
+  List<User> get tousLesComptes => _tousLesComptes;
   ActivityFeed? get activityFeed => _activityFeed;
   List<WeeklyStat> get weeklyStats => _weeklyStats;
   bool get isLoading => _isLoading;
@@ -23,6 +29,8 @@ class AdminState extends ChangeNotifier {
     try {
       final comptes = await _api.getComptesInternes();
       _comptesInternes = comptes.map((u) => User.fromJson(u as Map<String, dynamic>)).toList();
+      final tousLesComptes = await _api.getTousLesComptes();
+      _tousLesComptes = tousLesComptes.map((u) => User.fromJson(u as Map<String, dynamic>)).toList();
       final feed = await _api.getActivityFeed();
       _activityFeed = ActivityFeed.fromJson(feed);
       final stats = await _api.getAdminStats();
@@ -45,5 +53,33 @@ class AdminState extends ChangeNotifier {
       _comptesInternes[index] = updated;
     }
     await fetch();
+  }
+
+  Future<void> suspendreCompte(User user) async {
+    final data = await _api.suspendreCompteAdmin(user.id);
+    _replaceCompte(User.fromJson(data['user'] as Map<String, dynamic>));
+  }
+
+  Future<void> reactiverCompte(User user) async {
+    final data = await _api.reactiverCompteAdmin(user.id);
+    _replaceCompte(User.fromJson(data['user'] as Map<String, dynamic>));
+  }
+
+  Future<void> reinitialiserMotDePasse(User user, String password) =>
+      _api.reinitialiserMotDePasseAdmin(user.id, password);
+
+  Future<void> supprimerCompte(User user) async {
+    await _api.supprimerCompteAdmin(user.id);
+    _tousLesComptes = _tousLesComptes.where((u) => u.id != user.id).toList();
+    notifyListeners();
+  }
+
+  void _replaceCompte(User updated) {
+    final index = _tousLesComptes.indexWhere((u) => u.id == updated.id);
+    if (index != -1) {
+      _tousLesComptes = [..._tousLesComptes];
+      _tousLesComptes[index] = updated;
+    }
+    notifyListeners();
   }
 }

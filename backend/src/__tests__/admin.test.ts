@@ -78,6 +78,96 @@ describe('Validation des comptes internes par un Admin', () => {
   });
 });
 
+describe('Gestion globale des comptes (Admin)', () => {
+  it('liste tous les comptes sauf les comptes Admin', async () => {
+    const adminToken = await createAdmin();
+    await createCa();
+    await doSignup(app, {
+      nom: 'Roux', prenom: 'Thomas', mobile: '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo',
+    });
+
+    const res = await request(app).get('/admin/comptes').set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.comptes).toHaveLength(2);
+    expect(res.body.comptes.every((u: { role: string }) => u.role !== 'admin')).toBe(true);
+  });
+
+  it("refuse à un chargé d'affaires l'accès à la gestion globale des comptes", async () => {
+    const ca = await createCa();
+    const res = await request(app).get('/admin/comptes').set('Authorization', `Bearer ${ca.accessToken}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('suspend puis réactive un compte CA', async () => {
+    const adminToken = await createAdmin();
+    const ca = await createCa();
+
+    const suspendre = await request(app)
+      .post(`/admin/comptes/${ca.user.id}/suspendre`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(suspendre.status).toBe(200);
+    expect(suspendre.body.user.suspendu).toBe(true);
+
+    const reactiver = await request(app)
+      .post(`/admin/comptes/${ca.user.id}/reactiver`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(reactiver.status).toBe(200);
+    expect(reactiver.body.user.suspendu).toBe(false);
+  });
+
+  it("réinitialise le mot de passe d'un compte CA — connexion possible avec le nouveau", async () => {
+    const adminToken = await createAdmin();
+    const ca = await createCa();
+
+    const res = await request(app)
+      .post(`/admin/comptes/${ca.user.id}/reinitialiser-mot-de-passe`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ password: 'nouveaumdp' });
+    expect(res.status).toBe(204);
+
+    const login = await request(app).post('/auth/login').send({ identifier: 's.martin@actiwork.fr', password: 'nouveaumdp' });
+    expect(login.status).toBe(200);
+  });
+
+  it('supprime définitivement un compte CA', async () => {
+    const adminToken = await createAdmin();
+    const ca = await createCa();
+
+    const res = await request(app).delete(`/admin/comptes/${ca.user.id}`).set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(204);
+
+    const list = await request(app).get('/admin/comptes').set('Authorization', `Bearer ${adminToken}`);
+    expect(list.body.comptes).toHaveLength(0);
+  });
+
+  it('refuse que l\'Admin se supprime lui-même', async () => {
+    const adminToken = await createAdmin();
+    const me = await request(app).get('/auth/me').set('Authorization', `Bearer ${adminToken}`);
+
+    const res = await request(app).delete(`/admin/comptes/${me.body.user.id}`).set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(400);
+  });
+
+  it('refuse que l\'Admin agisse sur un autre compte Admin (suspension, suppression)', async () => {
+    const adminToken = await createAdmin();
+    const passwordHash = await bcrypt.hash('demodemo', 10);
+    const autreAdmin = await prisma.user.create({
+      data: {
+        nom: 'Lefebvre', prenom: 'Autre', mobile: '0102030408', email: 'autre.admin@actiwork.fr',
+        passwordHash, role: 'admin', isActive: true,
+      },
+    });
+
+    const suspendre = await request(app)
+      .post(`/admin/comptes/${autreAdmin.id}/suspendre`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(suspendre.status).toBe(404);
+
+    const supprimer = await request(app).delete(`/admin/comptes/${autreAdmin.id}`).set('Authorization', `Bearer ${adminToken}`);
+    expect(supprimer.status).toBe(404);
+  });
+});
+
 describe("Tableau de bord d'activité Admin", () => {
   it('agrège inscriptions en attente, anomalies, PV signés et REX soumis', async () => {
     const adminToken = await createAdmin();
