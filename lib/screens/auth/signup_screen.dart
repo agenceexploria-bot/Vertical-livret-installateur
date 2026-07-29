@@ -138,6 +138,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     const SizedBox(height: 12),
                     TextButton(
                       onPressed: () => context.go('/login'),
+                      style: TextButton.styleFrom(foregroundColor: Colors.black),
                       child: const Text('Vous avez déjà un compte ? Connectez-vous'),
                     ),
                   ],
