@@ -12,8 +12,7 @@ class _BoNavTab {
   final String label;
   final String route;
   final String key;
-  final IconData icon;
-  const _BoNavTab(this.label, this.route, this.key, this.icon);
+  const _BoNavTab(this.label, this.route, this.key);
 }
 
 class _BoSpace {
@@ -23,8 +22,8 @@ class _BoSpace {
 }
 
 const _caTabs = [
-  _BoNavTab('Chantiers', '/backoffice/ca', 'chantiers', Icons.apartment_outlined),
-  _BoNavTab('Comptes', '/backoffice/ca/comptes', 'comptes', Icons.groups_outlined),
+  _BoNavTab('Chantiers', '/backoffice/ca', 'chantiers'),
+  _BoNavTab('Comptes', '/backoffice/ca/comptes', 'comptes'),
 ];
 const _caSpace = _BoSpace('Espace Chargé d\'Affaires', _caTabs);
 
@@ -37,20 +36,13 @@ const _caSpace = _BoSpace('Espace Chargé d\'Affaires', _caTabs);
 /// marqué `qualite` en base atteint malgré tout cet écran.
 const _spaces = <UserRole, _BoSpace>{
   UserRole.admin: _BoSpace('Espace Administration', [
-    _BoNavTab('Tableau de bord', '/backoffice/admin', 'admin', Icons.space_dashboard_outlined),
+    _BoNavTab('Tableau de bord', '/backoffice/admin', 'admin'),
     ..._caTabs,
   ]),
   UserRole.chargeAffaires: _caSpace,
   UserRole.direction: _caSpace,
   UserRole.qualite: _caSpace,
 };
-
-/// En dessous de cette largeur, la navigation bascule d'un rail latéral
-/// déployable au survol vers un tiroir (Drawer) standard — le back-office est
-/// déjà bloqué sur mobile natif par le routeur (voir router.dart), ce seuil
-/// ne sert donc qu'aux fenêtres de navigateur étroites (redimensionnement,
-/// tablette).
-const _kMobileBreakpoint = 860.0;
 
 class BoShell extends StatelessWidget {
   final String activeNav;
@@ -115,21 +107,11 @@ class BoShell extends StatelessWidget {
       }
     }
 
-    final effectiveSpace = space ?? const _BoSpace('', []);
-    final isNarrow = MediaQuery.sizeOf(context).width < _kMobileBreakpoint;
-
     return Scaffold(
       backgroundColor: AppColors.fond,
-      drawer: isNarrow ? _BoDrawer(activeNav: activeNav, space: effectiveSpace) : null,
-      appBar: _BoAppBar(
-        initials: initials,
-        space: effectiveSpace,
-        showMenuButton: isNarrow,
-      ),
-      body: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      body: Column(
         children: [
-          if (!isNarrow) _HoverSidebar(activeNav: activeNav, space: effectiveSpace),
+          _TopBar(activeNav: activeNav, initials: initials, space: space ?? const _BoSpace('', [])),
           Expanded(
             child: SingleChildScrollView(
               child: Padding(
@@ -144,270 +126,152 @@ class BoShell extends StatelessWidget {
   }
 }
 
-class _BoAppBar extends StatelessWidget implements PreferredSizeWidget {
+class _TopBar extends StatelessWidget {
+  final String activeNav;
   final String initials;
   final _BoSpace space;
-  final bool showMenuButton;
 
-  const _BoAppBar({required this.initials, required this.space, required this.showMenuButton});
-
-  @override
-  Size get preferredSize => const Size.fromHeight(64);
+  const _TopBar({required this.activeNav, required this.initials, required this.space});
 
   @override
   Widget build(BuildContext context) {
-    return AppBar(
-      backgroundColor: AppColors.encre,
-      elevation: 0,
-      scrolledUnderElevation: 0,
-      surfaceTintColor: Colors.transparent,
-      toolbarHeight: 64,
-      automaticallyImplyLeading: showMenuButton,
-      titleSpacing: showMenuButton ? 0 : 24,
-      title: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 40, child: VerticalLogo(height: 40, onDarkBackground: true)),
-          if (space.name.isNotEmpty) ...[
-            const SizedBox(width: 16),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                border: Border.all(color: const Color(0xFFB9C4CE)),
-                borderRadius: BorderRadius.circular(99),
-              ),
-              child: Text(
-                space.name,
-                style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w700),
-              ),
-            ),
-          ],
-        ],
-      ),
-      actions: [
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(
-                border: Border.all(color: AppColors.acierClair, width: 1.5),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: const Icon(Icons.notifications_outlined, color: Colors.white, size: 16),
-            ),
-            Positioned(
-              top: -6,
-              right: -6,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                decoration: BoxDecoration(color: AppColors.orange, borderRadius: BorderRadius.circular(99)),
-                child: const Text('3', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Colors.white)),
-              ),
-            ),
-          ],
+    // Logo + badge d'espace + onglets défilent horizontalement s'ils ne
+    // tiennent pas (viewport téléphone) — notification et avatar restent
+    // toujours visibles à droite, jamais coupés par le défilement.
+    final leftCluster = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(height: 46, child: VerticalLogo(height: 46, onDarkBackground: true)),
+        const SizedBox(width: 20),
+        Container(
+          margin: const EdgeInsets.only(right: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            border: Border.all(color: const Color(0xFFB9C4CE)),
+            borderRadius: BorderRadius.circular(99),
+          ),
+          child: Text(
+            space.name,
+            style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w700),
+          ),
         ),
         const SizedBox(width: 16),
-        PopupMenuButton<String>(
-          onSelected: (value) {
-            if (value == 'profil') context.push('/profil');
-            if (value == 'logout') context.read<AuthState>().logout();
-          },
-          itemBuilder: (context) => const [
-            PopupMenuItem(
-              value: 'profil',
-              child: Row(
-                children: [
-                  Icon(Icons.person_outline, color: AppColors.acier, size: 18),
-                  SizedBox(width: 10),
-                  Text('Profil'),
-                ],
-              ),
-            ),
-            PopupMenuDivider(),
-            PopupMenuItem(
-              value: 'logout',
-              child: Row(
-                children: [
-                  Icon(Icons.logout, color: AppColors.rouge, size: 18),
-                  SizedBox(width: 10),
-                  Text('Déconnexion', style: TextStyle(color: AppColors.rouge)),
-                ],
-              ),
-            ),
-          ],
-          child: CircleAvatar(
-            radius: 15,
-            backgroundColor: AppColors.acier,
-            child: Text(initials, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-          ),
-        ),
-        const SizedBox(width: 24),
+        for (final tab in space.tabs) ...[
+          _NavLink(label: tab.label, route: tab.route, isActive: activeNav == tab.key),
+          const SizedBox(width: 18),
+        ],
       ],
     );
-  }
-}
 
-/// Rail de navigation latéral, replié par défaut, qui se déploie avec une
-/// animation fluide au survol de la souris pour révéler les libellés — pas de
-/// barre latérale fixe qui grignoterait en permanence l'espace du contenu.
-class _HoverSidebar extends StatefulWidget {
-  final String activeNav;
-  final _BoSpace space;
-
-  const _HoverSidebar({required this.activeNav, required this.space});
-
-  @override
-  State<_HoverSidebar> createState() => _HoverSidebarState();
-}
-
-class _HoverSidebarState extends State<_HoverSidebar> {
-  static const _collapsedWidth = 72.0;
-  static const _expandedWidth = 236.0;
-
-  bool _expanded = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _expanded = true),
-      onExit: (_) => setState(() => _expanded = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeInOutCubic,
-        width: _expanded ? _expandedWidth : _collapsedWidth,
-        color: AppColors.encre,
-        child: ClipRect(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      color: AppColors.encre,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: leftCluster,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Stack(
+            clipBehavior: Clip.none,
             children: [
-              const SizedBox(height: 20),
-              for (final tab in widget.space.tabs)
-                _SidebarLink(tab: tab, isActive: widget.activeNav == tab.key, expanded: _expanded),
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppColors.acierClair, width: 1.5),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Icon(Icons.notifications_outlined, color: Colors.white, size: 16),
+              ),
+              Positioned(
+                top: -6,
+                right: -6,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                  decoration: BoxDecoration(color: AppColors.orange, borderRadius: BorderRadius.circular(99)),
+                  child: const Text('3', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Colors.white)),
+                ),
+              ),
             ],
           ),
-        ),
+          const SizedBox(width: 16),
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'profil') context.push('/profil');
+              if (value == 'logout') context.read<AuthState>().logout();
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'profil',
+                child: Row(
+                  children: [
+                    Icon(Icons.person_outline, color: AppColors.acier, size: 18),
+                    SizedBox(width: 10),
+                    Text('Profil'),
+                  ],
+                ),
+              ),
+              PopupMenuDivider(),
+              PopupMenuItem(
+                value: 'logout',
+                child: Row(
+                  children: [
+                    Icon(Icons.logout, color: AppColors.rouge, size: 18),
+                    SizedBox(width: 10),
+                    Text('Déconnexion', style: TextStyle(color: AppColors.rouge)),
+                  ],
+                ),
+              ),
+            ],
+            child: CircleAvatar(
+              radius: 15,
+              backgroundColor: AppColors.acier,
+              child: Text(initials, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _SidebarLink extends StatelessWidget {
-  final _BoNavTab tab;
+class _NavLink extends StatelessWidget {
+  final String label;
+  final String route;
   final bool isActive;
-  final bool expanded;
 
-  const _SidebarLink({required this.tab, required this.isActive, required this.expanded});
+  const _NavLink({required this.label, required this.route, required this.isActive});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      child: Tooltip(
-        message: expanded ? '' : tab.label,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(10),
-            // Fond sombre du rail : la teinte de survol globale (claire, voir
-            // ThemeData.hoverColor) y serait quasi invisible.
-            hoverColor: Colors.white.withValues(alpha: 0.08),
-            onTap: () => context.go(tab.route),
-            child: Container(
-              height: 44,
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              decoration: BoxDecoration(
-                color: isActive ? Colors.white.withValues(alpha: 0.12) : null,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Row(
-                children: [
-                  Icon(tab.icon, color: isActive ? Colors.white : const Color(0xFFB9C4CE), size: 20),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: ClipRect(
-                      child: AnimatedOpacity(
-                        opacity: expanded ? 1 : 0,
-                        duration: const Duration(milliseconds: 150),
-                        child: Text(
-                          tab.label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: isActive ? Colors.white : const Color(0xFFB9C4CE),
-                            fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => context.go(route),
+        borderRadius: BorderRadius.circular(6),
+        // Fond sombre de la barre : la teinte de survol globale (claire, voir
+        // ThemeData.hoverColor) y serait quasi invisible.
+        hoverColor: Colors.white.withValues(alpha: 0.1),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+          child: Container(
+            decoration: isActive
+                ? const BoxDecoration(border: Border(bottom: BorderSide(color: Colors.white, width: 2)))
+                : null,
+            padding: const EdgeInsets.only(bottom: 2),
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isActive ? Colors.white : const Color(0xFFB9C4CE),
+                fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                fontSize: 13,
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Tiroir de navigation standard pour les fenêtres étroites (voir
-/// [_kMobileBreakpoint]) — mêmes onglets que le rail latéral.
-class _BoDrawer extends StatelessWidget {
-  final String activeNav;
-  final _BoSpace space;
-
-  const _BoDrawer({required this.activeNav, required this.space});
-
-  @override
-  Widget build(BuildContext context) {
-    return Drawer(
-      backgroundColor: AppColors.encre,
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: SizedBox(height: 36, child: VerticalLogo(height: 36, onDarkBackground: true)),
-            ),
-            if (space.name.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Text(
-                  space.name,
-                  style: const TextStyle(color: Color(0xFFB9C4CE), fontSize: 12, fontWeight: FontWeight.w700),
-                ),
-              ),
-            ],
-            const SizedBox(height: 20),
-            const Divider(color: Colors.white24, height: 1),
-            for (final tab in space.tabs)
-              ListTile(
-                leading: Icon(tab.icon, color: activeNav == tab.key ? Colors.white : const Color(0xFFB9C4CE)),
-                title: Text(
-                  tab.label,
-                  style: TextStyle(
-                    color: activeNav == tab.key ? Colors.white : const Color(0xFFB9C4CE),
-                    fontWeight: activeNav == tab.key ? FontWeight.w600 : FontWeight.normal,
-                  ),
-                ),
-                selected: activeNav == tab.key,
-                selectedTileColor: Colors.white.withValues(alpha: 0.08),
-                // Fond sombre : la teinte de survol globale (gris clair, voir
-                // ThemeData.hoverColor) y serait quasi invisible — surchargée
-                // ici en blanc translucide.
-                hoverColor: Colors.white.withValues(alpha: 0.06),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  context.go(tab.route);
-                },
-              ),
-          ],
         ),
       ),
     );
