@@ -30,7 +30,10 @@ Color get _orangeClair => Color.lerp(AppColors.orange, Colors.white, 0.35)!;
 
 /// Construit un dégradé + une ombre douce colorée pour un état de bouton
 /// donné — partagé entre le thème global (ElevatedButton) et tout bouton
-/// personnalisé qui voudrait le même style.
+/// personnalisé qui voudrait le même style. Le survol (hors pression)
+/// accentue légèrement l'ombre, pour un retour visuel fluide dès que la
+/// souris passe sur le bouton — l'animation elle-même vient de l'AnimatedContainer
+/// qui enveloppe ce décor (voir backgroundBuilder ci-dessous).
 BoxDecoration appButtonDecoration(Set<WidgetState> states, {double radius = 16}) {
   final disabled = states.contains(WidgetState.disabled);
   if (disabled) {
@@ -40,6 +43,7 @@ BoxDecoration appButtonDecoration(Set<WidgetState> states, {double radius = 16})
     );
   }
   final pressed = states.contains(WidgetState.pressed);
+  final hovered = !pressed && states.contains(WidgetState.hovered);
   return BoxDecoration(
     borderRadius: BorderRadius.circular(radius),
     gradient: LinearGradient(
@@ -49,9 +53,9 @@ BoxDecoration appButtonDecoration(Set<WidgetState> states, {double radius = 16})
     ),
     boxShadow: [
       BoxShadow(
-        color: AppColors.orange.withValues(alpha: pressed ? 0.22 : 0.35),
-        blurRadius: pressed ? 12 : 22,
-        offset: Offset(0, pressed ? 3 : 8),
+        color: AppColors.orange.withValues(alpha: pressed ? 0.22 : (hovered ? 0.42 : 0.35)),
+        blurRadius: pressed ? 12 : (hovered ? 27 : 22),
+        offset: Offset(0, pressed ? 3 : (hovered ? 10 : 8)),
       ),
     ],
   );
@@ -82,6 +86,10 @@ class AppTheme {
         onSurface: AppColors.encre,
         surfaceTint: Colors.transparent,
       ),
+      // Teinte de survol par défaut pour tout InkWell/ListTile/PopupMenuItem
+      // qui ne définit pas la sienne (menus déroulants, lignes de tableau,
+      // liens back-office...) — un gris de la charte, discret sur fond clair.
+      hoverColor: AppColors.acier.withValues(alpha: 0.06),
       textTheme: _textTheme,
       appBarTheme: AppBarTheme(
         backgroundColor: AppColors.encre,
@@ -145,7 +153,9 @@ class AppTheme {
           shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
           textStyle: WidgetStatePropertyAll(GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.bold)),
           backgroundBuilder: (context, states, child) {
-            return Container(
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOut,
               decoration: appButtonDecoration(states),
               alignment: Alignment.center,
               child: child,
@@ -154,15 +164,31 @@ class AppTheme {
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.encre,
-          side: const BorderSide(color: AppColors.lignes, width: 1),
-          elevation: 0,
-          minimumSize: const Size(double.infinity, 52),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          textStyle: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.bold),
+        style: ButtonStyle(
+          foregroundColor: const WidgetStatePropertyAll(AppColors.encre),
+          elevation: const WidgetStatePropertyAll(0),
+          minimumSize: const WidgetStatePropertyAll(Size(double.infinity, 52)),
+          shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
+          textStyle: WidgetStatePropertyAll(GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.bold)),
+          // Bordure qui fonce légèrement au survol (gris de la charte),
+          // en plus du fond fondu ci-dessous.
+          side: WidgetStateProperty.resolveWith((states) {
+            final hovered = !states.contains(WidgetState.disabled) && states.contains(WidgetState.hovered);
+            return BorderSide(color: hovered ? AppColors.acier : AppColors.lignes, width: 1);
+          }),
+          backgroundBuilder: (context, states, child) {
+            final hovered = !states.contains(WidgetState.disabled) && states.contains(WidgetState.hovered);
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOut,
+              decoration: BoxDecoration(
+                color: hovered ? AppColors.lignes.withValues(alpha: 0.35) : Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              alignment: Alignment.center,
+              child: child,
+            );
+          },
         ),
       ),
     );

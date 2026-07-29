@@ -310,6 +310,9 @@ class _SidebarLink extends StatelessWidget {
           color: Colors.transparent,
           child: InkWell(
             borderRadius: BorderRadius.circular(10),
+            // Fond sombre du rail : la teinte de survol globale (claire, voir
+            // ThemeData.hoverColor) y serait quasi invisible.
+            hoverColor: Colors.white.withValues(alpha: 0.08),
             onTap: () => context.go(tab.route),
             child: Container(
               height: 44,
@@ -351,8 +354,7 @@ class _SidebarLink extends StatelessWidget {
 }
 
 /// Tiroir de navigation standard pour les fenêtres étroites (voir
-/// [_kMobileBreakpoint]) — mêmes onglets que le rail latéral, sans animation
-/// de survol qui n'a pas de sens au toucher.
+/// [_kMobileBreakpoint]) — mêmes onglets que le rail latéral.
 class _BoDrawer extends StatelessWidget {
   final String activeNav;
   final _BoSpace space;
@@ -396,6 +398,10 @@ class _BoDrawer extends StatelessWidget {
                 ),
                 selected: activeNav == tab.key,
                 selectedTileColor: Colors.white.withValues(alpha: 0.08),
+                // Fond sombre : la teinte de survol globale (gris clair, voir
+                // ThemeData.hoverColor) y serait quasi invisible — surchargée
+                // ici en blanc translucide.
+                hoverColor: Colors.white.withValues(alpha: 0.06),
                 onTap: () {
                   Navigator.of(context).pop();
                   context.go(tab.route);

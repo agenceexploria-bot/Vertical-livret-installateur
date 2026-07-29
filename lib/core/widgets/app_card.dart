@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme.dart';
 
-class AppCard extends StatelessWidget {
+class AppCard extends StatefulWidget {
   final Widget child;
   final EdgeInsetsGeometry? padding;
   final VoidCallback? onTap;
@@ -14,31 +14,56 @@ class AppCard extends StatelessWidget {
   });
 
   @override
+  State<AppCard> createState() => _AppCardState();
+}
+
+class _AppCardState extends State<AppCard> {
+  bool _hovered = false;
+
+  // Seules les cartes cliquables réagissent au survol — sinon l'effet
+  // suggérerait à tort qu'une carte statique est interactive.
+  bool get _reactive => widget.onTap != null;
+
+  void _setHovered(bool value) {
+    if (_reactive && _hovered != value) setState(() => _hovered = value);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
-        onTap: onTap,
+    final hovered = _hovered && _reactive;
+    return MouseRegion(
+      cursor: _reactive ? SystemMouseCursors.click : MouseCursor.defer,
+      onEnter: (_) => _setHovered(true),
+      onExit: (_) => _setHovered(false),
+      child: Material(
+        color: Colors.transparent,
         borderRadius: BorderRadius.circular(20),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Colors.white, AppColors.fond],
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.encre.withValues(alpha: 0.08),
-                blurRadius: 30,
-                offset: const Offset(0, 12),
+        child: InkWell(
+          onTap: widget.onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOut,
+            transformAlignment: Alignment.center,
+            transform: Matrix4.diagonal3Values(hovered ? 1.015 : 1.0, hovered ? 1.015 : 1.0, 1.0),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Colors.white, AppColors.fond],
               ),
-            ],
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.encre.withValues(alpha: hovered ? 0.14 : 0.08),
+                  blurRadius: hovered ? 38 : 30,
+                  offset: Offset(0, hovered ? 16 : 12),
+                ),
+              ],
+            ),
+            padding: widget.padding ?? const EdgeInsets.all(16.0),
+            child: widget.child,
           ),
-          padding: padding ?? const EdgeInsets.all(16.0),
-          child: child,
         ),
       ),
     );
