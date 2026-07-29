@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../../core/coming_soon.dart';
 import '../../../core/theme.dart';
 import '../../../core/widgets/glass_app_bar.dart';
 import '../../../core/widgets/responsive_layout.dart';
@@ -89,7 +88,7 @@ class FicheChantierScreen extends StatelessWidget {
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () => showComingSoon(context),
+                      onPressed: () => _appeler(context, chantier.contactTel),
                       icon: const Icon(Icons.phone, size: 18),
                       label: const Text('Appeler'),
                     ),
@@ -97,7 +96,7 @@ class FicheChantierScreen extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: OutlinedButton.icon(
-                      onPressed: () => showComingSoon(context),
+                      onPressed: () => _ouvrirGps(context, '${chantier.adresse}, ${chantier.ville}'),
                       icon: const Icon(Icons.map_outlined, size: 18),
                       label: const Text('GPS'),
                     ),
@@ -120,6 +119,26 @@ class FicheChantierScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _appeler(BuildContext context, String tel) async {
+    final uri = Uri(scheme: 'tel', path: tel.replaceAll(' ', ''));
+    if (!await launchUrl(uri)) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Impossible de lancer l\'appel sur cet appareil.')),
+      );
+    }
+  }
+
+  Future<void> _ouvrirGps(BuildContext context, String adresse) async {
+    final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(adresse)}');
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Impossible d\'ouvrir le GPS.')),
+      );
+    }
   }
 
   Widget _buildDocuments(BuildContext context, Chantier chantier) {

@@ -4,20 +4,20 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme.dart';
+import '../../core/widgets/ajouter_document_chantier_dialog.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/glass_app_bar.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../core/widgets/status_indicator.dart';
 import '../../data/models/chantier.dart';
+import '../../data/models/document_chantier.dart';
 import '../../data/models/user.dart';
 import '../../state/chantier_state.dart';
 
-/// Fiche chantier mobile pour le CA — consultation de l'avancement et des
-/// installateurs rattachés, avec accès à la modification (voir
-/// [CaEditChantierScreen] atteint via l'icône crayon). Version réduite de
-/// BoChantierDetailScreen (Web), sans les modules de gestion documentaire du
-/// back-office — le CA en déplacement n'a besoin que du suivi et des
-/// coordonnées.
+/// Fiche chantier mobile pour le CA — consultation de l'avancement, des
+/// installateurs rattachés et dépôt de documents de référence (Modules 1 à 3),
+/// avec accès à la modification (voir [CaEditChantierScreen] atteint via
+/// l'icône crayon). Version réduite de BoChantierDetailScreen (Web).
 class CaChantierDetailScreen extends StatelessWidget {
   const CaChantierDetailScreen({super.key});
 
@@ -104,6 +104,8 @@ class CaChantierDetailScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
+          _buildDocuments(context, chantier),
+          const SizedBox(height: 16),
           Text('Installateurs rattachés (${chantier.installateursRattaches.length})', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 12),
           if (chantier.installateursRattaches.isEmpty)
@@ -113,6 +115,60 @@ class CaChantierDetailScreen extends StatelessWidget {
               _installateurCard(context, chantier, u),
               const SizedBox(height: 8),
             ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDocuments(BuildContext context, Chantier chantier) {
+    final docs = chantier.documentsChantier;
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Documents chantier (Modules 1-3)', style: TextStyle(fontWeight: FontWeight.bold)),
+              IconButton(
+                onPressed: () => showDialog(
+                  context: context,
+                  builder: (dialogContext) => AjouterDocumentChantierDialog(reference: chantier.reference),
+                ),
+                icon: const Icon(Icons.add_circle_outline, color: AppColors.orange),
+                tooltip: 'Ajouter un document',
+              ),
+            ],
+          ),
+          if (docs.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(top: 4),
+              child: Text('Aucun document déposé pour l\'instant.', style: TextStyle(color: AppColors.acierClair, fontSize: 12)),
+            )
+          else
+            for (final d in docs) ...[
+              const SizedBox(height: 8),
+              _documentRow(d),
+            ],
+        ],
+      ),
+    );
+  }
+
+  Widget _documentRow(DocumentChantier d) {
+    final icon = switch (d.type) {
+      TypeDocumentChantier.securite => Icons.shield_outlined,
+      TypeDocumentChantier.ficheChantier => Icons.assignment_outlined,
+      TypeDocumentChantier.technique => Icons.description_outlined,
+    };
+    return InkWell(
+      onTap: () => launchUrl(Uri.parse(d.filePath)),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: AppColors.acier),
+          const SizedBox(width: 8),
+          Expanded(child: Text(d.nom, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
+          const Icon(Icons.chevron_right, size: 18, color: AppColors.acierClair),
         ],
       ),
     );
