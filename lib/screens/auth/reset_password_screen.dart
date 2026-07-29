@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme.dart';
+import '../../core/widgets/password_field.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../core/widgets/vertical_logo.dart';
 import '../../state/auth_state.dart';
@@ -100,16 +101,14 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                 decoration: const InputDecoration(labelText: 'Code reçu par email', counterText: ''),
               ),
               const SizedBox(height: 16),
-              TextField(
+              PasswordField(
                 controller: _passwordController,
-                obscureText: true,
                 textInputAction: TextInputAction.next,
                 decoration: const InputDecoration(labelText: 'Nouveau mot de passe'),
               ),
               const SizedBox(height: 16),
-              TextField(
+              PasswordField(
                 controller: _confirmController,
-                obscureText: true,
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) => _submit(),
                 decoration: const InputDecoration(labelText: 'Confirmation'),

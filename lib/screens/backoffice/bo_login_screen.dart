@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme.dart';
+import '../../core/widgets/password_field.dart';
 import '../../core/widgets/vertical_logo.dart';
 import '../../data/models/user.dart';
 import '../../state/auth_state.dart';
@@ -60,9 +61,8 @@ class _BoLoginScreenState extends State<BoLoginScreen> {
                   child: Text('Mot de passe', style: Theme.of(context).textTheme.bodySmall),
                 ),
                 const SizedBox(height: 4),
-                TextField(
+                PasswordField(
                   controller: _passwordController,
-                  obscureText: true,
                   textInputAction: TextInputAction.done,
                   onSubmitted: (_) => _login(context),
                   decoration: const InputDecoration(),

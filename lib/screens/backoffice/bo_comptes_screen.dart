@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme.dart';
+import '../../core/widgets/password_field.dart';
 import '../../core/widgets/status_indicator.dart';
 import '../../data/models/user.dart';
 import '../../state/admin_state.dart';
@@ -217,9 +218,8 @@ class BoComptesScreen extends StatelessWidget {
           title: Text('Réinitialiser le mot de passe de ${u.fullName}'),
           content: SizedBox(
             width: 320,
-            child: TextField(
+            child: PasswordField(
               controller: controller,
-              obscureText: true,
               onChanged: (_) => setState(() {}),
               decoration: const InputDecoration(labelText: 'Nouveau mot de passe', hintText: 'Au moins 6 caractères'),
             ),
@@ -286,9 +286,8 @@ class BoComptesScreen extends StatelessWidget {
           title: Text('Réinitialiser le mot de passe de ${u.fullName}'),
           content: SizedBox(
             width: 320,
-            child: TextField(
+            child: PasswordField(
               controller: controller,
-              obscureText: true,
               onChanged: (_) => setState(() {}),
               decoration: const InputDecoration(labelText: 'Nouveau mot de passe', hintText: 'Au moins 6 caractères'),
             ),

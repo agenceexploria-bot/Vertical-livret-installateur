@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme.dart';
+import '../../core/widgets/password_field.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../core/widgets/vertical_logo.dart';
 import '../../state/auth_state.dart';
@@ -275,9 +276,16 @@ class _SignupScreenState extends State<SignupScreen> {
     bool obscure = false,
     TextInputType? keyboardType,
   }) {
+    if (obscure) {
+      return PasswordField(
+        controller: ctrl,
+        textInputAction: TextInputAction.next,
+        onSubmitted: (_) => _nextStep(),
+        decoration: InputDecoration(labelText: label, hintText: hint),
+      );
+    }
     return TextField(
       controller: ctrl,
-      obscureText: obscure,
       textInputAction: TextInputAction.next,
       keyboardType: keyboardType,
       onSubmitted: (_) => _nextStep(),

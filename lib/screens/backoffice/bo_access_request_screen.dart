@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme.dart';
+import '../../core/widgets/password_field.dart';
 import '../../core/widgets/vertical_logo.dart';
 import '../../state/auth_state.dart';
 
@@ -102,15 +103,22 @@ class _BoAccessRequestScreenState extends State<BoAccessRequestScreen> {
       children: [
         Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.acier)),
         const SizedBox(height: 4),
-        TextField(
-          controller: controller,
-          obscureText: obscure,
-          textInputAction: TextInputAction.next,
-          onSubmitted: (_) => _submit(context),
-          decoration: InputDecoration(
-            hintText: hint,
+        if (obscure)
+          PasswordField(
+            controller: controller,
+            textInputAction: TextInputAction.next,
+            onSubmitted: (_) => _submit(context),
+            decoration: InputDecoration(hintText: hint),
+          )
+        else
+          TextField(
+            controller: controller,
+            textInputAction: TextInputAction.next,
+            onSubmitted: (_) => _submit(context),
+            decoration: InputDecoration(
+              hintText: hint,
+            ),
           ),
-        ),
       ],
     );
   }

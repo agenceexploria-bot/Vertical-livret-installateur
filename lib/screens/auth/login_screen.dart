@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/vertical_logo.dart';
 import '../../core/widgets/responsive_layout.dart';
+import '../../core/widgets/password_field.dart';
 import '../../state/auth_state.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -50,9 +51,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              TextField(
+              PasswordField(
                 controller: _passwordController,
-                obscureText: true,
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) => _submit(),
                 decoration: const InputDecoration(
