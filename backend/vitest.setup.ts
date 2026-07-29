@@ -17,6 +17,7 @@ process.env.JWT_REFRESH_SECRET = 'test-refresh-secret';
 // Pas d'appel réseau réel vers Vercel Blob en test — voir imageStorage.ts.
 vi.mock('@vercel/blob', () => ({
   put: vi.fn(async (filename: string) => ({ url: `https://blob.vercel-storage.com/test/${filename}` })),
+  del: vi.fn(async () => {}),
 }));
 
 execSync('npx prisma db push --skip-generate --accept-data-loss', {

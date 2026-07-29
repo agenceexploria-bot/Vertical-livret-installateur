@@ -166,6 +166,13 @@ class ChantierRepository {
     }
   }
 
+  /// Supprime le REX d'un chantier (CA/Admin, back-office) — action toujours
+  /// en ligne, comme [deleteChantier]/[deleteDocumentChantier].
+  Future<Chantier> deleteRex(String reference) async {
+    final data = await _api.deleteRex(reference);
+    return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
+  }
+
   Future<Chantier> submitPv(String reference, String signataire, {String? signatureImage}) async {
     try {
       final data = await _api.postPv(reference, signataire, signatureImage: signatureImage);

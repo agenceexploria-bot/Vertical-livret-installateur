@@ -88,7 +88,7 @@ class BoCaChantiersScreen extends StatelessWidget {
               if (rexs.isEmpty) {
                 return const Text('Aucun REX en attente de qualification.', style: TextStyle(fontSize: 11, color: AppColors.acierClair));
               }
-              return Column(children: [for (final c in rexs) _rexRow(c)]);
+              return Column(children: [for (final c in rexs) _rexRow(context, c)]);
             }(),
           ),
           const SizedBox(height: 12),
@@ -290,7 +290,7 @@ class BoCaChantiersScreen extends StatelessWidget {
     );
   }
 
-  Widget _rexRow(Chantier c) {
+  Widget _rexRow(BuildContext context, Chantier c) {
     return BoTableRow(
       padding: const EdgeInsets.symmetric(vertical: 6),
       border: const Border(bottom: BorderSide(color: Color(0xFFEEF1F3))),
@@ -307,6 +307,36 @@ class BoCaChantiersScreen extends StatelessWidget {
               '${c.reference}${c.installateursRattaches.isNotEmpty ? ' · ${c.installateursRattaches.first.fullName}' : ''} — « ${c.rexTranscription} »',
               style: const TextStyle(fontSize: 10.5, color: AppColors.acier),
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.acierClair),
+            tooltip: 'Supprimer ce REX',
+            onPressed: () => _confirmerSuppressionRex(context, c),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Seule façon de débloquer l'installateur pour qu'il puisse soumettre un
+  // nouveau REX — voir le contrôle rexValide côté backend (POST .../rex).
+  void _confirmerSuppressionRex(BuildContext context, Chantier c) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Supprimer ce REX ?'),
+        content: Text(
+          'Le REX du chantier ${c.reference} sera supprimé définitivement, y compris la note vocale. L\'installateur pourra ensuite en soumettre un nouveau. Cette action est irréversible.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Annuler')),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppColors.rouge),
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              context.read<ChantierState>().deleteRex(c.reference);
+            },
+            child: const Text('Supprimer définitivement'),
           ),
         ],
       ),

@@ -198,10 +198,25 @@ chantiersRouter.patch('/:reference', requireAuth, requireRole('chargeAffaires', 
 
 // Suppression d'un chantier — réservé à l'Admin. Les points de contrôle,
 // rattachements, documents terrain et documents chantier sont supprimés en
-// cascade (voir onDelete: Cascade sur ces relations dans schema.prisma).
+// cascade (voir onDelete: Cascade sur ces relations dans schema.prisma), mais
+// la cascade ne nettoie que les lignes en base : les fichiers correspondants
+// sur Vercel Blob sont supprimés explicitement ci-dessous avant la suppression,
+// sans quoi ils resteraient stockés (et facturés) indéfiniment.
 chantiersRouter.delete('/:reference', requireAuth, requireRole('admin'), async (req, res) => {
-  const existing = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
+  const existing = await prisma.chantier.findUnique({
+    where: { reference: req.params.reference },
+    include: { pointsControle: true, documentsTerrain: true, documentsChantier: true },
+  });
   if (!existing) return res.status(404).json({ error: 'Chantier introuvable' });
+
+  const filePaths = [
+    existing.rexAudioPath,
+    existing.pvSignatureImagePath,
+    ...existing.pointsControle.map((p) => p.photoPath),
+    ...existing.documentsTerrain.map((d) => d.filePath),
+    ...existing.documentsChantier.map((d) => d.filePath),
+  ].filter((p): p is string => !!p);
+  await Promise.all(filePaths.map((p) => deleteBlobFile(p)));
 
   await prisma.chantier.delete({ where: { reference: req.params.reference } });
   res.status(204).send();
@@ -283,9 +298,16 @@ const rexSchema = z
   })
   .refine((d) => d.transcription || d.audio, { message: 'Une transcription ou une note vocale est requise' });
 
-chantiersRouter.post('/:reference/rex', requireAuth, requireRattachement, async (req, res) => {
+chantiersRouter.post('/:reference/rex', requireAuth, requireRattachement, async (req: ChantierScopedRequest, res) => {
   const parsed = rexSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  // Un seul REX actif par chantier : une fois soumis, l'installateur ne peut
+  // pas en renvoyer un autre tant que le CA/Admin n'a pas supprimé l'ancien
+  // (voir DELETE /:reference/rex ci-dessous).
+  if (req.chantier!.rexValide) {
+    return res.status(409).json({ error: 'Un REX a déjà été soumis pour ce chantier' });
+  }
 
   if (parsed.data.audio && !isAllowedFileDataUrl(parsed.data.audio)) {
     return res.status(400).json({ error: 'Type de fichier non autorisé' });
@@ -304,6 +326,25 @@ chantiersRouter.post('/:reference/rex', requireAuth, requireRattachement, async 
       rexAudioPath,
       rexSoumisAt: new Date(),
     },
+    include: CHANTIER_INCLUDE,
+  });
+  res.json({ chantier: serializeChantier(chantier) });
+});
+
+// Supprime le REX d'un chantier — réservé au CA/Admin. C'est la SEULE façon
+// de débloquer l'installateur pour qu'il puisse en soumettre un nouveau (voir
+// le contrôle rexValide ci-dessus). Suppression immédiate et définitive, y
+// compris de la note vocale sur Vercel Blob si elle existe.
+chantiersRouter.delete('/:reference/rex', requireAuth, requireRole('chargeAffaires', 'admin'), async (req, res) => {
+  const existing = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
+  if (!existing) return res.status(404).json({ error: 'Chantier introuvable' });
+  if (!existing.rexValide) return res.status(404).json({ error: 'Aucun REX à supprimer pour ce chantier' });
+
+  if (existing.rexAudioPath) await deleteBlobFile(existing.rexAudioPath);
+
+  const chantier = await prisma.chantier.update({
+    where: { reference: req.params.reference },
+    data: { rexValide: false, rexTranscription: null, rexAudioPath: null, rexSoumisAt: null },
     include: CHANTIER_INCLUDE,
   });
   res.json({ chantier: serializeChantier(chantier) });

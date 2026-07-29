@@ -22,6 +22,18 @@ async function createCa() {
   return { user: ca, accessToken: login.body.accessToken as string };
 }
 
+async function createAdmin() {
+  const passwordHash = await bcrypt.hash('demodemo', 10);
+  const admin = await prisma.user.create({
+    data: {
+      nom: 'Lefebvre', prenom: 'Admin', mobile: '0102030407', email: 'admin@actiwork.fr',
+      passwordHash, role: 'admin', isActive: true,
+    },
+  });
+  const login = await request(app).post('/auth/login').send({ identifier: 'admin@actiwork.fr', password: 'demodemo' });
+  return { user: admin, accessToken: login.body.accessToken as string };
+}
+
 async function createInstallateur(overrides: Partial<{ isActive: boolean; mobile: string }> = {}) {
   const signup = await doSignup(app, {
     nom: 'Roux', prenom: 'Thomas', mobile: overrides.mobile ?? '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo',
@@ -280,6 +292,142 @@ describe('POST /chantiers/:reference/rex', () => {
       .set('Authorization', `Bearer ${ca.accessToken}`)
       .send({});
     expect(res.status).toBe(400);
+  });
+
+  it('refuse un second REX tant que le CA/Admin n\'a pas supprimé le précédent', async () => {
+    const ca = await createCa();
+    await createChantier(ca.accessToken);
+
+    await request(app)
+      .post('/chantiers/LD64397/rex')
+      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .send({ transcription: 'Premier REX.' });
+
+    const res = await request(app)
+      .post('/chantiers/LD64397/rex')
+      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .send({ transcription: 'Deuxième tentative.' });
+    expect(res.status).toBe(409);
+  });
+});
+
+describe('DELETE /chantiers/:reference/rex', () => {
+  it('le CA supprime le REX, ce qui débloque un nouvel envoi', async () => {
+    const ca = await createCa();
+    await createChantier(ca.accessToken);
+    await request(app)
+      .post('/chantiers/LD64397/rex')
+      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .send({ transcription: 'À corriger.' });
+
+    const del = await request(app)
+      .delete('/chantiers/LD64397/rex')
+      .set('Authorization', `Bearer ${ca.accessToken}`);
+    expect(del.status).toBe(200);
+    expect(del.body.chantier.rexValide).toBe(false);
+    expect(del.body.chantier.rexTranscription).toBeNull();
+
+    const res = await request(app)
+      .post('/chantiers/LD64397/rex')
+      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .send({ transcription: 'Nouveau REX après suppression.' });
+    expect(res.status).toBe(200);
+    expect(res.body.chantier.rexTranscription).toBe('Nouveau REX après suppression.');
+  });
+
+  it('l\'Admin peut aussi supprimer le REX', async () => {
+    const ca = await createCa();
+    await createChantier(ca.accessToken);
+    await request(app)
+      .post('/chantiers/LD64397/rex')
+      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .send({ transcription: 'À corriger.' });
+
+    const admin = await createAdmin();
+    const del = await request(app)
+      .delete('/chantiers/LD64397/rex')
+      .set('Authorization', `Bearer ${admin.accessToken}`);
+    expect(del.status).toBe(200);
+    expect(del.body.chantier.rexValide).toBe(false);
+  });
+
+  it('refuse à un installateur de supprimer le REX', async () => {
+    const ca = await createCa();
+    await createChantier(ca.accessToken);
+    await request(app)
+      .post('/chantiers/LD64397/rex')
+      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .send({ transcription: 'À corriger.' });
+
+    const installateur = await createInstallateur({ isActive: true });
+    await request(app)
+      .post('/chantiers/LD64397/rattacher')
+      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .send({ userId: installateur.user.id });
+
+    const res = await request(app)
+      .delete('/chantiers/LD64397/rex')
+      .set('Authorization', `Bearer ${installateur.accessToken}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('renvoie 404 si aucun REX n\'a été soumis pour ce chantier', async () => {
+    const ca = await createCa();
+    await createChantier(ca.accessToken);
+
+    const res = await request(app)
+      .delete('/chantiers/LD64397/rex')
+      .set('Authorization', `Bearer ${ca.accessToken}`);
+    expect(res.status).toBe(404);
+  });
+
+  it('supprime aussi la note vocale associée', async () => {
+    const ca = await createCa();
+    await createChantier(ca.accessToken);
+    await request(app)
+      .post('/chantiers/LD64397/rex')
+      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .send({ audio: `data:audio/webm;base64,${ONE_PX_PNG_BASE64}` });
+
+    const del = await request(app)
+      .delete('/chantiers/LD64397/rex')
+      .set('Authorization', `Bearer ${ca.accessToken}`);
+    expect(del.status).toBe(200);
+    expect(del.body.chantier.rexAudioPath).toBeNull();
+  });
+});
+
+describe('DELETE /chantiers/:reference (suppression définitive, Admin uniquement)', () => {
+  it('supprime le chantier ainsi que les fichiers de ses documents/REX/PV associés', async () => {
+    const ca = await createCa();
+    await createChantier(ca.accessToken);
+    await request(app)
+      .post('/chantiers/LD64397/documents-chantier')
+      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .send({ type: 'securite', nom: 'PPSPS', file: `data:image/png;base64,${ONE_PX_PNG_BASE64}` });
+    await request(app)
+      .post('/chantiers/LD64397/rex')
+      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .send({ audio: `data:audio/webm;base64,${ONE_PX_PNG_BASE64}` });
+
+    const admin = await createAdmin();
+    const del = await request(app)
+      .delete('/chantiers/LD64397')
+      .set('Authorization', `Bearer ${admin.accessToken}`);
+    expect(del.status).toBe(204);
+
+    const get = await request(app).get('/chantiers/LD64397').set('Authorization', `Bearer ${admin.accessToken}`);
+    expect(get.status).toBe(404);
+  });
+
+  it('refuse à un CA de supprimer un chantier', async () => {
+    const ca = await createCa();
+    await createChantier(ca.accessToken);
+
+    const res = await request(app)
+      .delete('/chantiers/LD64397')
+      .set('Authorization', `Bearer ${ca.accessToken}`);
+    expect(res.status).toBe(403);
   });
 });
 

@@ -102,6 +102,11 @@ class ChantierState extends ChangeNotifier {
     _replaceInList(updated);
   }
 
+  Future<void> deleteRex(String reference) async {
+    final updated = await _repository.deleteRex(reference);
+    _replaceInList(updated);
+  }
+
   Future<void> submitPv(String reference, String signataire, {String? signatureImage}) async {
     final updated = await _repository.submitPv(reference, signataire, signatureImage: signatureImage);
     _replaceInList(updated);

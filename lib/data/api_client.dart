@@ -328,6 +328,11 @@ class ApiClient {
     });
   }
 
+  /// Supprime le REX d'un chantier (CA/Admin) — seule façon de débloquer
+  /// l'installateur pour qu'il puisse en soumettre un nouveau.
+  Future<Map<String, dynamic>> deleteRex(String reference) =>
+      _request('DELETE', '/chantiers/$reference/rex');
+
   Future<Map<String, dynamic>> postPv(String reference, String signataire, {String? signatureImage}) {
     return _request('POST', '/chantiers/$reference/pv', body: {
       'signataire': signataire,

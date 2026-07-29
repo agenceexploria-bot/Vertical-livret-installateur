@@ -133,6 +133,38 @@ describe('POST /comptes/moi/habilitations (EX-13)', () => {
   });
 });
 
+describe('DELETE /comptes/:id (suppression définitive, Admin uniquement)', () => {
+  it('supprime le compte ainsi que le fichier de son certificat', async () => {
+    const token = await createInstallateur();
+    await request(app)
+      .post('/comptes/moi/habilitations')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        titre: 'Habilitation électrique BR',
+        dateExpiration: '2027-03-12T00:00:00.000Z',
+        file: `data:image/png;base64,${ONE_PX_PNG_BASE64}`,
+      });
+    const me = await request(app).get('/auth/me').set('Authorization', `Bearer ${token}`);
+
+    const passwordHash = await bcrypt.hash('demodemo', 10);
+    await prisma.user.create({
+      data: {
+        nom: 'Lefebvre', prenom: 'Admin', mobile: '0102030407', email: 'admin@actiwork.fr',
+        passwordHash, role: 'admin', isActive: true,
+      },
+    });
+    const adminLogin = await request(app).post('/auth/login').send({ identifier: 'admin@actiwork.fr', password: 'demodemo' });
+
+    const res = await request(app)
+      .delete(`/comptes/${me.body.user.id}`)
+      .set('Authorization', `Bearer ${adminLogin.body.accessToken}`);
+    expect(res.status).toBe(204);
+
+    const list = await request(app).get('/comptes').set('Authorization', `Bearer ${adminLogin.body.accessToken}`);
+    expect(list.body.installateurs).toHaveLength(0);
+  });
+});
+
 describe('PATCH /comptes/moi', () => {
   it('modifie le nom et le prénom du compte connecté', async () => {
     const token = await createInstallateur();

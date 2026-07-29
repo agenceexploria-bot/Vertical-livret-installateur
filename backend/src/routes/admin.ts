@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { prisma } from '../prisma';
 import { serializeUser } from '../serializers';
 import { requireAuth, requireRole, AuthedRequest } from '../middleware/auth';
+import { deleteBlobFile } from '../lib/imageStorage';
 
 export const adminRouter = Router();
 
@@ -101,6 +102,16 @@ adminRouter.delete('/comptes/:id', requireAuth, requireRole('admin'), async (req
     return res.status(400).json({ error: 'Vous ne pouvez pas supprimer votre propre compte' });
   }
   if (!(await findManageableAccountOrNull(req.params.id))) return res.status(404).json({ error: 'Compte introuvable' });
+
+  const existing = await prisma.user.findUnique({
+    where: { id: req.params.id },
+    include: { habilitations: true, documentsTerrain: true },
+  });
+  const filePaths = [
+    ...(existing?.habilitations.map((h) => h.filePath) ?? []),
+    ...(existing?.documentsTerrain.map((d) => d.filePath) ?? []),
+  ].filter((p): p is string => !!p);
+  await Promise.all(filePaths.map((p) => deleteBlobFile(p)));
 
   await prisma.user.delete({ where: { id: req.params.id } });
   res.status(204).send();

@@ -7,6 +7,7 @@ import '../../../core/theme.dart';
 import '../../../core/widgets/glass_app_bar.dart';
 import '../../../core/voice_recorder.dart';
 import '../../../core/widgets/responsive_layout.dart';
+import '../../../data/models/chantier.dart';
 import '../../../state/chantier_state.dart';
 import '../../../state/network_state.dart';
 
@@ -159,6 +160,9 @@ class _RexScreenState extends State<RexScreen> with SingleTickerProviderStateMix
 
   @override
   Widget build(BuildContext context) {
+    final chantier = context.watch<ChantierState>().currentChantier;
+    final dejaEnvoye = chantier?.rexValide ?? false;
+
     return ResponsiveLayout(
       appBar: GlassAppBar(
         title: const Text('Retour d\'expérience'),
@@ -167,28 +171,61 @@ class _RexScreenState extends State<RexScreen> with SingleTickerProviderStateMix
       ),
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
-        child: Column(
-          children: [
-            const Text(
-              'Laissez un retour sur le chantier — note vocale ou texte. Vos remarques aident à améliorer nos produits.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.acier, height: 1.4),
-            ),
-            const SizedBox(height: 24),
-            _buildModeSwitch(),
-            const SizedBox(height: 32),
-            if (_mode == _RexMode.vocal) _buildVocalMode() else _buildTexteMode(),
-            const SizedBox(height: 32),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _peutEnvoyer ? () => _envoyer(context) : null,
-                child: const Text('Valider et envoyer le REX'),
-              ),
-            ),
-          ],
-        ),
+        child: dejaEnvoye ? _buildDejaEnvoye(chantier!) : _buildFormulaire(context),
       ),
+    );
+  }
+
+  Widget _buildDejaEnvoye(Chantier chantier) {
+    return Column(
+      children: [
+        const Icon(Icons.check_circle_outline, size: 48, color: AppColors.orange),
+        const SizedBox(height: 16),
+        const Text(
+          'Un REX a déjà été soumis pour ce chantier.',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Vous ne pouvez pas en envoyer un nouveau. Seul le CA ou l\'Admin peut supprimer l\'ancien REX depuis le back-office pour vous permettre d\'en soumettre un autre.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: AppColors.acier, height: 1.4),
+        ),
+        if (chantier.rexTranscription != null) ...[
+          const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: AppColors.fond, borderRadius: BorderRadius.circular(9)),
+            child: Text('« ${chantier.rexTranscription} »', style: const TextStyle(fontSize: 13, color: AppColors.encre, height: 1.4)),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildFormulaire(BuildContext context) {
+    return Column(
+      children: [
+        const Text(
+          'Laissez un retour sur le chantier — note vocale ou texte. Vos remarques aident à améliorer nos produits.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: AppColors.acier, height: 1.4),
+        ),
+        const SizedBox(height: 24),
+        _buildModeSwitch(),
+        const SizedBox(height: 32),
+        if (_mode == _RexMode.vocal) _buildVocalMode() else _buildTexteMode(),
+        const SizedBox(height: 32),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _peutEnvoyer ? () => _envoyer(context) : null,
+            child: const Text('Valider et envoyer le REX'),
+          ),
+        ),
+      ],
     );
   }
 

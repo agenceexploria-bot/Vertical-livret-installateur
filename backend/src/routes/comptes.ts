@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { prisma } from '../prisma';
 import { serializeUser } from '../serializers';
 import { requireAuth, requireRole, AuthedRequest } from '../middleware/auth';
-import { saveBase64File, isAllowedFileDataUrl } from '../lib/imageStorage';
+import { saveBase64File, deleteBlobFile, isAllowedFileDataUrl } from '../lib/imageStorage';
 import { isValidMobileInput, normalizePhoneInput, MOBILE_FORMAT_ERROR } from '../lib/sms';
 
 export const comptesRouter = Router();
@@ -65,13 +65,26 @@ comptesRouter.post('/:id/reactiver', requireAuth, requireRole('chargeAffaires', 
 // Suppression définitive d'un compte — réservée à l'Admin (nouvelle capacité
 // de la refonte des rôles back-office, distincte de la suspension qui reste
 // réversible). Un Admin ne peut pas se supprimer lui-même via cette route.
+// Les fichiers (certificats, documents terrain déposés par ce compte) sont
+// supprimés de Vercel Blob avant la suppression en base : la cascade Prisma ne
+// nettoie que les lignes, jamais les fichiers, qui resteraient sinon stockés
+// (et facturés) indéfiniment.
 comptesRouter.delete('/:id', requireAuth, requireRole('admin'), async (req: AuthedRequest, res) => {
   if (req.params.id === req.auth!.userId) {
     return res.status(400).json({ error: 'Vous ne pouvez pas supprimer votre propre compte' });
   }
 
-  const existing = await prisma.user.findUnique({ where: { id: req.params.id } });
+  const existing = await prisma.user.findUnique({
+    where: { id: req.params.id },
+    include: { habilitations: true, documentsTerrain: true },
+  });
   if (!existing) return res.status(404).json({ error: 'Compte introuvable' });
+
+  const filePaths = [
+    ...existing.habilitations.map((h) => h.filePath),
+    ...existing.documentsTerrain.map((d) => d.filePath),
+  ].filter((p): p is string => !!p);
+  await Promise.all(filePaths.map((p) => deleteBlobFile(p)));
 
   await prisma.user.delete({ where: { id: req.params.id } });
   res.status(204).send();
