@@ -91,6 +91,11 @@ class _CaHomeScreenState extends State<CaHomeScreen> {
         foregroundColor: Colors.white,
         actions: [
           IconButton(
+            onPressed: () => context.push('/ca/chantier/nouveau'),
+            icon: const Icon(Icons.add),
+            tooltip: 'Nouveau chantier',
+          ),
+          IconButton(
             onPressed: () => context.read<AuthState>().logout(),
             icon: const Icon(Icons.logout),
           ),
@@ -185,6 +190,7 @@ class _CaHomeScreenState extends State<CaHomeScreen> {
     final (label, type) = _chantierStatus(c);
     final progress = c.progressionAutoControle;
     return AppCard(
+      onTap: () => context.push('/ca/chantier/${c.reference}'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

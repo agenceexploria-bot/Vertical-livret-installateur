@@ -24,10 +24,14 @@ import '../screens/client/signature_screen.dart';
 import '../screens/client/confirmation_screen.dart';
 import '../screens/charge_affaires/ca_home_screen.dart';
 import '../screens/charge_affaires/ca_validation_screen.dart';
+import '../screens/charge_affaires/ca_chantier_detail_screen.dart';
+import '../screens/charge_affaires/ca_edit_chantier_screen.dart';
+import '../screens/charge_affaires/ca_new_chantier_screen.dart';
 import '../screens/backoffice/bo_login_screen.dart';
 import '../screens/backoffice/bo_access_request_screen.dart';
 import '../screens/backoffice/bo_access_confirmation_screen.dart';
 import '../screens/backoffice/bo_ca_chantiers_screen.dart';
+import '../screens/backoffice/bo_auto_controle_detail_screen.dart';
 import '../screens/backoffice/bo_new_chantier_screen.dart';
 import '../screens/backoffice/bo_chantier_detail_screen.dart';
 import '../screens/backoffice/bo_comptes_screen.dart';
@@ -148,11 +152,15 @@ class AppRouter {
             return '/backoffice/ca';
           }
 
-          // /ca/validation est réservé au CA/Direction — un autre rôle qui
-          // tape l'URL à la main est renvoyé sur son propre accueil. Le
-          // backend impose déjà ce rôle sur les endpoints valider/suspendre
-          // (voir comptes.ts), ce garde n'est qu'une défense en profondeur.
+          // /ca/validation et /ca/chantier sont réservés au CA/Direction — un
+          // autre rôle qui tape l'URL à la main est renvoyé sur son propre
+          // accueil. Le backend impose déjà ce rôle sur les endpoints
+          // concernés (voir comptes.ts / chantiers.ts), ces gardes ne sont
+          // qu'une défense en profondeur.
           if (state.matchedLocation.startsWith('/ca/validation') && !isCaRole) {
+            return '/';
+          }
+          if (state.matchedLocation.startsWith('/ca/chantier') && !isCaRole) {
             return '/';
           }
         }
@@ -196,6 +204,22 @@ class AppRouter {
           path: '/ca/validation',
           builder: (context, state) => const CaValidationScreen(),
         ),
+        // Mobile CA — consultation, création et modification de chantier
+        // (interface volontairement réduite par rapport au back-office Web,
+        // voir CaHomeScreen). '/ca/chantier/nouveau' est un chemin littéral :
+        // il prend priorité sur le paramètre ':ref' ci-dessous, comme
+        // '/backoffice/ca/chantiers/nouveau' le fait déjà côté Web.
+        GoRoute(
+          path: '/ca/chantier/nouveau',
+          builder: (context, state) => const CaNewChantierScreen(),
+        ),
+        GoRoute(
+          path: '/ca/chantier/:ref',
+          builder: (context, state) => const CaChantierDetailScreen(),
+          routes: [
+            GoRoute(path: 'modifier', builder: (context, state) => const CaEditChantierScreen()),
+          ],
+        ),
         GoRoute(
           path: '/chantier/:ref',
           builder: (context, state) => const ChantierDetailsScreen(),
@@ -223,6 +247,7 @@ class AppRouter {
         // contrôles/REX/anomalies/habilitations (ex-espace Qualité, fusionné
         // ici) + validation des installateurs. Accessible aussi à l'Admin.
         GoRoute(path: '/backoffice/ca', builder: (context, state) => const BoCaChantiersScreen()),
+        GoRoute(path: '/backoffice/ca/auto-controle', builder: (context, state) => const BoAutoControleDetailScreen()),
         GoRoute(path: '/backoffice/ca/chantiers/nouveau', builder: (context, state) => const BoNewChantierScreen()),
         GoRoute(path: '/backoffice/ca/chantiers/:ref', builder: (context, state) => const BoChantierDetailScreen()),
         GoRoute(path: '/backoffice/ca/comptes', builder: (context, state) => const BoComptesScreen()),
