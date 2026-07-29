@@ -6,6 +6,7 @@ import '../../core/document_capture.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/glass_app_bar.dart';
 import '../../core/widgets/responsive_layout.dart';
+import '../../data/api_client.dart';
 import '../../data/models/user.dart';
 import '../../state/auth_state.dart';
 
@@ -223,13 +224,25 @@ class _AddCertificatDialogState extends State<_AddCertificatDialog> {
 
   Future<void> _envoyer() async {
     setState(() => _isSubmitting = true);
-    await context.read<AuthState>().addHabilitation(
-          titre: _titreController.text.trim(),
-          dateExpiration: _dateExpiration!,
-          file: _file!,
-        );
-    if (!mounted) return;
-    Navigator.of(context).pop();
+    try {
+      await context.read<AuthState>().addHabilitation(
+            titre: _titreController.text.trim(),
+            dateExpiration: _dateExpiration!,
+            file: _file!,
+          );
+      if (!mounted) return;
+      Navigator.of(context).pop();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Échec de l\'envoi du certificat — réessayez.')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
   }
 
   @override

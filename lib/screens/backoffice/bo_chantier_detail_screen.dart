@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/document_capture.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/status_indicator.dart';
+import '../../data/api_client.dart';
 import '../../data/models/chantier.dart';
 import '../../data/models/document_chantier.dart';
 import '../../data/models/document_terrain.dart';
@@ -528,15 +529,27 @@ class _AjouterDocumentChantierDialogState extends State<_AjouterDocumentChantier
 
   Future<void> _envoyer() async {
     setState(() => _isSubmitting = true);
-    await context.read<ChantierState>().addDocumentChantier(
-          widget.reference,
-          type: _type.name,
-          nom: _nomController.text.trim(),
-          nomFichierOriginal: _picked!.fileName,
-          file: _picked!.dataUrl,
-        );
-    if (!mounted) return;
-    Navigator.of(context).pop();
+    try {
+      await context.read<ChantierState>().addDocumentChantier(
+            widget.reference,
+            type: _type.name,
+            nom: _nomController.text.trim(),
+            nomFichierOriginal: _picked!.fileName,
+            file: _picked!.dataUrl,
+          );
+      if (!mounted) return;
+      Navigator.of(context).pop();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Échec de l\'envoi du document — réessayez.')),
+      );
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
   }
 
   @override

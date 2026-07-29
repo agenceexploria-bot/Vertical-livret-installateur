@@ -21,7 +21,11 @@ export function createApp() {
   app.set('trust proxy', 1);
 
   app.use(cors({ origin: (origin, callback) => callback(null, isAllowedOrigin(origin)) }));
-  app.use(express.json());
+  // Les documents/photos/notes vocales voyagent en base64 dans le corps JSON
+  // (voir imageStorage.ts) — la limite par défaut d'Express (100kb) est bien
+  // en-deçà d'une simple photo compressée, ce qui faisait échouer l'upload en
+  // 413 silencieusement (promesse jamais résolue côté front, spinner infini).
+  app.use(express.json({ limit: '15mb' }));
 
   app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
