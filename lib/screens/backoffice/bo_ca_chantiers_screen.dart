@@ -53,7 +53,17 @@ class BoCaChantiersScreen extends StatelessWidget {
             },
           ),
           const SizedBox(height: 20),
-          Text('Auto-contrôles & qualité', style: Theme.of(context).textTheme.titleMedium),
+          InkWell(
+            onTap: () => context.push('/backoffice/ca/auto-controle'),
+            borderRadius: BorderRadius.circular(6),
+            child: Row(
+              children: [
+                Text('Auto-contrôles & qualité', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(width: 6),
+                const Icon(Icons.chevron_right, color: AppColors.acierClair, size: 20),
+              ],
+            ),
+          ),
           const SizedBox(height: 14),
           BoResponsiveTable(
             child: Container(
@@ -65,7 +75,7 @@ class BoCaChantiersScreen extends StatelessWidget {
               child: Column(
                 children: [
                   _qualiteHeaderRow(),
-                  for (final c in chantiers) _qualiteDataRow(c),
+                  for (final c in chantiers) _qualiteDataRow(context, c),
                 ],
               ),
             ),
@@ -253,7 +263,7 @@ class BoCaChantiersScreen extends StatelessWidget {
     );
   }
 
-  Widget _qualiteDataRow(Chantier c) {
+  Widget _qualiteDataRow(BuildContext context, Chantier c) {
     final total = c.autoControle.length;
     final done = c.autoControle.where((p) => p.isComplete).length;
     final (label, type) = c.pvSigne || done == total
@@ -267,6 +277,7 @@ class BoCaChantiersScreen extends StatelessWidget {
         : '—';
 
     return BoTableRow(
+      onTap: () => context.push('/backoffice/ca/auto-controle'),
       border: const Border(top: BorderSide(color: AppColors.lignes)),
       child: Row(
         children: [
