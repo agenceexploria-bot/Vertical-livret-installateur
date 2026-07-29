@@ -26,6 +26,11 @@ class AuthRepository {
 
   Future<Map<String, dynamic>> requestEmailCode(String email) => _api.requestEmailCode(email);
 
+  Future<void> requestPasswordReset(String email) => _api.requestPasswordReset(email);
+
+  Future<void> resetPassword({required String email, required String code, required String password}) =>
+      _api.resetPassword(email: email, code: code, password: password);
+
   Future<String> verifyEmailCode(String email, String code) async {
     final data = await _api.verifyEmailCode(email, code);
     return data['verificationTicket'] as String;

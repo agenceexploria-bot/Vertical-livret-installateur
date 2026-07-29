@@ -14,7 +14,7 @@ import {
   verifyEmailVerificationTicket,
 } from '../auth/tokens';
 import { requireAuth, AuthedRequest } from '../middleware/auth';
-import { sendVerificationCodeEmail } from '../lib/mailer';
+import { sendVerificationCodeEmail, sendPasswordResetCodeEmail } from '../lib/mailer';
 import { isValidMobileInput, normalizePhoneInput, MOBILE_FORMAT_ERROR } from '../lib/sms';
 
 export const authRouter = Router();
@@ -228,6 +228,65 @@ authRouter.post('/login', authRateLimit, async (req, res) => {
 
   const tokens = await issueTokens(user.id, user.role);
   res.json({ user: serializeUser(user), ...tokens });
+});
+
+const requestPasswordResetSchema = z.object({ email: z.string().email('Email invalide') });
+
+// Étape 1/2 du "mot de passe oublié" : envoie un code à 6 chiffres par email,
+// même mécanisme que le code de vérification à l'inscription. Répond succès
+// même si l'email n'existe pas (et n'envoie alors aucun email) — ne jamais
+// révéler à un attaquant quels emails ont un compte.
+authRouter.post('/request-password-reset', authRateLimit, async (req, res) => {
+  const parsed = requestPasswordResetSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  const { email } = parsed.data;
+
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) return res.json({ sent: true });
+
+  const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
+  const resetPasswordCode = await bcrypt.hash(code, 10);
+  const resetPasswordExpires = new Date(Date.now() + CODE_TTL_MINUTES * 60 * 1000);
+
+  await prisma.user.update({ where: { id: user.id }, data: { resetPasswordCode, resetPasswordExpires } });
+  await sendPasswordResetCodeEmail(email, code);
+
+  // Comme pour /request-email-code : le code n'est renvoyé en clair qu'en
+  // environnement de test, jamais en dev/prod.
+  res.json({ sent: true, ...(process.env.NODE_ENV === 'test' ? { code } : {}) });
+});
+
+const resetPasswordSchema = z.object({
+  email: z.string().email('Email invalide'),
+  code: z.string().length(6),
+  password: z.string().min(6),
+});
+
+// Étape 2/2 : vérifie le code reçu par email et remplace le mot de passe.
+// Le même message générique est renvoyé que l'email soit inconnu, le code
+// faux, ou le code expiré — là encore pour ne rien révéler à un attaquant.
+authRouter.post('/reset-password', authRateLimit, async (req, res) => {
+  const parsed = resetPasswordSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  const { email, code, password } = parsed.data;
+
+  const invalidCodeError = () => res.status(400).json({ error: 'Code invalide ou expiré — veuillez recommencer.' });
+
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user || !user.resetPasswordCode || !user.resetPasswordExpires || user.resetPasswordExpires < new Date()) {
+    return invalidCodeError();
+  }
+
+  const valid = await bcrypt.compare(code, user.resetPasswordCode);
+  if (!valid) return invalidCodeError();
+
+  const passwordHash = await bcrypt.hash(password, 10);
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash, resetPasswordCode: null, resetPasswordExpires: null },
+  });
+
+  res.status(204).send();
 });
 
 const refreshSchema = z.object({ refreshToken: z.string().min(1) });

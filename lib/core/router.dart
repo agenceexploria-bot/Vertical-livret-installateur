@@ -7,6 +7,8 @@ import '../data/models/user.dart';
 import '../screens/splash_screen.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/signup_screen.dart';
+import '../screens/auth/forgot_password_screen.dart';
+import '../screens/auth/reset_password_screen.dart';
 import '../screens/auth/pending_screen.dart';
 import '../screens/installateur/home_screen.dart';
 import '../screens/installateur/chantier_details_screen.dart';
@@ -114,13 +116,15 @@ class AppRouter {
         final isLoggingIn = state.matchedLocation == '/login';
         final isSigningUp = state.matchedLocation == '/signup';
         final isPending = state.matchedLocation == '/pending';
+        final isForgotPassword = state.matchedLocation == '/forgot-password';
+        final isResetPassword = state.matchedLocation == '/reset-password';
 
         // Tant que la session n'est pas encore résolue (vérification du jeton
         // au démarrage), on ne redirige nulle part — voir aussi le garde dans
         // le builder de '/' qui empêche d'afficher un écran avec un user nul.
         if (authState.isLoading) return null;
 
-        if (!authState.isAuthenticated && !isLoggingIn && !isSigningUp) {
+        if (!authState.isAuthenticated && !isLoggingIn && !isSigningUp && !isForgotPassword && !isResetPassword) {
           return '/login';
         }
 
@@ -159,6 +163,11 @@ class AppRouter {
         GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
         GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
         GoRoute(path: '/signup', builder: (context, state) => const SignupScreen()),
+        GoRoute(path: '/forgot-password', builder: (context, state) => const ForgotPasswordScreen()),
+        GoRoute(
+          path: '/reset-password',
+          builder: (context, state) => ResetPasswordScreen(email: state.extra as String? ?? ''),
+        ),
         GoRoute(path: '/pending', builder: (context, state) => const PendingScreen()),
         GoRoute(
           path: '/',

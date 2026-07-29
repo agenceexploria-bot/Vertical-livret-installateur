@@ -30,3 +30,15 @@ export async function sendVerificationCodeEmail(to: string, code: string): Promi
     html: `<p>Votre code de vérification est : <strong style="font-size:20px">${code}</strong></p><p>Ce code expire dans 10 minutes.</p>`,
   });
 }
+
+export async function sendPasswordResetCodeEmail(to: string, code: string): Promise<void> {
+  if (process.env.NODE_ENV === 'test') return;
+
+  await getTransporter().sendMail({
+    from: process.env.SMTP_FROM,
+    to,
+    subject: 'Réinitialisation de votre mot de passe Vertical',
+    text: `Votre code de réinitialisation est : ${code}\n\nCe code expire dans 10 minutes. Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.`,
+    html: `<p>Votre code de réinitialisation est : <strong style="font-size:20px">${code}</strong></p><p>Ce code expire dans 10 minutes. Si vous n'êtes pas à l'origine de cette demande, ignorez cet email.</p>`,
+  });
+}

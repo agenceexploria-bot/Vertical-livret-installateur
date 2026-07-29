@@ -34,6 +34,12 @@ model User {
   suspendu      Boolean  @default(false)
   createdAt     DateTime @default(now())
 
+  // Mot de passe oublié (self-service) : code à 6 chiffres haché, même
+  // mécanisme que EmailVerificationCode mais stocké directement sur le
+  // compte puisqu'une seule réinitialisation peut être en cours à la fois.
+  resetPasswordCode    String?
+  resetPasswordExpires DateTime?
+
   habilitations       Habilitation[]
   chantiersRattaches  ChantierInstallateur[]
   documentsTerrain    DocumentTerrain[]

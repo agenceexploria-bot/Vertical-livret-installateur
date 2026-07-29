@@ -182,6 +182,18 @@ class ApiClient {
 
   Future<Map<String, dynamic>> me() => _request('GET', '/auth/me');
 
+  Future<Map<String, dynamic>> requestPasswordReset(String email) {
+    return _request('POST', '/auth/request-password-reset', auth: false, body: {'email': email});
+  }
+
+  Future<void> resetPassword({required String email, required String code, required String password}) {
+    return _request('POST', '/auth/reset-password', auth: false, body: {
+      'email': email,
+      'code': code,
+      'password': password,
+    });
+  }
+
   Future<void> logout() async {
     if (_refreshToken != null) {
       try {

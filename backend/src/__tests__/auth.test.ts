@@ -246,3 +246,76 @@ describe('POST /auth/refresh', () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe('Mot de passe oublié', () => {
+  it('envoie un code et le renvoie en clair en environnement de test', async () => {
+    await doSignup(app, {
+      nom: 'Roux', prenom: 'Thomas', mobile: '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo',
+    });
+
+    const res = await request(app).post('/auth/request-password-reset').send({ email: 't.roux@elevpro.fr' });
+    expect(res.status).toBe(200);
+    expect(res.body.sent).toBe(true);
+    expect(res.body.code).toMatch(/^\d{6}$/);
+  });
+
+  it('renvoie succès sans code pour un email inconnu (ne révèle rien)', async () => {
+    const res = await request(app).post('/auth/request-password-reset').send({ email: 'inconnu@example.com' });
+    expect(res.status).toBe(200);
+    expect(res.body.sent).toBe(true);
+    expect(res.body.code).toBeUndefined();
+  });
+
+  it('réinitialise le mot de passe avec le bon code puis connecte avec le nouveau', async () => {
+    await doSignup(app, {
+      nom: 'Roux', prenom: 'Thomas', mobile: '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo',
+    });
+    const codeRes = await request(app).post('/auth/request-password-reset').send({ email: 't.roux@elevpro.fr' });
+
+    const resetRes = await request(app).post('/auth/reset-password').send({
+      email: 't.roux@elevpro.fr', code: codeRes.body.code, password: 'nouveaumdp',
+    });
+    expect(resetRes.status).toBe(204);
+
+    const ancien = await request(app).post('/auth/login').send({ identifier: 't.roux@elevpro.fr', password: 'demodemo' });
+    expect(ancien.status).toBe(401);
+
+    const nouveau = await request(app).post('/auth/login').send({ identifier: 't.roux@elevpro.fr', password: 'nouveaumdp' });
+    expect(nouveau.status).toBe(200);
+  });
+
+  it('refuse un code incorrect', async () => {
+    await doSignup(app, {
+      nom: 'Roux', prenom: 'Thomas', mobile: '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo',
+    });
+    await request(app).post('/auth/request-password-reset').send({ email: 't.roux@elevpro.fr' });
+
+    const res = await request(app).post('/auth/reset-password').send({
+      email: 't.roux@elevpro.fr', code: '000000', password: 'nouveaumdp',
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('refuse un code expiré', async () => {
+    const signup = await doSignup(app, {
+      nom: 'Roux', prenom: 'Thomas', mobile: '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo',
+    });
+    const codeRes = await request(app).post('/auth/request-password-reset').send({ email: 't.roux@elevpro.fr' });
+    await prisma.user.update({
+      where: { id: signup.body.user.id },
+      data: { resetPasswordExpires: new Date(Date.now() - 1000) },
+    });
+
+    const res = await request(app).post('/auth/reset-password').send({
+      email: 't.roux@elevpro.fr', code: codeRes.body.code, password: 'nouveaumdp',
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('refuse une réinitialisation pour un email inconnu', async () => {
+    const res = await request(app).post('/auth/reset-password').send({
+      email: 'inconnu@example.com', code: '123456', password: 'nouveaumdp',
+    });
+    expect(res.status).toBe(400);
+  });
+});

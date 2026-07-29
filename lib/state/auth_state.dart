@@ -96,6 +96,50 @@ class AuthState extends ChangeNotifier {
     }
   }
 
+  /// Étape 1/2 du "mot de passe oublié" : déclenche l'envoi du code par email.
+  /// Répond toujours succès côté serveur, même si l'email n'existe pas (voir
+  /// authRouter) — seule une vraie erreur réseau/serveur fait échouer ici.
+  Future<bool> requestPasswordReset(String email) async {
+    _isLoading = true;
+    _lastError = null;
+    notifyListeners();
+    try {
+      await _repository.requestPasswordReset(email);
+      return true;
+    } on ApiException catch (e) {
+      _lastError = e.message;
+      return false;
+    } catch (e, st) {
+      debugPrint('AuthState.requestPasswordReset: $e\n$st');
+      _lastError = 'Impossible de contacter le serveur';
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Étape 2/2 : vérifie le code reçu par email et remplace le mot de passe.
+  Future<bool> resetPassword({required String email, required String code, required String password}) async {
+    _isLoading = true;
+    _lastError = null;
+    notifyListeners();
+    try {
+      await _repository.resetPassword(email: email, code: code, password: password);
+      return true;
+    } on ApiException catch (e) {
+      _lastError = e.message;
+      return false;
+    } catch (e, st) {
+      debugPrint('AuthState.resetPassword: $e\n$st');
+      _lastError = 'Impossible de contacter le serveur';
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   Future<bool> signup({
     required String nom,
     required String prenom,
