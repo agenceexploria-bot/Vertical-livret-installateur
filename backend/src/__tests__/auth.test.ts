@@ -143,12 +143,12 @@ describe('POST /auth/signup-interne', () => {
     expect(res.body.accessToken).toBeTruthy();
   });
 
-  it('refuse un email hors domaine @actiwork.fr', async () => {
+  it('accepte un email hors domaine @actiwork.fr — tous les domaines sont autorisés', async () => {
     const res = await request(app).post('/auth/signup-interne').send({
       nom: 'Bernard', prenom: 'Julien', mobile: '0611223344', email: 'j.bernard@gmail.com',
-      password: 'motdepasse', role: 'qualite',
+      password: 'motdepasse', role: 'chargeAffaires',
     });
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(201);
   });
 
   it('refuse un rôle qui ne correspond pas à un compte interne', async () => {

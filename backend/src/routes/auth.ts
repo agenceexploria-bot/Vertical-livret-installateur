@@ -155,10 +155,7 @@ const signupInterneSchema = z.object({
   nom: z.string().min(1),
   prenom: z.string().min(1),
   mobile: z.string().min(6).refine((v) => isValidMobileInput(normalizePhoneInput(v)), MOBILE_FORMAT_ERROR),
-  email: z
-    .string()
-    .email('Email invalide')
-    .refine((e) => e.toLowerCase().endsWith('@actiwork.fr'), 'Email professionnel @actiwork.fr requis'),
+  email: z.string().email('Email invalide'),
   password: z.string().min(6),
   // Le rôle Qualité a été fusionné dans l'espace CA (refonte des rôles
   // back-office) — il n'est plus proposé à l'inscription, seul chargeAffaires

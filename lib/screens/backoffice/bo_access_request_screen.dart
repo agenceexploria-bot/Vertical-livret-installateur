@@ -47,7 +47,7 @@ class _BoAccessRequestScreenState extends State<BoAccessRequestScreen> {
                 const SizedBox(height: 24),
                 _field('Nom et prénom', _nomController, hint: 'Julien Bernard'),
                 const SizedBox(height: 12),
-                _field('Email professionnel', _emailController, hint: 'j.bernard@actiwork.fr'),
+                _field('Email professionnel', _emailController, hint: 'j.bernard@exemple.fr'),
                 const SizedBox(height: 12),
                 _field('Téléphone mobile', _mobileController, hint: '06 12 34 56 78'),
                 const SizedBox(height: 12),
@@ -66,7 +66,7 @@ class _BoAccessRequestScreenState extends State<BoAccessRequestScreen> {
                     border: const Border(left: BorderSide(color: AppColors.orange, width: 3)),
                   ),
                   child: const Text(
-                    'Email en @actiwork.fr exigé. La demande est validée par un administrateur avant activation du compte — vous recevrez un email de confirmation.',
+                    'La demande est validée par un administrateur avant activation du compte — vous recevrez un email de confirmation.',
                     style: TextStyle(fontSize: 10.5, color: AppColors.acier),
                   ),
                 ),
