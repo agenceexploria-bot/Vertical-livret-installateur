@@ -1,6 +1,9 @@
 {
   "buildCommand": "cd backend && npm install && npx prisma generate",
   "outputDirectory": "build/web",
+  "git": {
+    "deploymentEnabled": false
+  },
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
     { "source": "/(.*)", "destination": "/index.html" }
