@@ -44,18 +44,23 @@ BoxDecoration appButtonDecoration(Set<WidgetState> states, {double radius = 16})
   }
   final pressed = states.contains(WidgetState.pressed);
   final hovered = !pressed && states.contains(WidgetState.hovered);
+  // Au survol, le dégradé est nettement éclairci (pas seulement l'ombre) —
+  // un changement de teinte sur la face du bouton est bien plus perceptible
+  // qu'une variation d'ombre portée à peine visible sous un aplat coloré.
+  final topColor = hovered ? Color.lerp(_orangeClair, Colors.white, 0.25)! : _orangeClair;
+  final bottomColor = hovered ? Color.lerp(AppColors.orange, Colors.white, 0.15)! : AppColors.orange;
   return BoxDecoration(
     borderRadius: BorderRadius.circular(radius),
     gradient: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
-      colors: [_orangeClair, AppColors.orange],
+      colors: [topColor, bottomColor],
     ),
     boxShadow: [
       BoxShadow(
-        color: AppColors.orange.withValues(alpha: pressed ? 0.22 : (hovered ? 0.42 : 0.35)),
-        blurRadius: pressed ? 12 : (hovered ? 27 : 22),
-        offset: Offset(0, pressed ? 3 : (hovered ? 10 : 8)),
+        color: AppColors.orange.withValues(alpha: pressed ? 0.22 : (hovered ? 0.5 : 0.35)),
+        blurRadius: pressed ? 12 : (hovered ? 30 : 22),
+        offset: Offset(0, pressed ? 3 : (hovered ? 12 : 8)),
       ),
     ],
   );
@@ -89,7 +94,7 @@ class AppTheme {
       // Teinte de survol par défaut pour tout InkWell/ListTile/PopupMenuItem
       // qui ne définit pas la sienne (menus déroulants, lignes de tableau,
       // liens back-office...) — un gris de la charte, discret sur fond clair.
-      hoverColor: AppColors.acier.withValues(alpha: 0.06),
+      hoverColor: AppColors.acier.withValues(alpha: 0.1),
       textTheme: _textTheme,
       appBarTheme: AppBarTheme(
         backgroundColor: AppColors.encre,
@@ -182,7 +187,7 @@ class AppTheme {
               duration: const Duration(milliseconds: 220),
               curve: Curves.easeOut,
               decoration: BoxDecoration(
-                color: hovered ? AppColors.lignes.withValues(alpha: 0.35) : Colors.transparent,
+                color: hovered ? AppColors.acier.withValues(alpha: 0.1) : Colors.transparent,
                 borderRadius: BorderRadius.circular(16),
               ),
               alignment: Alignment.center,
