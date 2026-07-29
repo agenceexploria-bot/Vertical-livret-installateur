@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme.dart';
 
 /// Affichage du PV signé (signataire, horodatage, image de signature
@@ -34,6 +35,23 @@ class PvSignaturePanel extends StatelessWidget {
     }
 
     final imageUrl = imagePath;
+    // Le PV peut être signé au doigt (image PNG) ou importé sous forme de PDF
+    // déjà signé — ce dernier ne peut pas s'afficher via Image.network.
+    if (imageUrl.toLowerCase().endsWith('.pdf')) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          caption,
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () => launchUrl(Uri.parse(imageUrl), mode: LaunchMode.externalApplication),
+            icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+            label: const Text('Ouvrir le PV signé (PDF)'),
+          ),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

@@ -131,7 +131,7 @@ class BoChantierDetailScreen extends StatelessWidget {
         ),
         BoPanel(
           title: 'Documents terrain déposés par les installateurs (Module 8)',
-          child: _buildDocsTerrain(chantier),
+          child: _buildDocsTerrain(context, chantier),
         ),
         if (chantier.pvSigne)
           BoPanel(
@@ -182,7 +182,7 @@ class BoChantierDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildDocsTerrain(Chantier chantier) {
+  Widget _buildDocsTerrain(BuildContext context, Chantier chantier) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -191,16 +191,25 @@ class BoChantierDetailScreen extends StatelessWidget {
             padding: EdgeInsets.only(bottom: 8),
             child: Text('Aucun document terrain déposé pour l\'instant.', style: TextStyle(fontSize: 11, color: AppColors.acierClair)),
           ),
-        for (final d in chantier.docsTerrain.reversed) _docTerrainRow(d),
+        for (final d in chantier.docsTerrain.reversed) _docTerrainRow(context, d),
       ],
     );
   }
 
-  Widget _docTerrainRow(DocumentTerrain d) {
+  Future<void> _telechargerDocument(BuildContext context, String filePath) async {
+    final ok = await launchUrl(Uri.parse(filePath), mode: LaunchMode.externalApplication);
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Impossible d\'ouvrir ce document.')),
+      );
+    }
+  }
+
+  Widget _docTerrainRow(BuildContext context, DocumentTerrain d) {
     return BoTableRow(
       padding: const EdgeInsets.symmetric(vertical: 6),
       border: const Border(bottom: BorderSide(color: Color(0xFFEEF1F3))),
-      onTap: d.filePath == null ? null : () => launchUrl(Uri.parse(d.filePath!)),
+      onTap: d.filePath == null ? null : () => _telechargerDocument(context, d.filePath!),
       child: Row(
         children: [
           Icon(d.filePath != null ? Icons.description_outlined : Icons.image_outlined, size: 16, color: AppColors.acierClair),
@@ -217,6 +226,12 @@ class BoChantierDetailScreen extends StatelessWidget {
               ],
             ),
           ),
+          if (d.filePath != null)
+            IconButton(
+              icon: const Icon(Icons.download_outlined, size: 18, color: AppColors.acierClair),
+              tooltip: 'Télécharger',
+              onPressed: () => _telechargerDocument(context, d.filePath!),
+            ),
         ],
       ),
     );

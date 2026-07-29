@@ -20,10 +20,10 @@ class DocumentCapture {
   static const int _maxWidth = 1280;
   static const int _jpegQuality = 70;
 
-  static Future<PickedDocument?> pickFile() async {
+  static Future<PickedDocument?> pickFile({List<String> allowedExtensions = const ['jpg', 'jpeg', 'png', 'pdf']}) async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf'],
+      allowedExtensions: allowedExtensions,
       withData: true,
     );
     final picked = result?.files.single;

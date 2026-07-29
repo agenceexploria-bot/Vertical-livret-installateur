@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/document_capture.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/glass_app_bar.dart';
 import '../../core/widgets/responsive_layout.dart';
@@ -21,6 +22,8 @@ class _SignatureScreenState extends State<SignatureScreen> {
   final List<Offset?> _points = [];
   final _nameController = TextEditingController();
   final _signatureKey = GlobalKey();
+  String? _signedPdfDataUrl;
+  String? _signedPdfName;
 
   @override
   Widget build(BuildContext context) {
@@ -46,49 +49,90 @@ class _SignatureScreenState extends State<SignatureScreen> {
               ),
             ),
             const SizedBox(height: 24),
-            const Text('Signature au doigt', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-            const SizedBox(height: 8),
-            Expanded(
-              child: RepaintBoundary(
-                key: _signatureKey,
+            if (_signedPdfDataUrl == null) ...[
+              const Text('Signature au doigt', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+              const SizedBox(height: 8),
+              Expanded(
+                child: RepaintBoundary(
+                  key: _signatureKey,
+                  child: Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: AppColors.fond,
+                      borderRadius: BorderRadius.circular(9),
+                      border: Border.all(color: AppColors.lignes),
+                    ),
+                    child: GestureDetector(
+                      onPanUpdate: (details) {
+                        setState(() {
+                          RenderBox renderBox = context.findRenderObject() as RenderBox;
+                          _points.add(renderBox.globalToLocal(details.globalPosition));
+                        });
+                      },
+                      onPanEnd: (details) => _points.add(null),
+                      child: CustomPaint(
+                        painter: _SignaturePainter(points: _points),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ] else
+              Expanded(
                 child: Container(
                   width: double.infinity,
+                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: AppColors.fond,
                     borderRadius: BorderRadius.circular(9),
                     border: Border.all(color: AppColors.lignes),
                   ),
-                  child: GestureDetector(
-                    onPanUpdate: (details) {
-                      setState(() {
-                        RenderBox renderBox = context.findRenderObject() as RenderBox;
-                        _points.add(renderBox.globalToLocal(details.globalPosition));
-                      });
-                    },
-                    onPanEnd: (details) => _points.add(null),
-                    child: CustomPaint(
-                      painter: _SignaturePainter(points: _points),
-                    ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.picture_as_pdf_outlined, color: AppColors.encre),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text('PV signé importé : $_signedPdfName', style: const TextStyle(fontSize: 13))),
+                    ],
                   ),
                 ),
               ),
-            ),
             const SizedBox(height: 16),
             Row(
               children: [
+                if (_signedPdfDataUrl == null)
+                  TextButton.icon(
+                    onPressed: () => setState(() => _points.clear()),
+                    icon: const Icon(Icons.delete_outline, size: 18),
+                    label: const Text('Effacer'),
+                  )
+                else
+                  TextButton.icon(
+                    onPressed: () => setState(() {
+                      _signedPdfDataUrl = null;
+                      _signedPdfName = null;
+                    }),
+                    icon: const Icon(Icons.delete_outline, size: 18),
+                    label: const Text('Retirer le PDF'),
+                  ),
+                const Spacer(),
                 TextButton.icon(
-                  onPressed: () => setState(() => _points.clear()),
-                  icon: const Icon(Icons.delete_outline, size: 18),
-                  label: const Text('Effacer'),
+                  onPressed: _importSignedPdf,
+                  icon: const Icon(Icons.upload_file_outlined, size: 18),
+                  label: const Text('Importer un PDF signé'),
                 ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
                 const Spacer(),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(minimumSize: const Size(0, 48)),
-                  onPressed: _points.isEmpty ? null : () async {
+                  onPressed: (_points.isEmpty && _signedPdfDataUrl == null) ? null : () async {
                     final chantierState = context.read<ChantierState>();
                     final reference = chantierState.currentChantier!.reference;
                     final signataire = _nameController.text.isEmpty ? 'Client' : _nameController.text;
-                    final signatureImage = await _captureSignature();
+                    final signatureImage = _signedPdfDataUrl ?? await _captureSignature();
                     try {
                       await chantierState.submitPv(reference, signataire, signatureImage: signatureImage);
                       if (!context.mounted) return;
@@ -106,6 +150,18 @@ class _SignatureScreenState extends State<SignatureScreen> {
         ),
       ),
     );
+  }
+
+  /// Alternative à la signature au doigt : le client a déjà signé le PV sur
+  /// papier (ou à distance) et l'installateur importe directement le PDF
+  /// scanné/renvoyé, plutôt que de faire re-signer sur l'écran.
+  Future<void> _importSignedPdf() async {
+    final picked = await DocumentCapture.pickFile(allowedExtensions: ['pdf']);
+    if (picked == null) return;
+    setState(() {
+      _signedPdfDataUrl = picked.dataUrl;
+      _signedPdfName = picked.fileName;
+    });
   }
 
   /// Capture le tracé de signature en PNG (base64) pour l'envoyer au serveur
