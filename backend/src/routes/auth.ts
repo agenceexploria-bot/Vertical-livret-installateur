@@ -209,10 +209,9 @@ authRouter.post('/login', authRateLimit, async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
   const { identifier, password } = parsed.data;
-  const normalizedMobile = normalizeMobile(identifier);
 
   const user = await prisma.user.findFirst({
-    where: { OR: [{ email: identifier }, { mobile: normalizedMobile }] },
+    where: { email: identifier },
     include: { habilitations: true },
   });
   if (!user) return res.status(401).json({ error: 'Identifiants incorrects' });

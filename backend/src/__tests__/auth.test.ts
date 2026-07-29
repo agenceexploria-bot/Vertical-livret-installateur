@@ -167,13 +167,12 @@ describe('POST /auth/login', () => {
     });
   });
 
-  it('connecte avec le mobile même formaté avec des espaces', async () => {
+  it('refuse de connecter avec le mobile — seul l\'email est un identifiant valide', async () => {
     const res = await request(app).post('/auth/login').send({
       identifier: '06 52 41 78 90',
       password: 'demodemo',
     });
-    expect(res.status).toBe(200);
-    expect(res.body.user.mobile).toBe('0652417890');
+    expect(res.status).toBe(401);
   });
 
   it('connecte avec l\'email', async () => {

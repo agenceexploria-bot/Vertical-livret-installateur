@@ -41,7 +41,7 @@ async function createInstallateur(overrides: Partial<{ isActive: boolean; mobile
   if (overrides.isActive) {
     await prisma.user.update({ where: { id: signup.body.user.id }, data: { isActive: true } });
   }
-  const login = await request(app).post('/auth/login').send({ identifier: overrides.mobile ?? '0652417890', password: 'demodemo' });
+  const login = await request(app).post('/auth/login').send({ identifier: 't.roux@elevpro.fr', password: 'demodemo' });
   return { user: signup.body.user, accessToken: login.body.accessToken as string };
 }
 

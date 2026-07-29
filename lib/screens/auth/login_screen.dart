@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme.dart';
+import '../../core/validators.dart';
 import '../../core/widgets/vertical_logo.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../core/widgets/password_field.dart';
@@ -19,6 +20,13 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
 
   Future<void> _submit() async {
+    if (!isValidEmail(_identifierController.text)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Saisissez une adresse email valide.')),
+      );
+      return;
+    }
+
     final authState = context.read<AuthState>();
     final success = await authState.login(_identifierController.text, _passwordController.text);
     if (!success && mounted) {
@@ -44,10 +52,11 @@ class _LoginScreenState extends State<LoginScreen> {
               
               TextField(
                 controller: _identifierController,
+                keyboardType: TextInputType.emailAddress,
                 textInputAction: TextInputAction.next,
                 decoration: const InputDecoration(
-                  labelText: 'Mobile ou email',
-                  hintText: 'ex: 06 52 41 78 90',
+                  labelText: 'Email',
+                  hintText: 'ex: j.dupont@exemple.fr',
                 ),
               ),
               const SizedBox(height: 16),

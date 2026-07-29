@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme.dart';
+import '../../core/validators.dart';
 import '../../core/widgets/password_field.dart';
 import '../../core/widgets/vertical_logo.dart';
 import '../../data/models/user.dart';
@@ -50,6 +51,7 @@ class _BoLoginScreenState extends State<BoLoginScreen> {
                 const SizedBox(height: 4),
                 TextField(
                   controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
                   textInputAction: TextInputAction.next,
                   decoration: const InputDecoration(
                     hintText: 's.martin@actiwork.fr',
@@ -103,6 +105,13 @@ class _BoLoginScreenState extends State<BoLoginScreen> {
   }
 
   Future<void> _login(BuildContext context) async {
+    if (!isValidEmail(_emailController.text)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Saisissez une adresse email valide.')),
+      );
+      return;
+    }
+
     final authState = context.read<AuthState>();
     final success = await authState.login(_emailController.text, _passwordController.text);
 
