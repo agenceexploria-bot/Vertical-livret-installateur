@@ -8,19 +8,18 @@ void main() {
       expect(p.isComplete, isFalse);
     });
 
-    test('is false when conforme but photo required and missing', () {
+    test('is true when conforme, even without a photo', () {
       final p = PointControle(id: '1', libelle: 'Test', status: PointStatus.conforme);
-      expect(p.photoRequise, isTrue);
-      expect(p.isComplete, isFalse);
-    });
-
-    test('is true when conforme with photo attached', () {
-      final p = PointControle(id: '1', libelle: 'Test', status: PointStatus.conforme, photoPath: 'photo.jpg');
       expect(p.isComplete, isTrue);
     });
 
-    test('does not require a photo when photoRequise is false', () {
-      final p = PointControle(id: '1', libelle: 'Test', photoRequise: false, status: PointStatus.nonConforme);
+    test('is false when nonConforme without a photo (anomalie non prouvée)', () {
+      final p = PointControle(id: '1', libelle: 'Test', status: PointStatus.nonConforme);
+      expect(p.isComplete, isFalse);
+    });
+
+    test('is true when nonConforme with a photo attached', () {
+      final p = PointControle(id: '1', libelle: 'Test', status: PointStatus.nonConforme, photoPath: 'photo.jpg');
       expect(p.isComplete, isTrue);
     });
   });

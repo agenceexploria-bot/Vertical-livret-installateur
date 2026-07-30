@@ -25,6 +25,14 @@ class ChantierRepository {
     }
   }
 
+  /// Lecture cache uniquement (aucun appel réseau) — utilisée pour afficher
+  /// la liste instantanément à l'ouverture de l'écran (voir
+  /// ChantierState.fetchChantiers, pattern stale-while-revalidate).
+  Future<List<Chantier>> getCachedChantiers() async {
+    final cached = await _db.getAllCachedChantiers();
+    return cached.map(Chantier.fromJson).toList();
+  }
+
   Future<Chantier> getChantier(String reference) async {
     try {
       final data = await _api.getChantier(reference);

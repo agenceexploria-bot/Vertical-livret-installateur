@@ -47,7 +47,7 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Column(
             children: [
               const SizedBox(height: 40),
-              const VerticalLogo(height: 150, bubble: true),
+              const SizedBox(height: 120, child: VerticalLogo(height: 150)),
               const SizedBox(height: 40),
               
               TextField(

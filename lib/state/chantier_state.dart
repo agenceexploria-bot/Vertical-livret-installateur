@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../data/models/chantier.dart';
+import '../data/models/document_chantier.dart';
+import '../data/models/document_terrain.dart';
+import '../data/models/point_controle.dart';
 import '../data/models/user.dart';
 import '../data/repositories/chantier_repository.dart';
 
@@ -15,10 +18,26 @@ class ChantierState extends ChangeNotifier {
   Chantier? get currentChantier => _currentChantier;
   bool get isLoading => _isLoading;
 
+  /// Stale-while-revalidate : si le cache Drift a déjà des chantiers, ils
+  /// s'affichent immédiatement (pas de spinner) pendant que le réseau
+  /// rafraîchit en arrière-plan — l'écran ne reste bloqué sur un chargeur que
+  /// s'il n'y a vraiment rien à montrer.
   Future<void> fetchChantiers(User user) async {
-    _isLoading = true;
-    notifyListeners();
-    _chantiers = await _repository.getMyChantiers(user);
+    final cached = await _repository.getCachedChantiers();
+    if (cached.isNotEmpty) {
+      _chantiers = cached;
+      notifyListeners();
+    } else {
+      _isLoading = true;
+      notifyListeners();
+    }
+
+    try {
+      _chantiers = await _repository.getMyChantiers(user);
+    } finally {
+      _isLoading = false;
+    }
+
     // Vérification de la veille (EX-22) : ouvrir la liste de ses chantiers
     // marque le livret comme consulté pour cet installateur.
     if (user.role == UserRole.installateur) {
@@ -27,7 +46,6 @@ class ChantierState extends ChangeNotifier {
       }
       await Future.wait(_chantiers.map((c) => _repository.markLivretOuvert(c.reference)));
     }
-    _isLoading = false;
     notifyListeners();
   }
 
@@ -80,9 +98,32 @@ class ChantierState extends ChangeNotifier {
     _replaceInList(updated);
   }
 
+  /// Optimistic UI : le document disparaît immédiatement de la liste. En cas
+  /// d'échec réseau (pas de file d'attente hors-ligne pour cette action CA),
+  /// on le réaffiche et on laisse l'erreur remonter à l'écran appelant.
   Future<void> deleteDocumentChantier(String reference, String docId) async {
-    final updated = await _repository.deleteDocumentChantier(reference, docId);
-    _replaceInList(updated);
+    final chantier = findByReference(reference);
+    DocumentChantier? removed;
+    if (chantier != null) {
+      for (final d in chantier.documentsChantier) {
+        if (d.id == docId) {
+          removed = d;
+          break;
+        }
+      }
+      if (removed != null) chantier.documentsChantier.remove(removed);
+      notifyListeners();
+    }
+    try {
+      final updated = await _repository.deleteDocumentChantier(reference, docId);
+      _replaceInList(updated);
+    } catch (e) {
+      if (chantier != null && removed != null) {
+        chantier.documentsChantier.add(removed);
+        notifyListeners();
+      }
+      rethrow;
+    }
   }
 
   Future<void> replaceDocumentChantier(String reference, String docId,
@@ -91,10 +132,35 @@ class ChantierState extends ChangeNotifier {
     _replaceInList(updated);
   }
 
+  /// Optimistic UI : le point est mis à jour dans l'état local ET l'écran
+  /// notifié AVANT même l'appel réseau — l'installateur voit sa coche/photo
+  /// s'appliquer instantanément, l'appel API (et la file d'attente hors-ligne
+  /// si besoin, voir ChantierRepository) se fait en arrière-plan. Pas de
+  /// refetch complet du chantier ensuite : inutile et coûteux en latence
+  /// perçue, la mutation locale reflète déjà exactement ce que fera le serveur
+  /// (même règle isPointComplete des deux côtés), et l'événement Pusher
+  /// chantier-changed (s'il est configuré) rattrapera tout écart éventuel.
   Future<void> updatePoint(String reference, String pointId, {String? status, String? photo, String? validatedByName}) async {
+    final chantier = findByReference(reference);
+    if (chantier != null) {
+      for (final point in [...chantier.receptionMarchandises, ...chantier.autoControle]) {
+        if (point.id != pointId) continue;
+        if (status != null) {
+          point.status = PointStatus.values.firstWhere((s) => s.name == status);
+          if (status == 'vide') {
+            point.validePar = null;
+            point.valideAt = null;
+          } else {
+            if (validatedByName != null) point.validePar = validatedByName;
+            point.valideAt = DateTime.now();
+          }
+        }
+        if (photo != null) point.photoPath = photo;
+        break;
+      }
+      notifyListeners();
+    }
     await _repository.updatePoint(reference, pointId, status: status, photo: photo, validatedByName: validatedByName);
-    final updated = await _repository.getChantier(reference);
-    _replaceInList(updated);
   }
 
   Future<void> submitRex(String reference, {String? transcription, String? audio}) async {
@@ -112,15 +178,53 @@ class ChantierState extends ChangeNotifier {
     _replaceInList(updated);
   }
 
+  /// Optimistic UI : un document "en file" (même style que le dépôt hors-ligne
+  /// existant, voir ChantierRepository) apparaît immédiatement dans la liste
+  /// pendant l'envoi réel, plutôt que de laisser l'écran figé le temps des
+  /// deux appels réseau (dépôt puis refetch).
   Future<void> addDocument(String reference, {required String titre, required String categorie, required String file, String? auteurName}) async {
+    final chantier = findByReference(reference);
+    if (chantier != null) {
+      chantier.docsTerrain.add(DocumentTerrain(
+        titre: titre,
+        categorie: CategorieDocument.values.firstWhere((c) => c.name == categorie),
+        horodatage: DateTime.now(),
+        auteur: auteurName ?? '',
+        envoye: false,
+      ));
+      notifyListeners();
+    }
     await _repository.addDocument(reference, titre: titre, categorie: categorie, file: file, auteurName: auteurName);
     final updated = await _repository.getChantier(reference);
     _replaceInList(updated);
   }
 
+  /// Optimistic UI : suppression immédiate de la liste, avec réaffichage en
+  /// cas d'échec réseau réel (pas de file d'attente hors-ligne ici, comme
+  /// pour deleteDocumentChantier).
   Future<void> deleteDocument(String reference, String docId) async {
-    final updated = await _repository.deleteDocument(reference, docId);
-    _replaceInList(updated);
+    final chantier = findByReference(reference);
+    DocumentTerrain? removed;
+    if (chantier != null) {
+      for (final d in chantier.docsTerrain) {
+        if (d.id == docId) {
+          removed = d;
+          break;
+        }
+      }
+      if (removed != null) chantier.docsTerrain.remove(removed);
+      notifyListeners();
+    }
+    try {
+      final updated = await _repository.deleteDocument(reference, docId);
+      _replaceInList(updated);
+    } catch (e) {
+      if (chantier != null && removed != null) {
+        chantier.docsTerrain.add(removed);
+        notifyListeners();
+      }
+      rethrow;
+    }
   }
 
   /// Réagit à un événement temps réel "chantier-changed" (voir RealtimeService)

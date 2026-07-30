@@ -7,6 +7,7 @@ import '../../core/theme.dart';
 import '../../core/widgets/ajouter_document_chantier_dialog.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/glass_app_bar.dart';
+import '../../core/widgets/renseigner_pv_dialog.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../core/widgets/status_indicator.dart';
 import '../../data/models/chantier.dart';
@@ -95,11 +96,29 @@ class CaChantierDetailScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           AppCard(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('PV de réception', style: TextStyle(fontWeight: FontWeight.bold)),
-                StatusIndicator(label: pvLabel, type: pvType),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('PV de réception', style: TextStyle(fontWeight: FontWeight.bold)),
+                    StatusIndicator(label: pvLabel, type: pvType),
+                  ],
+                ),
+                if (!chantier.pvSigne) ...[
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed: () => showDialog(
+                        context: context,
+                        builder: (dialogContext) => RenseignerPvDialog(chantier: chantier),
+                      ),
+                      child: const Text('Renseigner le PV'),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
