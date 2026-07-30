@@ -99,9 +99,16 @@ model Chantier {
   rexTranscription  String?
   rexAudioPath      String?
   rexSoumisAt       DateTime?
-  pvSigne           Boolean  @default(false)
-  pvSigneur         String?
-  pvSigneAt         DateTime?
+  // PV de réception : le back-office dépose un gabarit PDF (pvPdfPath), qui
+  // n'est PAS encore validé — l'installateur le consulte, fait signer le
+  // client et renseigne son nom/sa fonction ; ce n'est qu'à ce moment que
+  // pvSigne passe à true et que le PDF final (signature intégrée) est
+  // enregistré dans pvSignatureImagePath. Voir refonte du workflow PV.
+  pvPdfPath            String?
+  pvSigne              Boolean  @default(false)
+  pvSigneur            String?
+  pvFonctionSignataire String?
+  pvSigneAt            DateTime?
   pvSignatureImagePath String?
   createdAt         DateTime @default(now())
 

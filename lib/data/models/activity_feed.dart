@@ -50,6 +50,7 @@ class PvRecent {
   final String chantierReference;
   final String client;
   final String? pvSigneur;
+  final String? pvFonctionSignataire;
   final DateTime? pvSigneAt;
   final String? pvSignatureImagePath;
 
@@ -57,6 +58,7 @@ class PvRecent {
     required this.chantierReference,
     required this.client,
     this.pvSigneur,
+    this.pvFonctionSignataire,
     this.pvSigneAt,
     this.pvSignatureImagePath,
   });
@@ -65,6 +67,7 @@ class PvRecent {
         chantierReference: json['chantierReference'] as String,
         client: json['client'] as String,
         pvSigneur: json['pvSigneur'] as String?,
+        pvFonctionSignataire: json['pvFonctionSignataire'] as String?,
         pvSigneAt: json['pvSigneAt'] != null ? DateTime.parse(json['pvSigneAt'] as String) : null,
         pvSignatureImagePath: json['pvSignatureImagePath'] as String?,
       );

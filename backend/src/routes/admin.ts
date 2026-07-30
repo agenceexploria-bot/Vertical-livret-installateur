@@ -175,6 +175,7 @@ adminRouter.get('/activity', requireAuth, requireRole('admin'), async (_req, res
       chantierReference: c.reference,
       client: c.client,
       pvSigneur: c.pvSigneur,
+      pvFonctionSignataire: c.pvFonctionSignataire,
       pvSigneAt: c.pvSigneAt,
       pvSignatureImagePath: c.pvSignatureImagePath,
     })),

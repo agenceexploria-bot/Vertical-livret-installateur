@@ -8,17 +8,19 @@ import '../../../core/theme.dart';
 /// voir la même preuve de validation avant facturation ou audit.
 class PvSignaturePanel extends StatelessWidget {
   final String? signataire;
+  final String? fonction;
   final DateTime? signeAt;
   final String? signatureImagePath;
 
-  const PvSignaturePanel({super.key, this.signataire, this.signeAt, this.signatureImagePath});
+  const PvSignaturePanel({super.key, this.signataire, this.fonction, this.signeAt, this.signatureImagePath});
 
   @override
   Widget build(BuildContext context) {
     final signataireLabel = signataire ?? 'le client';
+    final fonctionLabel = fonction != null ? ' ($fonction)' : '';
     final horodatage = signeAt != null ? DateFormat('dd/MM/yyyy à HH:mm').format(signeAt!) : null;
     final caption = Text(
-      'Signé par $signataireLabel${horodatage != null ? ' le $horodatage' : ''}.',
+      'Signé par $signataireLabel$fonctionLabel${horodatage != null ? ' le $horodatage' : ''}.',
       style: const TextStyle(fontSize: 11, color: AppColors.acier),
     );
 
@@ -29,14 +31,15 @@ class PvSignaturePanel extends StatelessWidget {
         children: [
           caption,
           const SizedBox(height: 4),
-          const Text('Aucune image de signature disponible.', style: TextStyle(fontSize: 10.5, color: AppColors.acierClair)),
+          const Text('Aucun document disponible.', style: TextStyle(fontSize: 10.5, color: AppColors.acierClair)),
         ],
       );
     }
 
     final imageUrl = imagePath;
-    // Le PV peut être signé au doigt (image PNG) ou importé sous forme de PDF
-    // déjà signé — ce dernier ne peut pas s'afficher via Image.network.
+    // Le PDF final (gabarit + signature fusionnés) est le cas normal depuis la
+    // refonte du workflow ; une image PNG ne peut subsister que sur un PV
+    // signé avant cette refonte (ancien flux de signature au doigt seul).
     if (imageUrl.toLowerCase().endsWith('.pdf')) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,

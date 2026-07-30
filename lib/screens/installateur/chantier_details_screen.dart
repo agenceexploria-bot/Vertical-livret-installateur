@@ -68,9 +68,11 @@ class ChantierDetailsScreen extends StatelessWidget {
         titre: 'Procès-verbal de réception',
         sousTitre: chantier.pvSigne
             ? 'Signé par ${chantier.pvSigneur ?? 'le client'}'
-            : chantier.canSignPV
-                ? 'Prêt pour signature'
-                : 'Verrouillé — terminer l\'auto-contrôle',
+            : chantier.pvEnAttenteSignature
+                ? 'À faire signer par le client'
+                : chantier.canSignPV
+                    ? 'En attente du PV (back-office)'
+                    : 'Verrouillé — terminer l\'auto-contrôle',
         icon: Icons.draw_outlined,
         isLocked: !chantier.pvSigne && !chantier.canSignPV,
         onTap: () => context.push(chantier.pvSigne ? '/confirmation' : '/signature'),

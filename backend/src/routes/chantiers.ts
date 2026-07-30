@@ -428,61 +428,117 @@ chantiersRouter.delete('/:reference/rex', requireAuth, requireRole('chargeAffair
   res.json({ chantier: serializeChantier(chantier) });
 });
 
-const pvSchema = z.object({ signataire: z.string().min(1), signatureImage: z.string().optional() });
+function isPdfDataUrl(dataUrl: string): boolean {
+  return dataUrl.startsWith('data:application/pdf;base64,');
+}
 
-chantiersRouter.post('/:reference/pv', requireAuth, requireRattachement, async (req, res) => {
-  const parsed = pvSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+const pvDocumentSchema = z.object({ file: z.string().min(1, 'Un fichier PDF est requis') });
 
-  const existing = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
-  if (!existing) return res.status(404).json({ error: 'Chantier introuvable' });
+// Dépôt (ou remplacement) du gabarit PV par le back-office — ne valide RIEN :
+// le PV reste "en attente de signature" tant que l'installateur n'a pas fait
+// signer le client (voir POST .../pv/signature ci-dessous). Remplacer le
+// gabarit invalide une signature déjà apposée sur l'ancienne version.
+chantiersRouter.post(
+  '/:reference/pv/document',
+  requireAuth,
+  requireRole('chargeAffaires', 'direction', 'admin'),
+  async (req, res) => {
+    const parsed = pvDocumentSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    if (!isPdfDataUrl(parsed.data.file)) return res.status(400).json({ error: 'Le fichier doit être un PDF' });
 
-  // Le PV peut être renseigné par le back-office ou par l'installateur (les
-  // deux flux coexistent), et modifié à nouveau ensuite par l'un ou l'autre —
-  // ce n'est plus bloqué une fois signé (voir aussi DELETE ci-dessous pour la
-  // suppression définitive par le back-office). L'ancienne exigence de 100%
-  // de complétion de l'auto-contrôle a également été retirée.
-  if (parsed.data.signatureImage && !isAllowedFileDataUrl(parsed.data.signatureImage)) {
-    return res.status(400).json({ error: 'Type de fichier non autorisé' });
-  }
+    const existing = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
+    if (!existing) return res.status(404).json({ error: 'Chantier introuvable' });
 
-  let pvSignatureImagePath: string | undefined;
-  if (parsed.data.signatureImage) {
-    // Remplace l'ancienne signature/le PDF précédent sur Vercel Blob plutôt
-    // que de le laisser orphelin, comme pour les autres fichiers remplacés
-    // (voir PUT .../documents-chantier/:docId).
+    if (existing.pvPdfPath) await deleteBlobFile(existing.pvPdfPath);
     if (existing.pvSignatureImagePath) await deleteBlobFile(existing.pvSignatureImagePath);
-    pvSignatureImagePath = await saveBase64File(parsed.data.signatureImage, `signature-${existing.id}`);
-  }
+    const pvPdfPath = await saveBase64File(parsed.data.file, `pv-${existing.id}`);
 
-  const chantier = await prisma.chantier.update({
-    where: { reference: req.params.reference },
-    data: {
-      pvSigne: true,
-      pvSigneur: parsed.data.signataire,
-      pvSigneAt: new Date(),
-      pvSignatureImagePath,
-    },
-    include: CHANTIER_INCLUDE,
-  });
-  await triggerChantierChanged(chantier.reference);
-  res.json({ chantier: serializeChantier(chantier) });
+    const chantier = await prisma.chantier.update({
+      where: { reference: req.params.reference },
+      data: {
+        pvPdfPath,
+        pvSigne: false,
+        pvSigneur: null,
+        pvFonctionSignataire: null,
+        pvSigneAt: null,
+        pvSignatureImagePath: null,
+      },
+      include: CHANTIER_INCLUDE,
+    });
+    await triggerChantierChanged(chantier.reference);
+    res.json({ chantier: serializeChantier(chantier) });
+  },
+);
+
+const pvSignatureSchema = z.object({
+  nomSignataire: z.string().min(1),
+  fonctionSignataire: z.string().min(1),
+  file: z.string().min(1, 'Le PDF signé est requis'),
 });
 
-// Supprime définitivement le PV d'un chantier — réservé au CA/Admin, comme
-// pour le REX. Contrairement à une simple modification (POST ci-dessus, qui
-// écrase et remplace), la suppression efface entièrement l'état et le
-// fichier associé sur Vercel Blob.
+// Signature du PV par le client, soumise par l'installateur — SEULE façon de
+// faire passer pvSigne à true. Le fichier reçu est déjà le PDF final (gabarit
+// + signature fusionnés côté app, voir lib/screens/client/signature_screen.dart).
+chantiersRouter.post(
+  '/:reference/pv/signature',
+  requireAuth,
+  requireRole('installateur'),
+  requireRattachement,
+  async (req, res) => {
+    const parsed = pvSignatureSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    if (!isPdfDataUrl(parsed.data.file)) return res.status(400).json({ error: 'Le fichier doit être un PDF' });
+
+    const existing = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
+    if (!existing) return res.status(404).json({ error: 'Chantier introuvable' });
+    if (!existing.pvPdfPath) {
+      return res.status(400).json({ error: 'Aucun PV à signer pour ce chantier — en attente du back-office' });
+    }
+
+    if (existing.pvSignatureImagePath) await deleteBlobFile(existing.pvSignatureImagePath);
+    const pvSignatureImagePath = await saveBase64File(parsed.data.file, `pv-signe-${existing.id}`);
+
+    const chantier = await prisma.chantier.update({
+      where: { reference: req.params.reference },
+      data: {
+        pvSigne: true,
+        pvSigneur: parsed.data.nomSignataire,
+        pvFonctionSignataire: parsed.data.fonctionSignataire,
+        pvSigneAt: new Date(),
+        pvSignatureImagePath,
+      },
+      include: CHANTIER_INCLUDE,
+    });
+    await triggerChantierChanged(chantier.reference);
+    res.json({ chantier: serializeChantier(chantier) });
+  },
+);
+
+// Supprime définitivement le PV d'un chantier (gabarit ET signature
+// éventuelle) — réservé au CA/Admin, comme pour le REX. Contrairement à un
+// remplacement du gabarit (POST .../pv/document, qui invalide juste la
+// signature), la suppression efface tout, y compris les fichiers sur Vercel Blob.
 chantiersRouter.delete('/:reference/pv', requireAuth, requireRole('chargeAffaires', 'admin'), async (req, res) => {
   const existing = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
   if (!existing) return res.status(404).json({ error: 'Chantier introuvable' });
-  if (!existing.pvSigne) return res.status(404).json({ error: 'Aucun PV à supprimer pour ce chantier' });
+  if (!existing.pvPdfPath && !existing.pvSigne) {
+    return res.status(404).json({ error: 'Aucun PV à supprimer pour ce chantier' });
+  }
 
+  if (existing.pvPdfPath) await deleteBlobFile(existing.pvPdfPath);
   if (existing.pvSignatureImagePath) await deleteBlobFile(existing.pvSignatureImagePath);
 
   const chantier = await prisma.chantier.update({
     where: { reference: req.params.reference },
-    data: { pvSigne: false, pvSigneur: null, pvSigneAt: null, pvSignatureImagePath: null },
+    data: {
+      pvPdfPath: null,
+      pvSigne: false,
+      pvSigneur: null,
+      pvFonctionSignataire: null,
+      pvSigneAt: null,
+      pvSignatureImagePath: null,
+    },
     include: CHANTIER_INCLUDE,
   });
   await triggerChantierChanged(chantier.reference);

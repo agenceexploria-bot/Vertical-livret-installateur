@@ -248,6 +248,7 @@ class _BoAdminDashboardScreenState extends State<BoAdminDashboardScreen> {
             width: 360,
             child: PvSignaturePanel(
               signataire: pv.pvSigneur,
+              fonction: pv.pvFonctionSignataire,
               signeAt: pv.pvSigneAt,
               signatureImagePath: pv.pvSignatureImagePath,
             ),

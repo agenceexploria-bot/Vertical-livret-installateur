@@ -7,6 +7,9 @@ import { resetDb, signup as doSignup } from './helpers';
 
 const app = createApp();
 
+const ONE_PX_PNG_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+
 async function createAdmin() {
   const passwordHash = await bcrypt.hash('demodemo', 10);
   await prisma.user.create({
@@ -203,19 +206,29 @@ describe("Tableau de bord d'activité Admin", () => {
       .set('Authorization', `Bearer ${ca.accessToken}`)
       .send({ transcription: 'Tout s\'est bien passé, quelques ajustements mineurs.' });
 
-    // Séquentiel plutôt que Promise.all : cette rafale de PATCH concurrents
-    // (chacun avec désormais plusieurs requêtes DB pour le seuil de
-    // notification à 80%, voir chantiers.ts) sature le pooler Neon en test.
-    for (const p of created.body.chantier.autoControle as { id: string }[]) {
-      await request(app)
-        .patch(`/chantiers/LD64397/points/${p.id}`)
-        .set('Authorization', `Bearer ${ca.accessToken}`)
-        .send({ status: 'conforme', photoPath: 'photo.jpg' });
-    }
+    // Compte installateur distinct de l'inscription "Thomas Roux" ci-dessus,
+    // créé directement en base comme pour createCa/createAdmin.
+    const installateurPasswordHash = await bcrypt.hash('demodemo', 10);
+    const installateurUser = await prisma.user.create({
+      data: {
+        nom: 'Dubois', prenom: 'Julien', mobile: '0611223344', email: 'j.dubois@elevpro.fr',
+        passwordHash: installateurPasswordHash, role: 'installateur', isActive: true,
+      },
+    });
+    const installateurLogin = await request(app).post('/auth/login').send({ identifier: 'j.dubois@elevpro.fr', password: 'demodemo' });
+    const installateurToken = installateurLogin.body.accessToken as string;
     await request(app)
-      .post('/chantiers/LD64397/pv')
+      .post('/chantiers/LD64397/rattacher')
       .set('Authorization', `Bearer ${ca.accessToken}`)
-      .send({ signataire: 'M. Weber' });
+      .send({ userId: installateurUser.id });
+    await request(app)
+      .post('/chantiers/LD64397/pv/document')
+      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .send({ file: `data:application/pdf;base64,${ONE_PX_PNG_BASE64}` });
+    await request(app)
+      .post('/chantiers/LD64397/pv/signature')
+      .set('Authorization', `Bearer ${installateurToken}`)
+      .send({ nomSignataire: 'M. Weber', fonctionSignataire: 'Client', file: `data:application/pdf;base64,${ONE_PX_PNG_BASE64}` });
 
     const feed = await request(app).get('/admin/activity').set('Authorization', `Bearer ${adminToken}`);
     expect(feed.status).toBe(200);
@@ -226,8 +239,8 @@ describe("Tableau de bord d'activité Admin", () => {
     expect(feed.body.pvRecents[0].pvSigneur).toBe('M. Weber');
     expect(feed.body.rexEnAttente).toHaveLength(1);
     expect(feed.body.rexEnAttente[0].rexTranscription).toContain('bien passé');
-    expect(feed.body.pvRecents[0].pvSignatureImagePath).toBeNull();
-  }, 30000);
+    expect(feed.body.pvRecents[0].pvSignatureImagePath).toMatch(/^https:\/\/blob\.vercel-storage\.com\/test\/pv-signe-.+\.pdf$/);
+  });
 });
 
 describe('GET /admin/stats', () => {
@@ -262,19 +275,27 @@ describe('GET /admin/stats', () => {
       .set('Authorization', `Bearer ${ca.accessToken}`)
       .send({ transcription: 'RAS.' });
 
-    // Séquentiel plutôt que Promise.all : cette rafale de PATCH concurrents
-    // (chacun avec désormais plusieurs requêtes DB pour le seuil de
-    // notification à 80%, voir chantiers.ts) sature le pooler Neon en test.
-    for (const p of created.body.chantier.autoControle as { id: string }[]) {
-      await request(app)
-        .patch(`/chantiers/LD64397/points/${p.id}`)
-        .set('Authorization', `Bearer ${ca.accessToken}`)
-        .send({ status: 'conforme', photoPath: 'photo.jpg' });
-    }
+    const installateurPasswordHash = await bcrypt.hash('demodemo', 10);
+    const installateurUser = await prisma.user.create({
+      data: {
+        nom: 'Dubois', prenom: 'Julien', mobile: '0611223344', email: 'j.dubois@elevpro.fr',
+        passwordHash: installateurPasswordHash, role: 'installateur', isActive: true,
+      },
+    });
+    const installateurLogin = await request(app).post('/auth/login').send({ identifier: 'j.dubois@elevpro.fr', password: 'demodemo' });
+    const installateurToken = installateurLogin.body.accessToken as string;
     await request(app)
-      .post('/chantiers/LD64397/pv')
+      .post('/chantiers/LD64397/rattacher')
       .set('Authorization', `Bearer ${ca.accessToken}`)
-      .send({ signataire: 'M. Weber' });
+      .send({ userId: installateurUser.id });
+    await request(app)
+      .post('/chantiers/LD64397/pv/document')
+      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .send({ file: `data:application/pdf;base64,${ONE_PX_PNG_BASE64}` });
+    await request(app)
+      .post('/chantiers/LD64397/pv/signature')
+      .set('Authorization', `Bearer ${installateurToken}`)
+      .send({ nomSignataire: 'M. Weber', fonctionSignataire: 'Client', file: `data:application/pdf;base64,${ONE_PX_PNG_BASE64}` });
 
     const res = await request(app).get('/admin/stats').set('Authorization', `Bearer ${adminToken}`);
     expect(res.status).toBe(200);
@@ -284,5 +305,5 @@ describe('GET /admin/stats', () => {
     expect(currentWeek.pvSignes).toBe(1);
     expect(currentWeek.rexSoumis).toBe(1);
     expect(currentWeek.anomalies).toBe(1);
-  }, 30000);
+  });
 });

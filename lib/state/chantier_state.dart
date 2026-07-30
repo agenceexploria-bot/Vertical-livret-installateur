@@ -237,22 +237,40 @@ class ChantierState extends ChangeNotifier {
     }
   }
 
-  Future<void> submitPv(String reference, String signataire, {String? signatureImage}) async {
-    final updated = await _repository.submitPv(reference, signataire, signatureImage: signatureImage);
+  /// Dépôt (ou remplacement) du gabarit PV par le back-office — ne valide
+  /// rien (voir [signPv]).
+  Future<void> uploadPvDocument(String reference, String file) async {
+    final updated = await _repository.uploadPvDocument(reference, file);
     _replaceInList(updated);
   }
 
-  /// Optimistic UI : le PV disparaît immédiatement (retour à "non signé"),
+  /// Signature du PV par le client, soumise par l'installateur — [file] est
+  /// déjà le PDF final (gabarit + signature fusionnés, voir signature_screen.dart).
+  Future<void> signPv(
+    String reference, {
+    required String nomSignataire,
+    required String fonctionSignataire,
+    required String file,
+  }) async {
+    final updated = await _repository.signPv(reference, nomSignataire: nomSignataire, fonctionSignataire: fonctionSignataire, file: file);
+    _replaceInList(updated);
+  }
+
+  /// Optimistic UI : le PV (gabarit et signature) disparaît immédiatement,
   /// avec restauration en cas d'échec réseau réel.
   Future<void> deletePv(String reference) async {
     final chantier = findByReference(reference);
+    final prevPvPdfPath = chantier?.pvPdfPath;
     final prevPvSigne = chantier?.pvSigne ?? false;
     final prevPvSigneur = chantier?.pvSigneur;
+    final prevPvFonctionSignataire = chantier?.pvFonctionSignataire;
     final prevPvSigneAt = chantier?.pvSigneAt;
     final prevPvSignatureImagePath = chantier?.pvSignatureImagePath;
     if (chantier != null) {
+      chantier.pvPdfPath = null;
       chantier.pvSigne = false;
       chantier.pvSigneur = null;
+      chantier.pvFonctionSignataire = null;
       chantier.pvSigneAt = null;
       chantier.pvSignatureImagePath = null;
       notifyListeners();
@@ -263,8 +281,10 @@ class ChantierState extends ChangeNotifier {
       _replaceInList(updated);
     } catch (e) {
       if (chantier != null) {
+        chantier.pvPdfPath = prevPvPdfPath;
         chantier.pvSigne = prevPvSigne;
         chantier.pvSigneur = prevPvSigneur;
+        chantier.pvFonctionSignataire = prevPvFonctionSignataire;
         chantier.pvSigneAt = prevPvSigneAt;
         chantier.pvSignatureImagePath = prevPvSignatureImagePath;
         notifyListeners();

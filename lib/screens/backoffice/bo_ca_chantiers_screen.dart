@@ -228,6 +228,7 @@ class BoCaChantiersScreen extends StatelessWidget {
             width: 360,
             child: PvSignaturePanel(
               signataire: c.pvSigneur,
+              fonction: c.pvFonctionSignataire,
               signeAt: c.pvSigneAt,
               signatureImagePath: c.pvSignatureImagePath,
             ),

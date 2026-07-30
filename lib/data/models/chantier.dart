@@ -28,8 +28,14 @@ class Chantier {
   final List<PointControle> autoControle;
   bool rexValide;
   String? rexTranscription;
+  // Gabarit PDF déposé par le back-office — ne vaut PAS validation (voir
+  // pvSigne, qui ne passe à true qu'une fois signé par le client via
+  // l'installateur). pvSignatureImagePath devient alors le PDF final
+  // (gabarit + signature fusionnés).
+  String? pvPdfPath;
   bool pvSigne;
   String? pvSigneur;
+  String? pvFonctionSignataire;
   DateTime? pvSigneAt;
   String? pvSignatureImagePath;
 
@@ -64,8 +70,10 @@ class Chantier {
     required this.autoControle,
     this.rexValide = false,
     this.rexTranscription,
+    this.pvPdfPath,
     this.pvSigne = false,
     this.pvSigneur,
+    this.pvFonctionSignataire,
     this.pvSigneAt,
     this.pvSignatureImagePath,
     List<User>? installateursRattaches,
@@ -85,11 +93,14 @@ class Chantier {
       ? 0
       : autoControle.where((p) => p.isComplete).length / autoControle.length;
 
-  /// Le module PV se débloque soit parce que le back-office l'a déjà rempli
-  /// (pvSigne, vérifié séparément par l'appelant), soit dès que
-  /// l'auto-contrôle atteint 90% — la décision finale de signer reste au
-  /// back-office (voir refonte du flux PV).
+  /// Le module PV se débloque soit parce que le back-office a déjà déposé le
+  /// gabarit (pvPdfPath, vérifié séparément par l'appelant), soit dès que
+  /// l'auto-contrôle atteint 90%.
   bool get canSignPV => progressionAutoControle >= 0.9;
+
+  /// Le back-office a déposé un gabarit, mais le client ne l'a pas encore
+  /// signé — l'installateur peut le consulter et le faire signer.
+  bool get pvEnAttenteSignature => pvPdfPath != null && !pvSigne;
 
   factory Chantier.fromJson(Map<String, dynamic> json) => Chantier(
         reference: json['reference'] as String,
@@ -117,8 +128,10 @@ class Chantier {
             .toList(),
         rexValide: json['rexValide'] as bool? ?? false,
         rexTranscription: json['rexTranscription'] as String?,
+        pvPdfPath: json['pvPdfPath'] as String?,
         pvSigne: json['pvSigne'] as bool? ?? false,
         pvSigneur: json['pvSigneur'] as String?,
+        pvFonctionSignataire: json['pvFonctionSignataire'] as String?,
         pvSigneAt: json['pvSigneAt'] != null ? DateTime.parse(json['pvSigneAt'] as String) : null,
         pvSignatureImagePath: json['pvSignatureImagePath'] as String?,
         installateursRattaches: ((json['installateursRattaches'] as List?) ?? [])
@@ -157,8 +170,10 @@ class Chantier {
         'autoControle': autoControle.map((p) => p.toJson()).toList(),
         'rexValide': rexValide,
         'rexTranscription': rexTranscription,
+        'pvPdfPath': pvPdfPath,
         'pvSigne': pvSigne,
         'pvSigneur': pvSigneur,
+        'pvFonctionSignataire': pvFonctionSignataire,
         'pvSigneAt': pvSigneAt?.toIso8601String(),
         'pvSignatureImagePath': pvSignatureImagePath,
         'installateursRattaches': installateursRattaches.map((u) => u.toJson()).toList(),

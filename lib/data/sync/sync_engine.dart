@@ -78,13 +78,6 @@ class SyncEngine {
             audio: payload['audio'] as String?,
           );
           break;
-        case 'submitPv':
-          await _api.postPv(
-            op.chantierReference,
-            payload['signataire'] as String,
-            signatureImage: payload['signatureImage'] as String?,
-          );
-          break;
         case 'addDocument':
           await _api.addDocument(
             op.chantierReference,

@@ -187,76 +187,95 @@ describe('Progression et modules', () => {
     expect(photoPath).toMatch(new RegExp(`^https://blob\\.vercel-storage\\.com/test/point-${pointId}-.+\\.jpeg$`));
   });
 
-  it('autorise la signature du PV même si l\'auto-contrôle n\'est pas complet (décision du back-office)', async () => {
+  const PDF_DATA_URL = `data:application/pdf;base64,${ONE_PX_PNG_BASE64}`;
+
+  it('le CA dépose le gabarit PV — ne le valide pas', async () => {
     const ca = await createCa();
     await createChantier(ca.accessToken);
 
     const res = await request(app)
-      .post('/chantiers/LD64397/pv')
+      .post('/chantiers/LD64397/pv/document')
       .set('Authorization', `Bearer ${ca.accessToken}`)
-      .send({ signataire: 'M. Weber' });
+      .send({ file: PDF_DATA_URL });
 
     expect(res.status).toBe(200);
-    expect(res.body.chantier.pvSigne).toBe(true);
+    expect(res.body.chantier.pvPdfPath).toBeTruthy();
+    expect(res.body.chantier.pvSigne).toBe(false);
   });
 
-  it('signe le PV une fois l\'auto-contrôle complet, et permet de le modifier ensuite', async () => {
+  it('l\'installateur signe le PV déposé par le CA, et peut le modifier ensuite', async () => {
     const ca = await createCa();
-    const created = await createChantier(ca.accessToken);
+    await createChantier(ca.accessToken);
+    const installateur = await createInstallateur({ isActive: true });
+    await request(app)
+      .post('/chantiers/LD64397/rattacher')
+      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .send({ userId: installateur.user.id });
 
-    // Séquentiel plutôt que Promise.all : cette rafale de PATCH concurrents
-    // (chacun avec désormais plusieurs requêtes DB pour le seuil de
-    // notification à 80%, voir chantiers.ts) sature le pooler Neon en test.
-    for (const p of created.body.chantier.autoControle as { id: string }[]) {
-      await request(app)
-        .patch(`/chantiers/LD64397/points/${p.id}`)
-        .set('Authorization', `Bearer ${ca.accessToken}`)
-        .send({ status: 'conforme', photoPath: 'photo.jpg' });
-    }
+    await request(app)
+      .post('/chantiers/LD64397/pv/document')
+      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .send({ file: PDF_DATA_URL });
 
     const res = await request(app)
-      .post('/chantiers/LD64397/pv')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
-      .send({ signataire: 'M. Weber' });
+      .post('/chantiers/LD64397/pv/signature')
+      .set('Authorization', `Bearer ${installateur.accessToken}`)
+      .send({ nomSignataire: 'M. Weber', fonctionSignataire: 'Client', file: PDF_DATA_URL });
 
     expect(res.status).toBe(200);
     expect(res.body.chantier.pvSigne).toBe(true);
     expect(res.body.chantier.pvSigneur).toBe('M. Weber');
+    expect(res.body.chantier.pvFonctionSignataire).toBe('Client');
 
-    // Le PV n'est plus verrouillé après signature : le CA (ou l'installateur)
-    // peut le modifier à nouveau (voir refonte — suppression réservée à
+    // Le PV n'est plus verrouillé après signature : l'installateur peut
+    // soumettre une nouvelle signature (suppression définitive réservée à
     // DELETE .../pv, séparée d'une simple modification).
     const second = await request(app)
-      .post('/chantiers/LD64397/pv')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
-      .send({ signataire: 'Un autre' });
+      .post('/chantiers/LD64397/pv/signature')
+      .set('Authorization', `Bearer ${installateur.accessToken}`)
+      .send({ nomSignataire: 'Un autre', fonctionSignataire: 'Responsable technique', file: PDF_DATA_URL });
     expect(second.status).toBe(200);
     expect(second.body.chantier.pvSigneur).toBe('Un autre');
-  }, 30000);
+  });
 
-  it('enregistre l\'image de la signature sur le stockage distant et renvoie son URL', async () => {
+  it('refuse de signer si le CA n\'a pas encore déposé de gabarit', async () => {
     const ca = await createCa();
-    const created = await createChantier(ca.accessToken);
-
-    // Séquentiel plutôt que Promise.all : cette rafale de PATCH concurrents
-    // (chacun avec désormais plusieurs requêtes DB pour le seuil de
-    // notification à 80%, voir chantiers.ts) sature le pooler Neon en test.
-    for (const p of created.body.chantier.autoControle as { id: string }[]) {
-      await request(app)
-        .patch(`/chantiers/LD64397/points/${p.id}`)
-        .set('Authorization', `Bearer ${ca.accessToken}`)
-        .send({ status: 'conforme', photoPath: 'photo.jpg' });
-    }
+    await createChantier(ca.accessToken);
+    const installateur = await createInstallateur({ isActive: true });
+    await request(app)
+      .post('/chantiers/LD64397/rattacher')
+      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .send({ userId: installateur.user.id });
 
     const res = await request(app)
-      .post('/chantiers/LD64397/pv')
+      .post('/chantiers/LD64397/pv/signature')
+      .set('Authorization', `Bearer ${installateur.accessToken}`)
+      .send({ nomSignataire: 'M. Weber', fonctionSignataire: 'Client', file: PDF_DATA_URL });
+    expect(res.status).toBe(400);
+  });
+
+  it('enregistre le PDF signé sur le stockage distant et renvoie son URL', async () => {
+    const ca = await createCa();
+    await createChantier(ca.accessToken);
+    const installateur = await createInstallateur({ isActive: true });
+    await request(app)
+      .post('/chantiers/LD64397/rattacher')
       .set('Authorization', `Bearer ${ca.accessToken}`)
-      .send({ signataire: 'M. Weber', signatureImage: `data:image/png;base64,${ONE_PX_PNG_BASE64}` });
+      .send({ userId: installateur.user.id });
+    await request(app)
+      .post('/chantiers/LD64397/pv/document')
+      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .send({ file: PDF_DATA_URL });
+
+    const res = await request(app)
+      .post('/chantiers/LD64397/pv/signature')
+      .set('Authorization', `Bearer ${installateur.accessToken}`)
+      .send({ nomSignataire: 'M. Weber', fonctionSignataire: 'Client', file: PDF_DATA_URL });
 
     expect(res.status).toBe(200);
     const imagePath = res.body.chantier.pvSignatureImagePath as string;
-    expect(imagePath).toMatch(/^https:\/\/blob\.vercel-storage\.com\/test\/signature-.+\.png$/);
-  }, 30000);
+    expect(imagePath).toMatch(/^https:\/\/blob\.vercel-storage\.com\/test\/pv-signe-.+\.pdf$/);
+  });
 });
 
 describe('POST /chantiers/:reference/rex', () => {
@@ -518,12 +537,16 @@ describe('Sécurité — rattachement obligatoire pour un installateur (bug 3B)'
   it('refuse à un installateur non rattaché de signer le PV', async () => {
     const ca = await createCa();
     await createChantier(ca.accessToken);
+    await request(app)
+      .post('/chantiers/LD64397/pv/document')
+      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .send({ file: `data:application/pdf;base64,${ONE_PX_PNG_BASE64}` });
     const etranger = await createInstallateur({ isActive: true });
 
     const res = await request(app)
-      .post('/chantiers/LD64397/pv')
+      .post('/chantiers/LD64397/pv/signature')
       .set('Authorization', `Bearer ${etranger.accessToken}`)
-      .send({ signataire: 'Tentative non autorisée' });
+      .send({ nomSignataire: 'Tentative', fonctionSignataire: 'Non autorisée', file: `data:application/pdf;base64,${ONE_PX_PNG_BASE64}` });
     expect(res.status).toBe(403);
   });
 

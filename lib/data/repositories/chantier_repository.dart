@@ -195,26 +195,24 @@ class ChantierRepository {
     return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
   }
 
-  Future<Chantier> submitPv(String reference, String signataire, {String? signatureImage}) async {
-    try {
-      final data = await _api.postPv(reference, signataire, signatureImage: signatureImage);
-      return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
-    } catch (_) {
-      // L'image de signature (base64) est stockée telle quelle dans la file
-      // d'attente locale — elle n'est donc jamais perdue si l'app est fermée
-      // hors-ligne, et part vers l'API dès que le SyncEngine la rejoue.
-      await _db.enqueueOperation(
-        type: 'submitPv',
-        chantierReference: reference,
-        payload: {'signataire': signataire, 'signatureImage': ?signatureImage},
-      );
-      await _applyOptimisticUpdate(reference, (chantier) {
-        chantier.pvSigne = true;
-        chantier.pvSigneur = signataire;
-        chantier.pvSigneAt = DateTime.now();
-      });
-      return getChantier(reference);
-    }
+  /// Dépôt du gabarit PV par le back-office — toujours en ligne, comme
+  /// [addDocumentChantier] (action web, pas de file d'attente hors-ligne).
+  Future<Chantier> uploadPvDocument(String reference, String file) async {
+    final data = await _api.uploadPvDocument(reference, file);
+    return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
+  }
+
+  /// Signature du PV par le client, soumise par l'installateur — toujours en
+  /// ligne : la fusion gabarit + signature nécessite d'avoir déjà téléchargé
+  /// le PDF depuis le réseau, donc pas de file d'attente hors-ligne possible ici.
+  Future<Chantier> signPv(
+    String reference, {
+    required String nomSignataire,
+    required String fonctionSignataire,
+    required String file,
+  }) async {
+    final data = await _api.signPv(reference, nomSignataire: nomSignataire, fonctionSignataire: fonctionSignataire, file: file);
+    return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
   }
 
   /// Supprime définitivement le PV d'un chantier (CA/Admin, back-office) —

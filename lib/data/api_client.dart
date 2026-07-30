@@ -338,15 +338,29 @@ class ApiClient {
   Future<Map<String, dynamic>> deleteRex(String reference) =>
       _request('DELETE', '/chantiers/$reference/rex');
 
-  Future<Map<String, dynamic>> postPv(String reference, String signataire, {String? signatureImage}) {
-    return _request('POST', '/chantiers/$reference/pv', body: {
-      'signataire': signataire,
-      'signatureImage': ?signatureImage,
+  /// Dépôt (ou remplacement) du gabarit PV par le back-office — ne valide
+  /// rien, voir signPv pour la signature qui valide effectivement le PV.
+  Future<Map<String, dynamic>> uploadPvDocument(String reference, String file) {
+    return _request('POST', '/chantiers/$reference/pv/document', body: {'file': file});
+  }
+
+  /// Signature du PV par le client, soumise par l'installateur — le PDF final
+  /// (gabarit + signature fusionnés côté app) est envoyé dans [file].
+  Future<Map<String, dynamic>> signPv(
+    String reference, {
+    required String nomSignataire,
+    required String fonctionSignataire,
+    required String file,
+  }) {
+    return _request('POST', '/chantiers/$reference/pv/signature', body: {
+      'nomSignataire': nomSignataire,
+      'fonctionSignataire': fonctionSignataire,
+      'file': file,
     });
   }
 
-  /// Supprime définitivement le PV d'un chantier (CA/Admin) — distinct d'une
-  /// simple modification (postPv, qui écrase et remplace sans blocage).
+  /// Supprime définitivement le PV d'un chantier (CA/Admin) — gabarit et
+  /// signature éventuelle.
   Future<Map<String, dynamic>> deletePv(String reference) =>
       _request('DELETE', '/chantiers/$reference/pv');
 

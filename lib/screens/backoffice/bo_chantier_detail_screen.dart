@@ -283,47 +283,7 @@ class BoChantierDetailScreen extends StatelessWidget {
         ),
         BoPanel(
           title: 'Procès-verbal de réception',
-          child: chantier.pvSigne
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    PvSignaturePanel(
-                      signataire: chantier.pvSigneur,
-                      signeAt: chantier.pvSigneAt,
-                      signatureImagePath: chantier.pvSignatureImagePath,
-                    ),
-                    if (canSupprimerPv) ...[
-                      const SizedBox(height: 12),
-                      OutlinedButton(
-                        onPressed: () => _confirmerSuppressionPv(context, chantier),
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size(0, 32),
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
-                          foregroundColor: AppColors.rouge,
-                          side: const BorderSide(color: AppColors.rouge),
-                        ),
-                        child: const Text('Supprimer le PV', style: TextStyle(fontSize: 11.5)),
-                      ),
-                    ],
-                  ],
-                )
-              : canRenseignerPv
-                  ? Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Le PV est renseigné par le back-office — dès validation, il se débloque côté installateur.',
-                          style: TextStyle(fontSize: 11, color: AppColors.acier),
-                        ),
-                        const SizedBox(height: 8),
-                        ElevatedButton(
-                          onPressed: () => _openRenseignerPvDialog(context, chantier),
-                          style: ElevatedButton.styleFrom(minimumSize: const Size(0, 32), padding: const EdgeInsets.symmetric(horizontal: 14)),
-                          child: const Text('Renseigner le PV', style: TextStyle(fontSize: 11.5)),
-                        ),
-                      ],
-                    )
-                  : const Text('En attente du back-office.', style: TextStyle(fontSize: 11, color: AppColors.acierClair)),
+          child: _buildPvPanel(context, chantier, canRenseignerPv: canRenseignerPv, canSupprimerPv: canSupprimerPv),
         ),
       ],
     );
@@ -334,6 +294,100 @@ class BoChantierDetailScreen extends StatelessWidget {
       context: context,
       builder: (dialogContext) => RenseignerPvDialog(chantier: chantier),
     );
+  }
+
+  /// Trois états : validé (signé par le client), en attente de signature
+  /// (gabarit déposé mais pas encore signé), ou aucun PV déposé.
+  Widget _buildPvPanel(BuildContext context, Chantier chantier, {required bool canRenseignerPv, required bool canSupprimerPv}) {
+    if (chantier.pvSigne) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          PvSignaturePanel(
+            signataire: chantier.pvSigneur,
+            fonction: chantier.pvFonctionSignataire,
+            signeAt: chantier.pvSigneAt,
+            signatureImagePath: chantier.pvSignatureImagePath,
+          ),
+          if (canSupprimerPv) ...[
+            const SizedBox(height: 12),
+            OutlinedButton(
+              onPressed: () => _confirmerSuppressionPv(context, chantier),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(0, 32),
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                foregroundColor: AppColors.rouge,
+                side: const BorderSide(color: AppColors.rouge),
+              ),
+              child: const Text('Supprimer le PV', style: TextStyle(fontSize: 11.5)),
+            ),
+          ],
+        ],
+      );
+    }
+
+    if (chantier.pvEnAttenteSignature) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'En attente de signature par le client — l\'installateur consulte le PDF déposé et le fait signer sur place.',
+            style: TextStyle(fontSize: 11, color: AppColors.acier),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () => launchUrl(Uri.parse(chantier.pvPdfPath!), mode: LaunchMode.externalApplication),
+            icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+            label: const Text('Ouvrir le PV déposé', style: TextStyle(fontSize: 11.5)),
+          ),
+          if (canRenseignerPv || canSupprimerPv) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                if (canRenseignerPv)
+                  OutlinedButton(
+                    onPressed: () => _openRenseignerPvDialog(context, chantier),
+                    style: OutlinedButton.styleFrom(minimumSize: const Size(0, 32), padding: const EdgeInsets.symmetric(horizontal: 14)),
+                    child: const Text('Remplacer le PV', style: TextStyle(fontSize: 11.5)),
+                  ),
+                if (canRenseignerPv && canSupprimerPv) const SizedBox(width: 8),
+                if (canSupprimerPv)
+                  OutlinedButton(
+                    onPressed: () => _confirmerSuppressionPv(context, chantier),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 32),
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      foregroundColor: AppColors.rouge,
+                      side: const BorderSide(color: AppColors.rouge),
+                    ),
+                    child: const Text('Annuler', style: TextStyle(fontSize: 11.5)),
+                  ),
+              ],
+            ),
+          ],
+        ],
+      );
+    }
+
+    if (canRenseignerPv) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Déposez le PDF du PV — l\'installateur le fera signer par le client sur place.',
+            style: TextStyle(fontSize: 11, color: AppColors.acier),
+          ),
+          const SizedBox(height: 8),
+          ElevatedButton(
+            onPressed: () => _openRenseignerPvDialog(context, chantier),
+            style: ElevatedButton.styleFrom(minimumSize: const Size(0, 32), padding: const EdgeInsets.symmetric(horizontal: 14)),
+            child: const Text('Déposer le PV', style: TextStyle(fontSize: 11.5)),
+          ),
+        ],
+      );
+    }
+
+    return const Text('En attente du back-office.', style: TextStyle(fontSize: 11, color: AppColors.acierClair));
   }
 
   static const _modulesDocuments = [

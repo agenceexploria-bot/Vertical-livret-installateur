@@ -37,7 +37,9 @@ class CaChantierDetailScreen extends StatelessWidget {
     final (livretLabel, livretType) = _livretStatus(chantier);
     final (pvLabel, pvType) = chantier.pvSigne
         ? ('Signé le ${DateFormat('dd/MM/yyyy').format(chantier.pvSigneAt ?? chantier.dateFin)}', StatusType.conforme)
-        : ('Non signé', StatusType.attente);
+        : chantier.pvEnAttenteSignature
+            ? ('En attente de signature', StatusType.enCours)
+            : ('Non déposé', StatusType.attente);
 
     return ResponsiveLayout(
       appBar: GlassAppBar(
@@ -115,7 +117,7 @@ class CaChantierDetailScreen extends StatelessWidget {
                         context: context,
                         builder: (dialogContext) => RenseignerPvDialog(chantier: chantier),
                       ),
-                      child: const Text('Renseigner le PV'),
+                      child: Text(chantier.pvEnAttenteSignature ? 'Remplacer le PV' : 'Déposer le PV'),
                     ),
                   ),
                 ],
