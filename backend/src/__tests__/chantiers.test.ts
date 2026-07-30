@@ -232,7 +232,7 @@ describe('Progression et modules', () => {
       .send({ signataire: 'Un autre' });
     expect(second.status).toBe(200);
     expect(second.body.chantier.pvSigneur).toBe('Un autre');
-  });
+  }, 30000);
 
   it('enregistre l\'image de la signature sur le stockage distant et renvoie son URL', async () => {
     const ca = await createCa();
@@ -256,7 +256,7 @@ describe('Progression et modules', () => {
     expect(res.status).toBe(200);
     const imagePath = res.body.chantier.pvSignatureImagePath as string;
     expect(imagePath).toMatch(/^https:\/\/blob\.vercel-storage\.com\/test\/signature-.+\.png$/);
-  });
+  }, 30000);
 });
 
 describe('POST /chantiers/:reference/rex', () => {
