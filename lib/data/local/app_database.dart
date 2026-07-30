@@ -88,6 +88,9 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> clearChantierCache() => delete(cachedChantiers).go();
 
+  Future<void> deleteCachedChantier(String reference) =>
+      (delete(cachedChantiers)..where((t) => t.reference.equals(reference))).go();
+
   // ---- File d'attente de synchronisation ----
 
   Future<int> enqueueOperation({

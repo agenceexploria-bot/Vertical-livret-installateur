@@ -43,10 +43,19 @@ class ComptesState extends ChangeNotifier {
   }
 
   /// Suppression définitive (Admin uniquement — voir la refonte des rôles).
+  /// Optimistic UI : le compte disparaît immédiatement de la liste, avec
+  /// réaffichage en cas d'échec réseau réel.
   Future<void> supprimer(User user) async {
-    await _api.supprimerCompte(user.id);
+    final previous = _installateurs;
     _installateurs = _installateurs.where((u) => u.id != user.id).toList();
     notifyListeners();
+    try {
+      await _api.supprimerCompte(user.id);
+    } catch (e) {
+      _installateurs = previous;
+      notifyListeners();
+      rethrow;
+    }
   }
 
   Future<void> reinitialiserMotDePasse(User user, String password) => _api.reinitialiserMotDePasse(user.id, password);

@@ -72,9 +72,33 @@ class ChantierState extends ChangeNotifier {
     _replaceInList(updated);
   }
 
+  /// Optimistic UI : l'installateur disparaît immédiatement de la liste des
+  /// rattachés, avec réaffichage en cas d'échec réseau réel.
   Future<void> detacher(String reference, String userId) async {
-    final updated = await _repository.detacher(reference, userId);
-    _replaceInList(updated);
+    final chantier = findByReference(reference);
+    User? removed;
+    if (chantier != null) {
+      for (final u in chantier.installateursRattaches) {
+        if (u.id == userId) {
+          removed = u;
+          break;
+        }
+      }
+      if (removed != null) chantier.installateursRattaches.remove(removed);
+      notifyListeners();
+      await _repository.cacheChantierLocally(chantier);
+    }
+    try {
+      final updated = await _repository.detacher(reference, userId);
+      _replaceInList(updated);
+    } catch (e) {
+      if (chantier != null && removed != null) {
+        chantier.installateursRattaches.add(removed);
+        notifyListeners();
+        await _repository.cacheChantierLocally(chantier);
+      }
+      rethrow;
+    }
   }
 
   /// Modification et suppression d'un chantier (Admin uniquement — voir la
@@ -84,11 +108,27 @@ class ChantierState extends ChangeNotifier {
     _replaceInList(updated);
   }
 
+  /// Optimistic UI : le chantier disparaît immédiatement de la liste (et du
+  /// cache Drift), avec réaffichage en cas d'échec réseau réel.
   Future<void> deleteChantier(String reference) async {
-    await _repository.deleteChantier(reference);
+    final removedChantier = findByReference(reference);
+    final wasCurrent = _currentChantier?.reference == reference;
     _chantiers = _chantiers.where((c) => c.reference != reference).toList();
-    if (_currentChantier?.reference == reference) _currentChantier = null;
+    if (wasCurrent) _currentChantier = null;
     notifyListeners();
+    await _repository.removeCachedChantier(reference);
+
+    try {
+      await _repository.deleteChantier(reference);
+    } catch (e) {
+      if (removedChantier != null) {
+        _chantiers = [..._chantiers, removedChantier];
+        if (wasCurrent) _currentChantier = removedChantier;
+        notifyListeners();
+        await _repository.cacheChantierLocally(removedChantier);
+      }
+      rethrow;
+    }
   }
 
   Future<void> addDocumentChantier(String reference,
@@ -113,6 +153,7 @@ class ChantierState extends ChangeNotifier {
       }
       if (removed != null) chantier.documentsChantier.remove(removed);
       notifyListeners();
+      await _repository.cacheChantierLocally(chantier);
     }
     try {
       final updated = await _repository.deleteDocumentChantier(reference, docId);
@@ -121,6 +162,7 @@ class ChantierState extends ChangeNotifier {
       if (chantier != null && removed != null) {
         chantier.documentsChantier.add(removed);
         notifyListeners();
+        await _repository.cacheChantierLocally(chantier);
       }
       rethrow;
     }
@@ -159,6 +201,7 @@ class ChantierState extends ChangeNotifier {
         break;
       }
       notifyListeners();
+      await _repository.cacheChantierLocally(chantier);
     }
     await _repository.updatePoint(reference, pointId, status: status, photo: photo, validatedByName: validatedByName);
   }
@@ -168,9 +211,30 @@ class ChantierState extends ChangeNotifier {
     _replaceInList(updated);
   }
 
+  /// Optimistic UI : le REX disparaît immédiatement, avec restauration en cas
+  /// d'échec réseau réel.
   Future<void> deleteRex(String reference) async {
-    final updated = await _repository.deleteRex(reference);
-    _replaceInList(updated);
+    final chantier = findByReference(reference);
+    final prevRexValide = chantier?.rexValide ?? false;
+    final prevTranscription = chantier?.rexTranscription;
+    if (chantier != null) {
+      chantier.rexValide = false;
+      chantier.rexTranscription = null;
+      notifyListeners();
+      await _repository.cacheChantierLocally(chantier);
+    }
+    try {
+      final updated = await _repository.deleteRex(reference);
+      _replaceInList(updated);
+    } catch (e) {
+      if (chantier != null) {
+        chantier.rexValide = prevRexValide;
+        chantier.rexTranscription = prevTranscription;
+        notifyListeners();
+        await _repository.cacheChantierLocally(chantier);
+      }
+      rethrow;
+    }
   }
 
   Future<void> submitPv(String reference, String signataire, {String? signatureImage}) async {
@@ -193,6 +257,7 @@ class ChantierState extends ChangeNotifier {
         envoye: false,
       ));
       notifyListeners();
+      await _repository.cacheChantierLocally(chantier);
     }
     await _repository.addDocument(reference, titre: titre, categorie: categorie, file: file, auteurName: auteurName);
     final updated = await _repository.getChantier(reference);
@@ -214,6 +279,7 @@ class ChantierState extends ChangeNotifier {
       }
       if (removed != null) chantier.docsTerrain.remove(removed);
       notifyListeners();
+      await _repository.cacheChantierLocally(chantier);
     }
     try {
       final updated = await _repository.deleteDocument(reference, docId);
@@ -222,6 +288,7 @@ class ChantierState extends ChangeNotifier {
       if (chantier != null && removed != null) {
         chantier.docsTerrain.add(removed);
         notifyListeners();
+        await _repository.cacheChantierLocally(chantier);
       }
       rethrow;
     }

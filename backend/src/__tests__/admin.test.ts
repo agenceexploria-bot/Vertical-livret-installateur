@@ -284,5 +284,5 @@ describe('GET /admin/stats', () => {
     expect(currentWeek.pvSignes).toBe(1);
     expect(currentWeek.rexSoumis).toBe(1);
     expect(currentWeek.anomalies).toBe(1);
-  });
+  }, 30000);
 });

@@ -82,10 +82,19 @@ class AdminState extends ChangeNotifier {
   Future<void> reinitialiserMotDePasse(User user, String password) =>
       _api.reinitialiserMotDePasseAdmin(user.id, password);
 
+  /// Optimistic UI : le compte disparaît immédiatement de la liste, avec
+  /// réaffichage en cas d'échec réseau réel.
   Future<void> supprimerCompte(User user) async {
-    await _api.supprimerCompteAdmin(user.id);
+    final previous = _tousLesComptes;
     _tousLesComptes = _tousLesComptes.where((u) => u.id != user.id).toList();
     notifyListeners();
+    try {
+      await _api.supprimerCompteAdmin(user.id);
+    } catch (e) {
+      _tousLesComptes = previous;
+      notifyListeners();
+      rethrow;
+    }
   }
 
   void _replaceCompte(User updated) {

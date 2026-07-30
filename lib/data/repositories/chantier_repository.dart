@@ -33,6 +33,13 @@ class ChantierRepository {
     return cached.map(Chantier.fromJson).toList();
   }
 
+  /// Écrit un chantier déjà muté de façon optimiste (ChantierState) dans le
+  /// cache Drift, pour que l'action (suppression, détachement...) survive un
+  /// rechargement immédiat sans attendre la réponse serveur.
+  Future<void> cacheChantierLocally(Chantier chantier) => _db.cacheChantier(chantier.toJson());
+
+  Future<void> removeCachedChantier(String reference) => _db.deleteCachedChantier(reference);
+
   Future<Chantier> getChantier(String reference) async {
     try {
       final data = await _api.getChantier(reference);
