@@ -97,7 +97,9 @@ class FicheChantierScreen extends StatelessWidget {
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () => _ouvrirGps(context, '${chantier.adresse}, ${chantier.ville}'),
-                      icon: const Icon(Icons.map_outlined, size: 18),
+                      // Bleu Google Maps — rend le bouton immédiatement identifiable comme
+                      // une action de géolocalisation, sans toucher à sa taille ni son comportement.
+                      icon: const Icon(Icons.map_outlined, size: 18, color: Color(0xFF4285F4)),
                       label: const Text('GPS'),
                     ),
                   ),
