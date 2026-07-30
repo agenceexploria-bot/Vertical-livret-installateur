@@ -63,13 +63,8 @@ class _SignatureScreenState extends State<SignatureScreen> {
                       border: Border.all(color: AppColors.lignes),
                     ),
                     child: GestureDetector(
-                      onPanUpdate: (details) {
-                        setState(() {
-                          RenderBox renderBox = context.findRenderObject() as RenderBox;
-                          _points.add(renderBox.globalToLocal(details.globalPosition));
-                        });
-                      },
-                      onPanEnd: (details) => _points.add(null),
+                      onPanUpdate: _handlePanUpdate,
+                      onPanEnd: (details) => setState(() => _points.add(null)),
                       child: CustomPaint(
                         painter: _SignaturePainter(points: _points),
                       ),
@@ -150,6 +145,27 @@ class _SignatureScreenState extends State<SignatureScreen> {
         ),
       ),
     );
+  }
+
+  /// Coordonnées locales à la zone de dessin (RepaintBoundary [_signatureKey]),
+  /// pas au contexte de l'écran entier — sans ça, globalToLocal calcule par
+  /// rapport à la mauvaise origine et le tracé se décale par rapport au
+  /// doigt. Les points hors du carré de signature sont ignorés (le tracé
+  /// s'arrête net au bord) ; un point null vient "lever le stylo" pour ne pas
+  /// relier le dernier point valide à celui où le doigt revient dans le cadre.
+  void _handlePanUpdate(DragUpdateDetails details) {
+    final renderBox = _signatureKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+    final local = renderBox.globalToLocal(details.globalPosition);
+    final inBounds = (Offset.zero & renderBox.size).contains(local);
+
+    setState(() {
+      if (inBounds) {
+        _points.add(local);
+      } else if (_points.isNotEmpty && _points.last != null) {
+        _points.add(null);
+      }
+    });
   }
 
   /// Alternative à la signature au doigt : le client a déjà signé le PV sur
