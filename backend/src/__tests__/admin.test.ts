@@ -203,14 +203,15 @@ describe("Tableau de bord d'activité Admin", () => {
       .set('Authorization', `Bearer ${ca.accessToken}`)
       .send({ transcription: 'Tout s\'est bien passé, quelques ajustements mineurs.' });
 
-    await Promise.all(
-      (created.body.chantier.autoControle as { id: string }[]).map((p) =>
-        request(app)
-          .patch(`/chantiers/LD64397/points/${p.id}`)
-          .set('Authorization', `Bearer ${ca.accessToken}`)
-          .send({ status: 'conforme', photoPath: 'photo.jpg' }),
-      ),
-    );
+    // Séquentiel plutôt que Promise.all : cette rafale de PATCH concurrents
+    // (chacun avec désormais plusieurs requêtes DB pour le seuil de
+    // notification à 80%, voir chantiers.ts) sature le pooler Neon en test.
+    for (const p of created.body.chantier.autoControle as { id: string }[]) {
+      await request(app)
+        .patch(`/chantiers/LD64397/points/${p.id}`)
+        .set('Authorization', `Bearer ${ca.accessToken}`)
+        .send({ status: 'conforme', photoPath: 'photo.jpg' });
+    }
     await request(app)
       .post('/chantiers/LD64397/pv')
       .set('Authorization', `Bearer ${ca.accessToken}`)
@@ -261,14 +262,15 @@ describe('GET /admin/stats', () => {
       .set('Authorization', `Bearer ${ca.accessToken}`)
       .send({ transcription: 'RAS.' });
 
-    await Promise.all(
-      (created.body.chantier.autoControle as { id: string }[]).map((p) =>
-        request(app)
-          .patch(`/chantiers/LD64397/points/${p.id}`)
-          .set('Authorization', `Bearer ${ca.accessToken}`)
-          .send({ status: 'conforme', photoPath: 'photo.jpg' }),
-      ),
-    );
+    // Séquentiel plutôt que Promise.all : cette rafale de PATCH concurrents
+    // (chacun avec désormais plusieurs requêtes DB pour le seuil de
+    // notification à 80%, voir chantiers.ts) sature le pooler Neon en test.
+    for (const p of created.body.chantier.autoControle as { id: string }[]) {
+      await request(app)
+        .patch(`/chantiers/LD64397/points/${p.id}`)
+        .set('Authorization', `Bearer ${ca.accessToken}`)
+        .send({ status: 'conforme', photoPath: 'photo.jpg' });
+    }
     await request(app)
       .post('/chantiers/LD64397/pv')
       .set('Authorization', `Bearer ${ca.accessToken}`)

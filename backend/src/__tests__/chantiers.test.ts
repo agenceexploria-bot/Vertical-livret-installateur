@@ -204,14 +204,15 @@ describe('Progression et modules', () => {
     const ca = await createCa();
     const created = await createChantier(ca.accessToken);
 
-    await Promise.all(
-      created.body.chantier.autoControle.map((p: { id: string }) =>
-        request(app)
-          .patch(`/chantiers/LD64397/points/${p.id}`)
-          .set('Authorization', `Bearer ${ca.accessToken}`)
-          .send({ status: 'conforme', photoPath: 'photo.jpg' }),
-      ),
-    );
+    // Séquentiel plutôt que Promise.all : cette rafale de PATCH concurrents
+    // (chacun avec désormais plusieurs requêtes DB pour le seuil de
+    // notification à 80%, voir chantiers.ts) sature le pooler Neon en test.
+    for (const p of created.body.chantier.autoControle as { id: string }[]) {
+      await request(app)
+        .patch(`/chantiers/LD64397/points/${p.id}`)
+        .set('Authorization', `Bearer ${ca.accessToken}`)
+        .send({ status: 'conforme', photoPath: 'photo.jpg' });
+    }
 
     const res = await request(app)
       .post('/chantiers/LD64397/pv')
@@ -233,14 +234,15 @@ describe('Progression et modules', () => {
     const ca = await createCa();
     const created = await createChantier(ca.accessToken);
 
-    await Promise.all(
-      created.body.chantier.autoControle.map((p: { id: string }) =>
-        request(app)
-          .patch(`/chantiers/LD64397/points/${p.id}`)
-          .set('Authorization', `Bearer ${ca.accessToken}`)
-          .send({ status: 'conforme', photoPath: 'photo.jpg' }),
-      ),
-    );
+    // Séquentiel plutôt que Promise.all : cette rafale de PATCH concurrents
+    // (chacun avec désormais plusieurs requêtes DB pour le seuil de
+    // notification à 80%, voir chantiers.ts) sature le pooler Neon en test.
+    for (const p of created.body.chantier.autoControle as { id: string }[]) {
+      await request(app)
+        .patch(`/chantiers/LD64397/points/${p.id}`)
+        .set('Authorization', `Bearer ${ca.accessToken}`)
+        .send({ status: 'conforme', photoPath: 'photo.jpg' });
+    }
 
     const res = await request(app)
       .post('/chantiers/LD64397/pv')

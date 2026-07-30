@@ -10,6 +10,7 @@ import '../../state/admin_state.dart';
 import '../../state/auth_state.dart';
 import '../../state/chantier_state.dart';
 import '../../state/comptes_state.dart';
+import 'widgets/bo_panel.dart';
 import 'widgets/bo_responsive_table.dart';
 import 'widgets/bo_shell.dart';
 import 'widgets/bo_table_row.dart';
@@ -83,11 +84,16 @@ class BoComptesScreen extends StatelessWidget {
     );
   }
 
+  // Ordre d'affichage des groupes — du plus "back-office" au plus nombreux,
+  // Qualité en dernier car legacy (fusionné dans l'espace CA, voir ailleurs).
+  static const _ordreGroupes = [UserRole.chargeAffaires, UserRole.direction, UserRole.installateur, UserRole.qualite];
+
   /// Gestion globale des comptes (Admin uniquement) : contrairement à la table
   /// ci-dessous (réservée aux installateurs, utilisée aussi par le CA), cette
-  /// vue couvre tous les rôles sauf Admin — seul l'Admin peut supprimer,
-  /// réinitialiser le mot de passe ou suspendre/réactiver un compte Chargé
-  /// d'affaires/Qualité/Direction.
+  /// vue couvre tous les rôles sauf Admin (exclus côté backend) — seul
+  /// l'Admin peut supprimer, réinitialiser le mot de passe ou
+  /// suspendre/réactiver un compte. Regroupés par rôle plutôt qu'un seul
+  /// grand tableau, pour rester lisible à mesure que les comptes s'accumulent.
   Widget _buildGestionComptes(BuildContext context, AdminState adminState) {
     final comptes = adminState.tousLesComptes;
     return Column(
@@ -100,23 +106,50 @@ class BoComptesScreen extends StatelessWidget {
           style: TextStyle(fontSize: 11, color: AppColors.acierClair),
         ),
         const SizedBox(height: 14),
-        BoResponsiveTable(
-          child: Container(
-            decoration: BoxDecoration(
-              color: AppColors.blanc,
-              border: Border.all(color: AppColors.lignes),
-              borderRadius: BorderRadius.circular(7),
-            ),
-            child: Column(
-              children: [
-                _comptesHeaderRow(),
-                for (final u in comptes) _comptesDataRow(context, adminState, u),
-              ],
-            ),
-          ),
-        ),
+        for (final role in _ordreGroupes) ...[
+          () {
+            final groupe = comptes.where((u) => u.role == role).toList();
+            if (groupe.isEmpty) return const SizedBox.shrink();
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: BoPanel(
+                title: '${_roleLabelPluriel(role)} (${groupe.length})',
+                child: BoResponsiveTable(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.blanc,
+                      border: Border.all(color: AppColors.lignes),
+                      borderRadius: BorderRadius.circular(7),
+                    ),
+                    child: Column(
+                      children: [
+                        _comptesHeaderRow(),
+                        for (final u in groupe) _comptesDataRow(context, adminState, u),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }(),
+        ],
       ],
     );
+  }
+
+  String _roleLabelPluriel(UserRole role) {
+    switch (role) {
+      case UserRole.installateur:
+        return 'Installateurs';
+      case UserRole.chargeAffaires:
+        return 'Chargés d\'affaires';
+      case UserRole.qualite:
+        return 'Qualité';
+      case UserRole.direction:
+        return 'Direction';
+      case UserRole.admin:
+        return 'Admins';
+    }
   }
 
   String _roleLabel(UserRole role) {

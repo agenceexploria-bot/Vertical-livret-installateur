@@ -7,6 +7,7 @@ import { requireAuth, requireRole, AuthedRequest } from '../middleware/auth';
 import { saveBase64File, deleteBlobFile, isAllowedFileDataUrl } from '../lib/imageStorage';
 import { RECEPTION_POINTS, AUTO_CONTROLE_POINTS } from '../lib/checklistDefaults';
 import { isPointComplete } from '../lib/pointControleStatus';
+import { triggerChantierChanged, triggerChantierDeleted, triggerNotificationCreated } from '../lib/pusher';
 
 export const chantiersRouter = Router();
 
@@ -114,6 +115,7 @@ chantiersRouter.post('/', requireAuth, requireRole('chargeAffaires', 'direction'
     include: CHANTIER_INCLUDE,
   });
 
+  await triggerChantierChanged(chantier.reference);
   res.status(201).json({ chantier: serializeChantier(chantier) });
 });
 
@@ -140,6 +142,7 @@ chantiersRouter.post('/:reference/rattacher', requireAuth, requireRole('chargeAf
   });
 
   const updated = await prisma.chantier.findUnique({ where: { id: chantier.id }, include: CHANTIER_INCLUDE });
+  await triggerChantierChanged(updated!.reference);
   res.json({ chantier: serializeChantier(updated!) });
 });
 
@@ -157,6 +160,7 @@ chantiersRouter.delete(
     });
 
     const updated = await prisma.chantier.findUnique({ where: { id: chantier.id }, include: CHANTIER_INCLUDE });
+    await triggerChantierChanged(updated!.reference);
     res.json({ chantier: serializeChantier(updated!) });
   },
 );
@@ -207,6 +211,7 @@ chantiersRouter.patch('/:reference', requireAuth, requireRole('chargeAffaires', 
     },
     include: CHANTIER_INCLUDE,
   });
+  await triggerChantierChanged(chantier.reference);
   res.json({ chantier: serializeChantier(chantier) });
 });
 
@@ -233,6 +238,7 @@ chantiersRouter.delete('/:reference', requireAuth, requireRole('admin'), async (
   await Promise.all(filePaths.map((p) => deleteBlobFile(p)));
 
   await prisma.chantier.delete({ where: { reference: req.params.reference } });
+  await triggerChantierDeleted(req.params.reference);
   res.status(204).send();
 });
 
@@ -246,6 +252,7 @@ chantiersRouter.post('/:reference/livret-ouvert', requireAuth, requireRattacheme
     where: { id: chantier.id },
     data: { livretsOuvertsJson: JSON.stringify([...opened]) },
   });
+  await triggerChantierChanged(chantier.reference);
   res.status(204).send();
 });
 
@@ -282,9 +289,14 @@ chantiersRouter.patch('/:reference/points/:pointId', requireAuth, requireRattach
   // liées au compte connecté (jamais au nom fourni par le client) — pris à
   // l'heure de l'action terrain (clientValidatedAt) plutôt qu'à l'heure de
   // synchronisation, qui peut survenir bien plus tard si l'installateur était hors-ligne.
-  let validePar: string | undefined;
-  let valideAt: Date | undefined;
-  if (parsed.data.status !== undefined) {
+  // Un retour à `vide` (annulation de validation) efface l'attribution — sans
+  // ça la mention "Validé par ..." resterait affichée sur un point redevenu à faire.
+  let validePar: string | null | undefined;
+  let valideAt: Date | null | undefined;
+  if (parsed.data.status === 'vide') {
+    validePar = null;
+    valideAt = null;
+  } else if (parsed.data.status !== undefined) {
     const auteur = await prisma.user.findUnique({ where: { id: req.auth!.userId } });
     validePar = auteur ? `${auteur.prenom} ${auteur.nom}` : undefined;
     valideAt = parsed.data.clientValidatedAt ? new Date(parsed.data.clientValidatedAt) : new Date();
@@ -304,31 +316,51 @@ chantiersRouter.patch('/:reference/points/:pointId', requireAuth, requireRattach
   // l'auto-contrôle d'un chantier atteint 80%, pour pouvoir intervenir avant
   // la fin du chantier plutôt que de découvrir les anomalies au moment du PV.
   // Une seule notification par chantier (pas de spam à chaque point coché
-  // au-delà du seuil).
+  // au-delà du seuil). Toute cette vérification est secondaire à la mise à
+  // jour du point elle-même : un échec ici (ex. chantier supprimé entre-temps
+  // par un autre utilisateur, contrainte de clé étrangère) ne doit jamais
+  // faire échouer la réponse au point qui vient d'être validé.
   if (point.type === 'autoControle') {
-    const autoControlePoints = await prisma.pointControle.findMany({
-      where: { chantierId: req.chantier!.id, type: 'autoControle' },
-    });
-    const progression = autoControlePoints.length === 0
-      ? 0
-      : autoControlePoints.filter(isPointComplete).length / autoControlePoints.length;
-
-    if (progression >= 0.8) {
-      const existingNotif = await prisma.notification.findFirst({
-        where: { chantierId: req.chantier!.id, type: 'autoControle80' },
+    try {
+      const autoControlePoints = await prisma.pointControle.findMany({
+        where: { chantierId: req.chantier!.id, type: 'autoControle' },
       });
-      if (!existingNotif) {
-        await prisma.notification.create({
-          data: {
-            chantierId: req.chantier!.id,
-            type: 'autoControle80',
-            message: `Auto-contrôle à ${Math.round(progression * 100)}% pour ${req.chantier!.reference} — à vérifier avant réception.`,
-          },
+      const progression = autoControlePoints.length === 0
+        ? 0
+        : autoControlePoints.filter(isPointComplete).length / autoControlePoints.length;
+
+      if (progression >= 0.8) {
+        const existingNotif = await prisma.notification.findFirst({
+          where: { chantierId: req.chantier!.id, type: 'autoControle80' },
         });
+        if (!existingNotif) {
+          const notification = await prisma.notification.create({
+            data: {
+              chantierId: req.chantier!.id,
+              type: 'autoControle80',
+              message: `Auto-contrôle à ${Math.round(progression * 100)}% pour ${req.chantier!.reference} — à vérifier avant réception.`,
+            },
+          });
+          await triggerNotificationCreated({
+            id: notification.id,
+            type: notification.type,
+            message: notification.message,
+            lue: notification.lue,
+            createdAt: notification.createdAt,
+            chantierReference: req.chantier!.reference,
+          });
+        }
       }
+    } catch (err) {
+      console.error('Échec de la vérification de notification à 80%', err);
     }
   }
 
+  try {
+    await triggerChantierChanged(req.chantier!.reference);
+  } catch (err) {
+    console.error('Échec de la diffusion temps réel', err);
+  }
   res.json({ point: updated });
 });
 
@@ -372,6 +404,7 @@ chantiersRouter.post('/:reference/rex', requireAuth, requireRattachement, async 
     },
     include: CHANTIER_INCLUDE,
   });
+  await triggerChantierChanged(chantier.reference);
   res.json({ chantier: serializeChantier(chantier) });
 });
 
@@ -391,6 +424,7 @@ chantiersRouter.delete('/:reference/rex', requireAuth, requireRole('chargeAffair
     data: { rexValide: false, rexTranscription: null, rexAudioPath: null, rexSoumisAt: null },
     include: CHANTIER_INCLUDE,
   });
+  await triggerChantierChanged(chantier.reference);
   res.json({ chantier: serializeChantier(chantier) });
 });
 
@@ -426,6 +460,7 @@ chantiersRouter.post('/:reference/pv', requireAuth, requireRattachement, async (
     },
     include: CHANTIER_INCLUDE,
   });
+  await triggerChantierChanged(chantier.reference);
   res.json({ chantier: serializeChantier(chantier) });
 });
 
@@ -457,6 +492,7 @@ chantiersRouter.post('/:reference/documents', requireAuth, requireRattachement, 
     },
     include: { auteur: true },
   });
+  await triggerChantierChanged(chantier.reference);
   res.status(201).json({ document: doc });
 });
 
@@ -480,6 +516,7 @@ chantiersRouter.delete('/:reference/documents/:docId', requireAuth, requireRatta
   await prisma.documentTerrain.delete({ where: { id: doc.id } });
 
   const chantier = await prisma.chantier.findUnique({ where: { id: req.chantier!.id }, include: CHANTIER_INCLUDE });
+  await triggerChantierChanged(chantier!.reference);
   res.json({ chantier: serializeChantier(chantier!) });
 });
 
@@ -521,6 +558,7 @@ chantiersRouter.post(
     });
 
     const updated = await prisma.chantier.findUnique({ where: { id: chantier.id }, include: CHANTIER_INCLUDE });
+    await triggerChantierChanged(updated!.reference);
     res.status(201).json({ chantier: serializeChantier(updated!) });
   },
 );
@@ -542,6 +580,7 @@ chantiersRouter.delete(
     await prisma.documentChantier.delete({ where: { id: doc.id } });
 
     const updated = await prisma.chantier.findUnique({ where: { id: chantier.id }, include: CHANTIER_INCLUDE });
+    await triggerChantierChanged(updated!.reference);
     res.json({ chantier: serializeChantier(updated!) });
   },
 );
@@ -581,6 +620,7 @@ chantiersRouter.put(
     });
 
     const updated = await prisma.chantier.findUnique({ where: { id: chantier.id }, include: CHANTIER_INCLUDE });
+    await triggerChantierChanged(updated!.reference);
     res.json({ chantier: serializeChantier(updated!) });
   },
 );

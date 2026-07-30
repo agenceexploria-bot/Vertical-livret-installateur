@@ -212,22 +212,29 @@ class _PointCardState extends State<_PointCard> {
     }
   }
 
+  /// Un point déjà validé (conforme ou non conforme) redevient "à faire" en
+  /// retapant la case — seul un point encore vide se marque conforme ici.
   Future<void> _toggle(BuildContext context) async {
-    final next = widget.point.status == PointStatus.conforme ? PointStatus.vide : PointStatus.conforme;
+    final next = widget.point.status == PointStatus.vide ? PointStatus.conforme : PointStatus.vide;
     final nom = context.read<AuthState>().currentUser?.fullName;
     await context.read<ChantierState>().updatePoint(widget.reference, widget.point.id, status: next.name, validatedByName: nom);
   }
 
   /// Une anomalie doit être prouvée par une photo — contrairement à la
-  /// validation d'un point conforme, qui n'en a plus besoin.
+  /// validation d'un point conforme, qui n'en a plus besoin. Retaper alors
+  /// que l'anomalie est déjà signalée l'annule (retour à "à faire").
   Future<void> _signalerAnomalie(BuildContext context) async {
+    final nom = context.read<AuthState>().currentUser?.fullName;
+    if (widget.point.status == PointStatus.nonConforme) {
+      await context.read<ChantierState>().updatePoint(widget.reference, widget.point.id, status: PointStatus.vide.name, validatedByName: nom);
+      return;
+    }
     if (widget.point.photoPath == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Une photo est obligatoire pour signaler une anomalie.')),
       );
       return;
     }
-    final nom = context.read<AuthState>().currentUser?.fullName;
     await context.read<ChantierState>().updatePoint(widget.reference, widget.point.id, status: PointStatus.nonConforme.name, validatedByName: nom);
   }
 }

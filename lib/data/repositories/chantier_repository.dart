@@ -137,8 +137,15 @@ class ChantierRepository {
           if (point.id != pointId) continue;
           if (status != null) point.status = PointStatus.values.firstWhere((s) => s.name == status);
           if (photo != null) point.photoPath = photo;
-          if (validatedByName != null) point.validePar = validatedByName;
-          if (clientValidatedAt != null) point.valideAt = DateTime.parse(clientValidatedAt);
+          // Une annulation de validation (retour à `vide`) efface l'attribution,
+          // comme côté serveur (voir PATCH .../points/:pointId).
+          if (status == 'vide') {
+            point.validePar = null;
+            point.valideAt = null;
+          } else {
+            if (validatedByName != null) point.validePar = validatedByName;
+            if (clientValidatedAt != null) point.valideAt = DateTime.parse(clientValidatedAt);
+          }
           break;
         }
       });

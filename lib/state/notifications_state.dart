@@ -28,6 +28,15 @@ class NotificationsState extends ChangeNotifier {
     }
   }
 
+  /// Réagit à un événement temps réel "notification-created" (voir
+  /// RealtimeService) — insère directement le payload reçu, sans refetch.
+  void handleRealtimeNotification(Map<String, dynamic> json) {
+    final notification = NotificationItem.fromJson(json);
+    if (_notifications.any((n) => n.id == notification.id)) return;
+    _notifications = [notification, ..._notifications];
+    notifyListeners();
+  }
+
   Future<void> marquerLue(String id) async {
     await _api.marquerNotificationLue(id);
     final index = _notifications.indexWhere((n) => n.id == id);

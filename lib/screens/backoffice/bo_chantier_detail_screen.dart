@@ -341,6 +341,17 @@ class BoChantierDetailScreen extends StatelessWidget {
     );
   }
 
+  /// Aperçu : ouvre le document dans un nouvel onglet du navigateur (rendu
+  /// natif — PDF/image affichés directement), sans forcer de téléchargement.
+  Future<void> _ouvrirDocument(BuildContext context, String filePath) async {
+    final ok = await launchUrl(Uri.parse(filePath), mode: LaunchMode.externalApplication);
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Impossible d\'ouvrir ce document.')),
+      );
+    }
+  }
+
   Future<void> _telechargerDocument(BuildContext context, String filePath) async {
     final ok = await launchUrl(forceDownloadUri(filePath), mode: LaunchMode.externalApplication);
     if (!ok && context.mounted) {
@@ -354,7 +365,7 @@ class BoChantierDetailScreen extends StatelessWidget {
     return BoTableRow(
       padding: const EdgeInsets.symmetric(vertical: 6),
       border: const Border(bottom: BorderSide(color: Color(0xFFEEF1F3))),
-      onTap: d.filePath == null ? null : () => _telechargerDocument(context, d.filePath!),
+      onTap: d.filePath == null ? null : () => _ouvrirDocument(context, d.filePath!),
       child: Row(
         children: [
           Icon(d.filePath != null ? Icons.description_outlined : Icons.image_outlined, size: 16, color: AppColors.acierClair),
@@ -391,7 +402,7 @@ class BoChantierDetailScreen extends StatelessWidget {
     return BoTableRow(
       padding: const EdgeInsets.symmetric(vertical: 6),
       border: const Border(bottom: BorderSide(color: Color(0xFFEEF1F3))),
-      onTap: () => launchUrl(forceDownloadUri(d.filePath), mode: LaunchMode.externalApplication),
+      onTap: () => _ouvrirDocument(context, d.filePath),
       child: Row(
         children: [
           Expanded(
@@ -414,6 +425,11 @@ class BoChantierDetailScreen extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.download_outlined, size: 18, color: AppColors.acierClair),
+            tooltip: 'Télécharger',
+            onPressed: () => _telechargerDocument(context, d.filePath),
           ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert, size: 18, color: AppColors.acierClair),

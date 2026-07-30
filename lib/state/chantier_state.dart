@@ -123,6 +123,26 @@ class ChantierState extends ChangeNotifier {
     _replaceInList(updated);
   }
 
+  /// Réagit à un événement temps réel "chantier-changed" (voir RealtimeService)
+  /// : refetch ce seul chantier — couvre aussi bien une mise à jour d'un
+  /// chantier déjà connu qu'une création par un autre utilisateur (absent de
+  /// la liste locale, alors ajouté par [_replaceInList]).
+  Future<void> handleRealtimeChange(String reference) async {
+    try {
+      final updated = await _repository.getChantier(reference);
+      _replaceInList(updated);
+    } catch (_) {
+      // Chantier supprimé entre-temps ou réseau indisponible — ignoré, la
+      // suppression est de toute façon signalée par son propre événement.
+    }
+  }
+
+  void handleRealtimeDelete(String reference) {
+    _chantiers = _chantiers.where((c) => c.reference != reference).toList();
+    if (_currentChantier?.reference == reference) _currentChantier = null;
+    notifyListeners();
+  }
+
   void _replaceInList(Chantier updated) {
     final index = _chantiers.indexWhere((c) => c.reference == updated.reference);
     if (index != -1) {

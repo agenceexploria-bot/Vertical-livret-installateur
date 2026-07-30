@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'core/theme.dart';
 import 'core/router.dart';
+import 'core/realtime_service.dart';
 import 'data/api_client.dart';
 import 'data/local/app_database.dart';
 import 'data/repositories/auth_repository.dart';
@@ -77,6 +78,16 @@ class _RouterHost extends StatefulWidget {
 
 class _RouterHostState extends State<_RouterHost> {
   late final GoRouter _router = AppRouter.build(context.read<AuthState>());
+  final RealtimeService _realtime = RealtimeService();
+
+  @override
+  void initState() {
+    super.initState();
+    _realtime.onChantierChanged = (reference) => context.read<ChantierState>().handleRealtimeChange(reference);
+    _realtime.onChantierDeleted = (reference) => context.read<ChantierState>().handleRealtimeDelete(reference);
+    _realtime.onNotificationCreated = (json) => context.read<NotificationsState>().handleRealtimeNotification(json);
+    _realtime.connect();
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -95,6 +95,7 @@ de chaque variable et où l'obtenir) :
 | `PORT` | Port du serveur local (défaut `3000`) |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | Envoi réel du code à 6 chiffres (2FA inscription) — **obligatoires**, le serveur refuse de démarrer si l'une manque |
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_PHONE_NUMBER` | SMS de relance installateur — optionnel, sans elles seule cette fonctionnalité échoue (502) |
+| `PUSHER_APP_ID` / `PUSHER_KEY` / `PUSHER_SECRET` / `PUSHER_CLUSTER` | Synchronisation temps réel (app créée sur dashboard.pusher.com) — optionnel, sans elles l'app fonctionne normalement mais sans mise à jour instantanée entre appareils. `PUSHER_KEY`/`PUSHER_CLUSTER` doivent aussi être recopiés dans `lib/core/realtime_config.dart` |
 
 Puis initialisez la base de données :
 

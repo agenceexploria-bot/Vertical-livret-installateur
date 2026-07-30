@@ -158,7 +158,7 @@ class _TopBar extends StatelessWidget {
     final leftCluster = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const SizedBox(height: 46, child: VerticalLogo(height: 46, onDarkBackground: true)),
+        const VerticalLogo(height: 56, bubble: true),
         const SizedBox(width: 20),
         Container(
           margin: const EdgeInsets.only(right: 8),
