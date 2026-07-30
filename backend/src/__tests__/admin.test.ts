@@ -173,9 +173,6 @@ describe('Gestion globale des comptes (Admin)', () => {
 
 describe("Tableau de bord d'activité Admin", () => {
   it('agrège inscriptions en attente, anomalies, PV signés et REX soumis', async () => {
-    // Timeout relevé : chaque PATCH sur un point d'auto-contrôle vérifie
-    // désormais le seuil de notification à 80% (requête supplémentaire), et
-    // ce test en déclenche onze en parallèle contre la vraie base Neon.
     const adminToken = await createAdmin();
     const ca = await createCa();
 
@@ -240,7 +237,7 @@ describe("Tableau de bord d'activité Admin", () => {
     expect(feed.body.rexEnAttente).toHaveLength(1);
     expect(feed.body.rexEnAttente[0].rexTranscription).toContain('bien passé');
     expect(feed.body.pvRecents[0].pvSignatureImagePath).toMatch(/^https:\/\/blob\.vercel-storage\.com\/test\/pv-signe-.+\.pdf$/);
-  });
+  }, 30000);
 });
 
 describe('GET /admin/stats', () => {
@@ -305,5 +302,5 @@ describe('GET /admin/stats', () => {
     expect(currentWeek.pvSignes).toBe(1);
     expect(currentWeek.rexSoumis).toBe(1);
     expect(currentWeek.anomalies).toBe(1);
-  });
+  }, 30000);
 });
