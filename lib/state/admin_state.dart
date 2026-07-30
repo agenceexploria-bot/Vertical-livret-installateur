@@ -44,6 +44,20 @@ class AdminState extends ChangeNotifier {
     }
   }
 
+  /// Charge un compte précis s'il n'est pas déjà dans [tousLesComptes] (accès
+  /// direct à une fiche détaillée sans être passé par la liste d'abord).
+  Future<void> fetchCompte(String id) async {
+    if (_tousLesComptes.any((u) => u.id == id)) return;
+    try {
+      final data = await _api.getCompteAdmin(id);
+      final user = User.fromJson(data['compte'] as Map<String, dynamic>);
+      _tousLesComptes = [..._tousLesComptes, user];
+      notifyListeners();
+    } catch (_) {
+      // Compte introuvable ou droits insuffisants — l'écran affichera "introuvable".
+    }
+  }
+
   Future<void> validerCompteInterne(User user) async {
     final data = await _api.validerCompteInterne(user.id);
     final updated = User.fromJson(data['user'] as Map<String, dynamic>);

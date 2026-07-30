@@ -36,6 +36,7 @@ import '../screens/backoffice/bo_new_chantier_screen.dart';
 import '../screens/backoffice/bo_chantier_detail_screen.dart';
 import '../screens/backoffice/bo_comptes_screen.dart';
 import '../screens/backoffice/bo_installateur_detail_screen.dart';
+import '../screens/backoffice/bo_admin_compte_detail_screen.dart';
 import '../screens/backoffice/bo_admin_dashboard_screen.dart';
 
 /// Préfixes de back-office accessibles à chaque rôle interne — utilisé par le
@@ -256,6 +257,10 @@ class AppRouter {
         // Espace Administration : flux d'activité + validation des comptes
         // internes — en plus de l'espace CA ci-dessus, auquel l'Admin a aussi accès.
         GoRoute(path: '/backoffice/admin', builder: (context, state) => const BoAdminDashboardScreen()),
+        // Fiche détaillée d'un compte, tous rôles confondus (sauf Admin) — voir
+        // BoAdminCompteDetailScreen, distincte de /backoffice/ca/comptes/:id
+        // (BoInstallateurDetailScreen) qui ne couvre que les installateurs.
+        GoRoute(path: '/backoffice/admin/comptes/:id', builder: (context, state) => const BoAdminCompteDetailScreen()),
       ],
     );
   }

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme.dart';
 import '../../../core/widgets/glass_app_bar.dart';
+import '../../../core/widgets/gps_pin_icon.dart';
 import '../../../core/widgets/responsive_layout.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../data/models/chantier.dart';
@@ -97,9 +98,9 @@ class FicheChantierScreen extends StatelessWidget {
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () => _ouvrirGps(context, '${chantier.adresse}, ${chantier.ville}'),
-                      // Bleu Google Maps — rend le bouton immédiatement identifiable comme
-                      // une action de géolocalisation, sans toucher à sa taille ni son comportement.
-                      icon: const Icon(Icons.map_outlined, size: 18, color: Color(0xFF4285F4)),
+                      // Carte + repère de localisation — reconnaissable immédiatement comme
+                      // une action GPS, sans toucher à la taille ni au comportement du bouton.
+                      icon: const GpsPinIcon(size: 20),
                       label: const Text('GPS'),
                     ),
                   ),

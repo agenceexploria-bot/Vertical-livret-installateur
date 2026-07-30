@@ -52,6 +52,19 @@ adminRouter.get('/comptes', requireAuth, requireRole('admin'), async (_req, res)
   res.json({ comptes: users.map(serializeUser) });
 });
 
+// Fiche détaillée d'un compte — n'importe quel rôle sauf Admin (voir
+// findManageableAccountOrNull). Utilisée par la fiche de consultation
+// générique de l'Admin (BoAdminCompteDetailScreen), en complément de la liste
+// /comptes qui charge déjà tous les comptes d'un coup.
+adminRouter.get('/comptes/:id', requireAuth, requireRole('admin'), async (req, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.params.id },
+    include: { habilitations: true },
+  });
+  if (!user || user.role === 'admin') return res.status(404).json({ error: 'Compte introuvable' });
+  res.json({ compte: serializeUser(user) });
+});
+
 adminRouter.post('/comptes/:id/suspendre', requireAuth, requireRole('admin'), async (req, res) => {
   if (!(await findManageableAccountOrNull(req.params.id))) return res.status(404).json({ error: 'Compte introuvable' });
 

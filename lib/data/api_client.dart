@@ -284,6 +284,11 @@ class ApiClient {
     return data['comptes'] as List<dynamic>;
   }
 
+  /// Fiche détaillée d'un compte (n'importe quel rôle sauf Admin) — utilisée
+  /// quand le compte n'est pas déjà dans la liste chargée localement (accès
+  /// direct par lien, par exemple).
+  Future<Map<String, dynamic>> getCompteAdmin(String id) => _request('GET', '/admin/comptes/$id');
+
   Future<Map<String, dynamic>> suspendreCompteAdmin(String id) => _request('POST', '/admin/comptes/$id/suspendre');
   Future<Map<String, dynamic>> reactiverCompteAdmin(String id) => _request('POST', '/admin/comptes/$id/reactiver');
 

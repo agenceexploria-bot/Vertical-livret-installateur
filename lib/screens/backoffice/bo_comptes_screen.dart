@@ -192,10 +192,17 @@ class BoComptesScreen extends StatelessWidget {
             : ('Actif', StatusType.conforme);
 
     return BoTableRow(
+      onTap: () => context.push('/backoffice/admin/comptes/${u.id}'),
       border: const Border(top: BorderSide(color: AppColors.lignes)),
       child: Row(
         children: [
-          Expanded(flex: 3, child: Text(u.fullName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+          Expanded(
+            flex: 3,
+            child: Text(
+              u.fullName,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, decoration: TextDecoration.underline),
+            ),
+          ),
           Expanded(flex: 2, child: Text(_roleLabel(u.role), style: const TextStyle(fontSize: 11.5, color: AppColors.acier))),
           Expanded(flex: 3, child: Text(u.email ?? '—', style: const TextStyle(fontSize: 11.5, color: AppColors.acier))),
           Expanded(flex: 2, child: StatusIndicator(label: statutLabel, type: statutType)),
