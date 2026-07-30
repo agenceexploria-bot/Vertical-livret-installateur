@@ -436,17 +436,22 @@ chantiersRouter.post('/:reference/pv', requireAuth, requireRattachement, async (
 
   const existing = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
   if (!existing) return res.status(404).json({ error: 'Chantier introuvable' });
-  if (existing.pvSigne) return res.status(409).json({ error: 'Le PV a déjà été signé pour ce chantier' });
 
-  // Le PV est désormais renseigné par le back-office (CA/Admin), dont la
-  // décision fait foi même si l'auto-contrôle n'est pas terminé — l'ancien
-  // verrou à 100% de complétion a été retiré (voir refonte du flux PV).
+  // Le PV peut être renseigné par le back-office ou par l'installateur (les
+  // deux flux coexistent), et modifié à nouveau ensuite par l'un ou l'autre —
+  // ce n'est plus bloqué une fois signé (voir aussi DELETE ci-dessous pour la
+  // suppression définitive par le back-office). L'ancienne exigence de 100%
+  // de complétion de l'auto-contrôle a également été retirée.
   if (parsed.data.signatureImage && !isAllowedFileDataUrl(parsed.data.signatureImage)) {
     return res.status(400).json({ error: 'Type de fichier non autorisé' });
   }
 
   let pvSignatureImagePath: string | undefined;
   if (parsed.data.signatureImage) {
+    // Remplace l'ancienne signature/le PDF précédent sur Vercel Blob plutôt
+    // que de le laisser orphelin, comme pour les autres fichiers remplacés
+    // (voir PUT .../documents-chantier/:docId).
+    if (existing.pvSignatureImagePath) await deleteBlobFile(existing.pvSignatureImagePath);
     pvSignatureImagePath = await saveBase64File(parsed.data.signatureImage, `signature-${existing.id}`);
   }
 
@@ -458,6 +463,26 @@ chantiersRouter.post('/:reference/pv', requireAuth, requireRattachement, async (
       pvSigneAt: new Date(),
       pvSignatureImagePath,
     },
+    include: CHANTIER_INCLUDE,
+  });
+  await triggerChantierChanged(chantier.reference);
+  res.json({ chantier: serializeChantier(chantier) });
+});
+
+// Supprime définitivement le PV d'un chantier — réservé au CA/Admin, comme
+// pour le REX. Contrairement à une simple modification (POST ci-dessus, qui
+// écrase et remplace), la suppression efface entièrement l'état et le
+// fichier associé sur Vercel Blob.
+chantiersRouter.delete('/:reference/pv', requireAuth, requireRole('chargeAffaires', 'admin'), async (req, res) => {
+  const existing = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
+  if (!existing) return res.status(404).json({ error: 'Chantier introuvable' });
+  if (!existing.pvSigne) return res.status(404).json({ error: 'Aucun PV à supprimer pour ce chantier' });
+
+  if (existing.pvSignatureImagePath) await deleteBlobFile(existing.pvSignatureImagePath);
+
+  const chantier = await prisma.chantier.update({
+    where: { reference: req.params.reference },
+    data: { pvSigne: false, pvSigneur: null, pvSigneAt: null, pvSignatureImagePath: null },
     include: CHANTIER_INCLUDE,
   });
   await triggerChantierChanged(chantier.reference);

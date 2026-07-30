@@ -216,9 +216,35 @@ class BoChantierDetailScreen extends StatelessWidget {
     );
   }
 
+  void _confirmerSuppressionPv(BuildContext context, Chantier chantier) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Supprimer ce PV ?'),
+        content: Text(
+          'Le PV du chantier ${chantier.reference} sera supprimé définitivement, y compris la signature/le PDF associé. Cette action est irréversible.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Annuler')),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppColors.rouge),
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              context.read<ChantierState>().deletePv(chantier.reference);
+            },
+            child: const Text('Supprimer définitivement'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildLeftColumn(BuildContext context, Chantier chantier) {
     final role = context.watch<AuthState>().currentUser?.role;
     final canRenseignerPv = role == UserRole.admin || role == UserRole.chargeAffaires || role == UserRole.direction;
+    // Suppression réservée au CA/Admin, comme côté backend (DELETE .../pv) —
+    // Direction peut renseigner le PV mais pas le supprimer.
+    final canSupprimerPv = role == UserRole.admin || role == UserRole.chargeAffaires;
     return Column(
       children: [
         BoPanel(
@@ -258,10 +284,28 @@ class BoChantierDetailScreen extends StatelessWidget {
         BoPanel(
           title: 'Procès-verbal de réception',
           child: chantier.pvSigne
-              ? PvSignaturePanel(
-                  signataire: chantier.pvSigneur,
-                  signeAt: chantier.pvSigneAt,
-                  signatureImagePath: chantier.pvSignatureImagePath,
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    PvSignaturePanel(
+                      signataire: chantier.pvSigneur,
+                      signeAt: chantier.pvSigneAt,
+                      signatureImagePath: chantier.pvSignatureImagePath,
+                    ),
+                    if (canSupprimerPv) ...[
+                      const SizedBox(height: 12),
+                      OutlinedButton(
+                        onPressed: () => _confirmerSuppressionPv(context, chantier),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(0, 32),
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          foregroundColor: AppColors.rouge,
+                          side: const BorderSide(color: AppColors.rouge),
+                        ),
+                        child: const Text('Supprimer le PV', style: TextStyle(fontSize: 11.5)),
+                      ),
+                    ],
+                  ],
                 )
               : canRenseignerPv
                   ? Column(

@@ -200,7 +200,7 @@ describe('Progression et modules', () => {
     expect(res.body.chantier.pvSigne).toBe(true);
   });
 
-  it('signe le PV une fois l\'auto-contrôle complet, et refuse une seconde signature', async () => {
+  it('signe le PV une fois l\'auto-contrôle complet, et permet de le modifier ensuite', async () => {
     const ca = await createCa();
     const created = await createChantier(ca.accessToken);
 
@@ -223,11 +223,15 @@ describe('Progression et modules', () => {
     expect(res.body.chantier.pvSigne).toBe(true);
     expect(res.body.chantier.pvSigneur).toBe('M. Weber');
 
+    // Le PV n'est plus verrouillé après signature : le CA (ou l'installateur)
+    // peut le modifier à nouveau (voir refonte — suppression réservée à
+    // DELETE .../pv, séparée d'une simple modification).
     const second = await request(app)
       .post('/chantiers/LD64397/pv')
       .set('Authorization', `Bearer ${ca.accessToken}`)
       .send({ signataire: 'Un autre' });
-    expect(second.status).toBe(409);
+    expect(second.status).toBe(200);
+    expect(second.body.chantier.pvSigneur).toBe('Un autre');
   });
 
   it('enregistre l\'image de la signature sur le stockage distant et renvoie son URL', async () => {

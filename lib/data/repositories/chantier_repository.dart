@@ -217,6 +217,13 @@ class ChantierRepository {
     }
   }
 
+  /// Supprime définitivement le PV d'un chantier (CA/Admin, back-office) —
+  /// action toujours en ligne, comme [deleteRex]/[deleteChantier].
+  Future<Chantier> deletePv(String reference) async {
+    final data = await _api.deletePv(reference);
+    return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
+  }
+
   /// Suppression d'un document terrain (Module 8) — toujours en ligne, comme
   /// [deleteDocumentChantier] (action destructive, pas de file d'attente).
   Future<Chantier> deleteDocument(String reference, String docId) async {

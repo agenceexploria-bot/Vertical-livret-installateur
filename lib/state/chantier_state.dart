@@ -242,6 +242,38 @@ class ChantierState extends ChangeNotifier {
     _replaceInList(updated);
   }
 
+  /// Optimistic UI : le PV disparaît immédiatement (retour à "non signé"),
+  /// avec restauration en cas d'échec réseau réel.
+  Future<void> deletePv(String reference) async {
+    final chantier = findByReference(reference);
+    final prevPvSigne = chantier?.pvSigne ?? false;
+    final prevPvSigneur = chantier?.pvSigneur;
+    final prevPvSigneAt = chantier?.pvSigneAt;
+    final prevPvSignatureImagePath = chantier?.pvSignatureImagePath;
+    if (chantier != null) {
+      chantier.pvSigne = false;
+      chantier.pvSigneur = null;
+      chantier.pvSigneAt = null;
+      chantier.pvSignatureImagePath = null;
+      notifyListeners();
+      await _repository.cacheChantierLocally(chantier);
+    }
+    try {
+      final updated = await _repository.deletePv(reference);
+      _replaceInList(updated);
+    } catch (e) {
+      if (chantier != null) {
+        chantier.pvSigne = prevPvSigne;
+        chantier.pvSigneur = prevPvSigneur;
+        chantier.pvSigneAt = prevPvSigneAt;
+        chantier.pvSignatureImagePath = prevPvSignatureImagePath;
+        notifyListeners();
+        await _repository.cacheChantierLocally(chantier);
+      }
+      rethrow;
+    }
+  }
+
   /// Optimistic UI : un document "en file" (même style que le dépôt hors-ligne
   /// existant, voir ChantierRepository) apparaît immédiatement dans la liste
   /// pendant l'envoi réel, plutôt que de laisser l'écran figé le temps des

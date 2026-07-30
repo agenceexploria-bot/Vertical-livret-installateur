@@ -76,7 +76,13 @@ class _ConfirmationScreenState extends State<ConfirmationScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 60),
+            const SizedBox(height: 16),
+            TextButton.icon(
+              onPressed: () => context.push('/signature'),
+              icon: const Icon(Icons.edit_outlined, size: 18),
+              label: const Text('Modifier la signature'),
+            ),
+            const SizedBox(height: 44),
             ElevatedButton(
               onPressed: () => context.go('/'),
               child: const Text('Retour au livret'),

@@ -345,6 +345,11 @@ class ApiClient {
     });
   }
 
+  /// Supprime définitivement le PV d'un chantier (CA/Admin) — distinct d'une
+  /// simple modification (postPv, qui écrase et remplace sans blocage).
+  Future<Map<String, dynamic>> deletePv(String reference) =>
+      _request('DELETE', '/chantiers/$reference/pv');
+
   Future<Map<String, dynamic>> addDocument(String reference, {required String titre, required String categorie, required String file}) {
     return _request('POST', '/chantiers/$reference/documents', body: {'titre': titre, 'categorie': categorie, 'file': file});
   }
