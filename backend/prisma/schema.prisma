@@ -44,6 +44,7 @@ model User {
   chantiersRattaches  ChantierInstallateur[]
   documentsTerrain    DocumentTerrain[]
   refreshTokens       RefreshToken[]
+  chantiersCommeCA    Chantier[]             @relation("ChantierChargeAffaires")
 }
 
 model Habilitation {
@@ -104,11 +105,31 @@ model Chantier {
   pvSignatureImagePath String?
   createdAt         DateTime @default(now())
 
+  // Rattachement direct à un CA responsable, renseigné par l'Admin à la
+  // création (voir la refonte : sélecteur de CA dans le formulaire admin) —
+  // optionnel, distinct de ChantierInstallateur qui rattache des installateurs.
+  chargeAffaires      User?    @relation("ChantierChargeAffaires", fields: [chargeAffairesId], references: [id])
+  chargeAffairesId    String?
+
   pointsControle      PointControle[]
   installateurs       ChantierInstallateur[]
   documentsTerrain    DocumentTerrain[]
   documentsChantier   DocumentChantier[]
+  notifications       Notification[]
   livretsOuvertsJson  String @default("[]") // JSON-encoded list of user ids
+}
+
+// Notifications internes (CA/Admin), ex. alerte de prévention quand
+// l'auto-contrôle d'un chantier atteint 80% — pas de push/email, juste un
+// panneau consulté dans le back-office.
+model Notification {
+  id         String   @id @default(cuid())
+  chantier   Chantier @relation(fields: [chantierId], references: [id], onDelete: Cascade)
+  chantierId String
+  type       String
+  message    String
+  lue        Boolean  @default(false)
+  createdAt  DateTime @default(now())
 }
 
 model ChantierInstallateur {

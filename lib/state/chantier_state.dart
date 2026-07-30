@@ -118,6 +118,11 @@ class ChantierState extends ChangeNotifier {
     _replaceInList(updated);
   }
 
+  Future<void> deleteDocument(String reference, String docId) async {
+    final updated = await _repository.deleteDocument(reference, docId);
+    _replaceInList(updated);
+  }
+
   void _replaceInList(Chantier updated) {
     final index = _chantiers.indexWhere((c) => c.reference == updated.reference);
     if (index != -1) {

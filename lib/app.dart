@@ -14,6 +14,7 @@ import 'state/network_state.dart';
 import 'state/chantier_state.dart';
 import 'state/comptes_state.dart';
 import 'state/admin_state.dart';
+import 'state/notifications_state.dart';
 
 class VerticalApp extends StatelessWidget {
   const VerticalApp({super.key});
@@ -54,6 +55,9 @@ class VerticalApp extends StatelessWidget {
         ),
         ChangeNotifierProvider(
           create: (context) => AdminState(context.read<ApiClient>()),
+        ),
+        ChangeNotifierProvider(
+          create: (context) => NotificationsState(context.read<ApiClient>()),
         ),
       ],
       child: const _RouterHost(),

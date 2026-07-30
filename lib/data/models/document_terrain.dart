@@ -8,6 +8,7 @@ class DocumentTerrain {
   final CategorieDocument categorie;
   final DateTime horodatage;
   final String auteur;
+  final String? auteurId;
   bool envoye;
   final String? filePath;
 
@@ -17,6 +18,7 @@ class DocumentTerrain {
     required this.categorie,
     required this.horodatage,
     required this.auteur,
+    this.auteurId,
     this.envoye = true,
     this.filePath,
   });
@@ -42,6 +44,7 @@ class DocumentTerrain {
         categorie: categorieFromJson(json['categorie'] as String),
         horodatage: DateTime.parse(json['horodatage'] as String),
         auteur: json['auteur'] as String? ?? '',
+        auteurId: json['auteurId'] as String?,
         // Le serveur ne renvoie que des documents déjà envoyés ; `envoye:
         // false` n'apparaît que sur une entrée optimiste ajoutée localement
         // au cache pendant que l'envoi est en file d'attente hors-ligne.
@@ -57,6 +60,7 @@ class DocumentTerrain {
         'categorie': categorie.name,
         'horodatage': horodatage.toIso8601String(),
         'auteur': auteur,
+        'auteurId': auteurId,
         'envoye': envoye,
         'filePath': filePath,
       };

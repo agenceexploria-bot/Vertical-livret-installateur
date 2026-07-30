@@ -195,6 +195,13 @@ class ChantierRepository {
     }
   }
 
+  /// Suppression d'un document terrain (Module 8) — toujours en ligne, comme
+  /// [deleteDocumentChantier] (action destructive, pas de file d'attente).
+  Future<Chantier> deleteDocument(String reference, String docId) async {
+    final data = await _api.deleteDocument(reference, docId);
+    return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
+  }
+
   /// [file] : photo ou PDF, en data URL base64 (compressé côté client pour
   /// les photos) — requis, comme pour les autres pièces jointes hors-ligne.
   /// [auteurName] n'est utilisé que pour l'affichage optimiste local.

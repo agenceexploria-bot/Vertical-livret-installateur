@@ -3,10 +3,12 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme.dart';
 import '../../../core/widgets/vertical_logo.dart';
+import 'package:intl/intl.dart';
 import '../../../data/models/user.dart';
 import '../../../state/auth_state.dart';
 import '../../../state/chantier_state.dart';
 import '../../../state/comptes_state.dart';
+import '../../../state/notifications_state.dart';
 
 class _BoNavTab {
   final String label;
@@ -89,6 +91,10 @@ class BoShell extends StatelessWidget {
         user?.role == UserRole.direction ||
         user?.role == UserRole.admin;
     final needsComptes = needsChantiers;
+    // Les notifications de prévention (auto-contrôle à 80%) ne concernent que
+    // le CA et l'Admin côté backend (voir notificationsRouter) — Direction
+    // n'y a pas droit.
+    final needsNotifications = user?.role == UserRole.chargeAffaires || user?.role == UserRole.admin;
 
     if (needsChantiers) {
       final chantierState = context.watch<ChantierState>();
@@ -103,6 +109,14 @@ class BoShell extends StatelessWidget {
       if (comptesState.installateurs.isEmpty && !comptesState.isLoading) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (context.mounted) context.read<ComptesState>().fetch();
+        });
+      }
+    }
+    if (needsNotifications) {
+      final notificationsState = context.watch<NotificationsState>();
+      if (notificationsState.notifications.isEmpty && !notificationsState.isLoading) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (context.mounted) context.read<NotificationsState>().fetch();
         });
       }
     }
@@ -135,6 +149,9 @@ class _TopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final notifState = context.watch<NotificationsState>();
+    final notifCount = notifState.nonLuesCount;
+
     // Logo + badge d'espace + onglets défilent horizontalement s'ils ne
     // tiennent pas (viewport téléphone) — notification et avatar restent
     // toujours visibles à droite, jamais coupés par le défilement.
@@ -175,27 +192,46 @@ class _TopBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 16),
+          IconButton(
+            onPressed: () => context.push('/backoffice/ca/auto-controle'),
+            icon: const Icon(Icons.ios_share_outlined, color: Colors.white, size: 18),
+            tooltip: 'Exports Qualité (PDF/CSV)',
+            style: IconButton.styleFrom(
+              side: const BorderSide(color: AppColors.acierClair, width: 1.5),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              minimumSize: const Size(30, 30),
+              padding: EdgeInsets.zero,
+            ),
+          ),
+          const SizedBox(width: 16),
           Stack(
             clipBehavior: Clip.none,
             children: [
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  border: Border.all(color: AppColors.acierClair, width: 1.5),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Icon(Icons.notifications_outlined, color: Colors.white, size: 16),
-              ),
-              Positioned(
-                top: -6,
-                right: -6,
+              InkWell(
+                onTap: () => _openNotifications(context, notifState),
+                borderRadius: BorderRadius.circular(6),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                  decoration: BoxDecoration(color: AppColors.orange, borderRadius: BorderRadius.circular(99)),
-                  child: const Text('3', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Colors.white)),
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: AppColors.acierClair, width: 1.5),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Icon(Icons.notifications_outlined, color: Colors.white, size: 16),
                 ),
               ),
+              if (notifCount > 0)
+                Positioned(
+                  top: -6,
+                  right: -6,
+                  child: IgnorePointer(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                      decoration: BoxDecoration(color: AppColors.orange, borderRadius: BorderRadius.circular(99)),
+                      child: Text('$notifCount', style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Colors.white)),
+                    ),
+                  ),
+                ),
             ],
           ),
           const SizedBox(width: 16),
@@ -233,6 +269,40 @@ class _TopBar extends StatelessWidget {
               child: Text(initials, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  static void _openNotifications(BuildContext context, NotificationsState notifState) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Notifications'),
+        content: SizedBox(
+          width: 380,
+          child: notifState.notifications.isEmpty
+              ? const Text('Aucune notification.', style: TextStyle(fontSize: 12.5, color: AppColors.acierClair))
+              : SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: notifState.notifications
+                        .map((n) => ListTile(
+                              leading: Icon(Icons.warning_amber_rounded, color: n.lue ? AppColors.acierClair : AppColors.orange),
+                              title: Text(n.message, style: const TextStyle(fontSize: 12.5)),
+                              subtitle: Text(DateFormat('dd/MM/yyyy HH:mm').format(n.createdAt), style: const TextStyle(fontSize: 10.5)),
+                              onTap: () {
+                                Navigator.pop(dialogContext);
+                                if (!n.lue) context.read<NotificationsState>().marquerLue(n.id);
+                                context.go('/backoffice/ca/chantiers/${n.chantierReference}');
+                              },
+                            ))
+                        .toList(),
+                  ),
+                ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Fermer')),
         ],
       ),
     );

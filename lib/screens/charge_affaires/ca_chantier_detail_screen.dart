@@ -148,14 +148,14 @@ class CaChantierDetailScreen extends StatelessWidget {
           else
             for (final d in docs) ...[
               const SizedBox(height: 8),
-              _documentRow(d),
+              _documentRow(context, chantier, d),
             ],
         ],
       ),
     );
   }
 
-  Widget _documentRow(DocumentChantier d) {
+  Widget _documentRow(BuildContext context, Chantier chantier, DocumentChantier d) {
     final icon = switch (d.type) {
       TypeDocumentChantier.securite => Icons.shield_outlined,
       TypeDocumentChantier.ficheChantier => Icons.assignment_outlined,
@@ -168,7 +168,35 @@ class CaChantierDetailScreen extends StatelessWidget {
           Icon(icon, size: 18, color: AppColors.acier),
           const SizedBox(width: 8),
           Expanded(child: Text(d.nom, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
-          const Icon(Icons.chevron_right, size: 18, color: AppColors.acierClair),
+          IconButton(
+            onPressed: () => _confirmerSuppressionDocument(context, chantier, d),
+            icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.acierClair),
+            tooltip: 'Supprimer',
+            visualDensity: VisualDensity.compact,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            padding: EdgeInsets.zero,
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmerSuppressionDocument(BuildContext context, Chantier chantier, DocumentChantier d) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Supprimer ce document ?'),
+        content: Text('« ${d.nom} » sera supprimé définitivement, y compris le fichier stocké. Cette action est irréversible.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Annuler')),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppColors.rouge),
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              context.read<ChantierState>().deleteDocumentChantier(chantier.reference, d.id);
+            },
+            child: const Text('Supprimer définitivement'),
+          ),
         ],
       ),
     );

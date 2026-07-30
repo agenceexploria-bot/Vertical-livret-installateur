@@ -4,12 +4,14 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/document_capture.dart';
+import '../../core/document_download.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/ajouter_document_chantier_dialog.dart';
 import '../../core/widgets/status_indicator.dart';
 import '../../data/models/chantier.dart';
 import '../../data/models/document_chantier.dart';
 import '../../data/models/document_terrain.dart';
+import '../../data/models/point_controle.dart';
 import '../../data/models/user.dart';
 import '../../state/auth_state.dart';
 import '../../state/chantier_state.dart';
@@ -91,12 +93,131 @@ class BoChantierDetailScreen extends StatelessWidget {
               );
             },
           ),
+          const SizedBox(height: 20),
+          _buildAutoControle(chantier),
+          const SizedBox(height: 12),
+          _buildRex(context, chantier, role),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAutoControle(Chantier chantier) {
+    final total = chantier.autoControle.length;
+    final done = chantier.autoControle.where((p) => p.isComplete).length;
+    return BoPanel(
+      title: 'Auto-contrôle & qualité (${(chantier.progressionAutoControle * 100).toInt()}%)',
+      child: chantier.autoControle.isEmpty
+          ? const Text('Aucun point d\'auto-contrôle pour ce chantier.', style: TextStyle(fontSize: 11, color: AppColors.acierClair))
+          : Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      StatusIndicator(
+                        label: '$done/$total conforme(s)',
+                        type: done == total ? StatusType.conforme : done > 0 ? StatusType.enCours : StatusType.attente,
+                      ),
+                    ],
+                  ),
+                ),
+                for (final p in chantier.autoControle) _autoControlePointRow(p),
+              ],
+            ),
+    );
+  }
+
+  Widget _autoControlePointRow(PointControle p) {
+    final (label, type) = switch (p.status) {
+      PointStatus.conforme => ('Conforme', StatusType.conforme),
+      PointStatus.nonConforme => ('Non conforme', StatusType.nonConforme),
+      PointStatus.vide => ('À faire', StatusType.attente),
+    };
+    return BoTableRow(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      border: const Border(bottom: BorderSide(color: Color(0xFFEEF1F3))),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              '${p.libelle}${p.critique ? ' (sécurité)' : ''}',
+              style: const TextStyle(fontSize: 11.5),
+            ),
+          ),
+          StatusIndicator(label: label, type: type),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 120,
+            child: Text(
+              p.validePar != null && p.valideAt != null
+                  ? '${p.validePar} · ${DateFormat('dd/MM HH:mm').format(p.valideAt!)}'
+                  : '—',
+              style: const TextStyle(fontSize: 10.5, color: AppColors.acierClair),
+              textAlign: TextAlign.end,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRex(BuildContext context, Chantier chantier, UserRole? role) {
+    final peutSupprimer = role == UserRole.chargeAffaires || role == UserRole.admin;
+    return BoPanel(
+      title: 'Retour d\'expérience (REX)',
+      child: !chantier.rexValide
+          ? const Text('Aucun REX soumis pour l\'instant.', style: TextStyle(fontSize: 11, color: AppColors.acierClair))
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    chantier.rexTranscription ?? '(note vocale sans transcription)',
+                    style: const TextStyle(fontSize: 12, color: AppColors.acier),
+                  ),
+                ),
+                if (peutSupprimer) ...[
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.acierClair),
+                    tooltip: 'Supprimer ce REX',
+                    onPressed: () => _confirmerSuppressionRex(context, chantier),
+                  ),
+                ],
+              ],
+            ),
+    );
+  }
+
+  // Seule façon de débloquer l'installateur pour qu'il puisse soumettre un
+  // nouveau REX — voir le contrôle rexValide côté backend (POST .../rex).
+  void _confirmerSuppressionRex(BuildContext context, Chantier chantier) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Supprimer ce REX ?'),
+        content: Text(
+          'Le REX du chantier ${chantier.reference} sera supprimé définitivement, y compris la note vocale. L\'installateur pourra ensuite en soumettre un nouveau. Cette action est irréversible.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Annuler')),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppColors.rouge),
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              context.read<ChantierState>().deleteRex(chantier.reference);
+            },
+            child: const Text('Supprimer définitivement'),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildLeftColumn(BuildContext context, Chantier chantier) {
+    final role = context.watch<AuthState>().currentUser?.role;
+    final canRenseignerPv = role == UserRole.admin || role == UserRole.chargeAffaires || role == UserRole.direction;
     return Column(
       children: [
         BoPanel(
@@ -133,16 +254,40 @@ class BoChantierDetailScreen extends StatelessWidget {
           title: 'Documents terrain déposés par les installateurs (Module 8)',
           child: _buildDocsTerrain(context, chantier),
         ),
-        if (chantier.pvSigne)
-          BoPanel(
-            title: 'Validation du PV',
-            child: PvSignaturePanel(
-              signataire: chantier.pvSigneur,
-              signeAt: chantier.pvSigneAt,
-              signatureImagePath: chantier.pvSignatureImagePath,
-            ),
-          ),
+        BoPanel(
+          title: 'Procès-verbal de réception',
+          child: chantier.pvSigne
+              ? PvSignaturePanel(
+                  signataire: chantier.pvSigneur,
+                  signeAt: chantier.pvSigneAt,
+                  signatureImagePath: chantier.pvSignatureImagePath,
+                )
+              : canRenseignerPv
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Le PV est renseigné par le back-office — dès validation, il se débloque côté installateur.',
+                          style: TextStyle(fontSize: 11, color: AppColors.acier),
+                        ),
+                        const SizedBox(height: 8),
+                        ElevatedButton(
+                          onPressed: () => _openRenseignerPvDialog(context, chantier),
+                          style: ElevatedButton.styleFrom(minimumSize: const Size(0, 32), padding: const EdgeInsets.symmetric(horizontal: 14)),
+                          child: const Text('Renseigner le PV', style: TextStyle(fontSize: 11.5)),
+                        ),
+                      ],
+                    )
+                  : const Text('En attente du back-office.', style: TextStyle(fontSize: 11, color: AppColors.acierClair)),
+        ),
       ],
+    );
+  }
+
+  void _openRenseignerPvDialog(BuildContext context, Chantier chantier) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => _RenseignerPvDialog(chantier: chantier),
     );
   }
 
@@ -197,10 +342,10 @@ class BoChantierDetailScreen extends StatelessWidget {
   }
 
   Future<void> _telechargerDocument(BuildContext context, String filePath) async {
-    final ok = await launchUrl(Uri.parse(filePath), mode: LaunchMode.externalApplication);
+    final ok = await launchUrl(forceDownloadUri(filePath), mode: LaunchMode.externalApplication);
     if (!ok && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Impossible d\'ouvrir ce document.')),
+        const SnackBar(content: Text('Impossible de télécharger ce document.')),
       );
     }
   }
@@ -246,7 +391,7 @@ class BoChantierDetailScreen extends StatelessWidget {
     return BoTableRow(
       padding: const EdgeInsets.symmetric(vertical: 6),
       border: const Border(bottom: BorderSide(color: Color(0xFFEEF1F3))),
-      onTap: () => launchUrl(Uri.parse(d.filePath)),
+      onTap: () => launchUrl(forceDownloadUri(d.filePath), mode: LaunchMode.externalApplication),
       child: Row(
         children: [
           Expanded(
@@ -603,6 +748,100 @@ class _ModifierChantierDialogState extends State<_ModifierChantierDialog> {
           child: _isSubmitting
               ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
               : const Text('Enregistrer'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Le PV est désormais renseigné par le back-office (CA/Admin/Direction) —
+/// signataire + PDF signé optionnel, transmis via la même route que
+/// l'ancienne signature au doigt côté installateur (les deux flux coexistent).
+class _RenseignerPvDialog extends StatefulWidget {
+  final Chantier chantier;
+  const _RenseignerPvDialog({required this.chantier});
+
+  @override
+  State<_RenseignerPvDialog> createState() => _RenseignerPvDialogState();
+}
+
+class _RenseignerPvDialogState extends State<_RenseignerPvDialog> {
+  final _signataireController = TextEditingController();
+  String? _pdfDataUrl;
+  String? _pdfName;
+  bool _isSubmitting = false;
+
+  @override
+  void dispose() {
+    _signataireController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _importerPdf() async {
+    final picked = await DocumentCapture.pickFile(allowedExtensions: ['pdf']);
+    if (picked == null) return;
+    setState(() {
+      _pdfDataUrl = picked.dataUrl;
+      _pdfName = picked.fileName;
+    });
+  }
+
+  Future<void> _enregistrer() async {
+    if (_signataireController.text.trim().isEmpty) return;
+    setState(() => _isSubmitting = true);
+    try {
+      await context.read<ChantierState>().submitPv(
+            widget.chantier.reference,
+            _signataireController.text.trim(),
+            signatureImage: _pdfDataUrl,
+          );
+      if (mounted) Navigator.of(context).pop();
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text('Renseigner le PV — ${widget.chantier.reference}'),
+      content: SizedBox(
+        width: 360,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: _signataireController,
+              decoration: const InputDecoration(labelText: 'Nom et fonction du signataire'),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _pdfName ?? 'Aucun PDF importé.',
+                    style: const TextStyle(fontSize: 11.5, color: AppColors.acier),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: _importerPdf,
+                  icon: const Icon(Icons.upload_file_outlined, size: 18),
+                  label: const Text('Importer un PDF'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Annuler')),
+        ElevatedButton(
+          onPressed: _isSubmitting ? null : _enregistrer,
+          child: _isSubmitting
+              ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Text('Valider le PV'),
         ),
       ],
     );

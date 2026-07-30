@@ -344,6 +344,11 @@ class ApiClient {
     return _request('POST', '/chantiers/$reference/documents', body: {'titre': titre, 'categorie': categorie, 'file': file});
   }
 
+  /// Suppression d'un document terrain (Module 8) — réservée à son auteur ou
+  /// à un CA/Admin (vérifié côté serveur).
+  Future<Map<String, dynamic>> deleteDocument(String reference, String docId) =>
+      _request('DELETE', '/chantiers/$reference/documents/$docId');
+
   Future<Map<String, dynamic>> addDocumentChantier(String reference,
       {required String type, required String nom, String? nomFichierOriginal, required String file}) {
     return _request('POST', '/chantiers/$reference/documents-chantier', body: {
@@ -372,4 +377,14 @@ class ApiClient {
       _request('PATCH', '/chantiers/$reference', body: body);
 
   Future<void> deleteChantier(String reference) => _request('DELETE', '/chantiers/$reference');
+
+  // ---- Notifications ----
+
+  Future<List<dynamic>> getNotifications() async {
+    final data = await _request('GET', '/notifications');
+    return data['notifications'] as List<dynamic>;
+  }
+
+  Future<Map<String, dynamic>> marquerNotificationLue(String id) =>
+      _request('PATCH', '/notifications/$id/lue');
 }

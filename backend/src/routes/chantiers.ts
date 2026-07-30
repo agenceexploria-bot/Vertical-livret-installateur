@@ -6,6 +6,7 @@ import { serializeChantier } from '../serializers';
 import { requireAuth, requireRole, AuthedRequest } from '../middleware/auth';
 import { saveBase64File, deleteBlobFile, isAllowedFileDataUrl } from '../lib/imageStorage';
 import { RECEPTION_POINTS, AUTO_CONTROLE_POINTS } from '../lib/checklistDefaults';
+import { isPointComplete } from '../lib/pointControleStatus';
 
 export const chantiersRouter = Router();
 
@@ -14,6 +15,7 @@ const CHANTIER_INCLUDE = {
   installateurs: { include: { user: true } },
   documentsTerrain: { include: { auteur: true } },
   documentsChantier: { orderBy: { createdAt: 'asc' as const } },
+  chargeAffaires: true,
 };
 
 interface ChantierScopedRequest extends AuthedRequest {
@@ -67,6 +69,7 @@ const createSchema = z.object({
   capacite: z.string().min(1),
   niveaux: z.number().int().positive(),
   referenceAffaire: z.string().min(1),
+  chargeAffairesId: z.string().optional(),
 });
 
 chantiersRouter.post('/', requireAuth, requireRole('chargeAffaires', 'direction', 'admin'), async (req, res) => {
@@ -76,6 +79,16 @@ chantiersRouter.post('/', requireAuth, requireRole('chargeAffaires', 'direction'
 
   const existing = await prisma.chantier.findUnique({ where: { reference: d.reference } });
   if (existing) return res.status(409).json({ error: 'Cette référence existe déjà' });
+
+  // Rattachement direct à un CA — réservé à l'Admin côté formulaire (voir
+  // BoNewChantierScreen), mais vérifié ici indépendamment de qui appelle la
+  // route : la valeur fournie doit correspondre à un compte CA existant.
+  if (d.chargeAffairesId) {
+    const ca = await prisma.user.findUnique({ where: { id: d.chargeAffairesId } });
+    if (!ca || ca.role !== 'chargeAffaires') {
+      return res.status(400).json({ error: 'CA sélectionné invalide' });
+    }
+  }
 
   const chantier = await prisma.chantier.create({
     data: {
@@ -93,6 +106,7 @@ chantiersRouter.post('/', requireAuth, requireRole('chargeAffaires', 'direction'
       capacite: d.capacite,
       niveaux: d.niveaux,
       referenceAffaire: d.referenceAffaire,
+      chargeAffairesId: d.chargeAffairesId,
       pointsControle: {
         create: [...RECEPTION_POINTS, ...AUTO_CONTROLE_POINTS],
       },
@@ -285,6 +299,36 @@ chantiersRouter.patch('/:reference/points/:pointId', requireAuth, requireRattach
       valideAt,
     },
   });
+
+  // Prévention : le back-office (CA/Admin) doit être alerté dès que
+  // l'auto-contrôle d'un chantier atteint 80%, pour pouvoir intervenir avant
+  // la fin du chantier plutôt que de découvrir les anomalies au moment du PV.
+  // Une seule notification par chantier (pas de spam à chaque point coché
+  // au-delà du seuil).
+  if (point.type === 'autoControle') {
+    const autoControlePoints = await prisma.pointControle.findMany({
+      where: { chantierId: req.chantier!.id, type: 'autoControle' },
+    });
+    const progression = autoControlePoints.length === 0
+      ? 0
+      : autoControlePoints.filter(isPointComplete).length / autoControlePoints.length;
+
+    if (progression >= 0.8) {
+      const existingNotif = await prisma.notification.findFirst({
+        where: { chantierId: req.chantier!.id, type: 'autoControle80' },
+      });
+      if (!existingNotif) {
+        await prisma.notification.create({
+          data: {
+            chantierId: req.chantier!.id,
+            type: 'autoControle80',
+            message: `Auto-contrôle à ${Math.round(progression * 100)}% pour ${req.chantier!.reference} — à vérifier avant réception.`,
+          },
+        });
+      }
+    }
+  }
+
   res.json({ point: updated });
 });
 
@@ -356,20 +400,13 @@ chantiersRouter.post('/:reference/pv', requireAuth, requireRattachement, async (
   const parsed = pvSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-  const existing = await prisma.chantier.findUnique({
-    where: { reference: req.params.reference },
-    include: { pointsControle: true },
-  });
+  const existing = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
   if (!existing) return res.status(404).json({ error: 'Chantier introuvable' });
   if (existing.pvSigne) return res.status(409).json({ error: 'Le PV a déjà été signé pour ce chantier' });
 
-  const autoControle = existing.pointsControle.filter((p) => p.type === 'autoControle');
-  const isComplete = (p: (typeof autoControle)[number]) => p.status !== 'vide' && (!p.photoRequise || p.photoPath != null);
-  const complete = autoControle.length > 0 && autoControle.every(isComplete);
-  if (!complete) {
-    return res.status(400).json({ error: "L'auto-contrôle doit être complet avant de signer le PV" });
-  }
-
+  // Le PV est désormais renseigné par le back-office (CA/Admin), dont la
+  // décision fait foi même si l'auto-contrôle n'est pas terminé — l'ancien
+  // verrou à 100% de complétion a été retiré (voir refonte du flux PV).
   if (parsed.data.signatureImage && !isAllowedFileDataUrl(parsed.data.signatureImage)) {
     return res.status(400).json({ error: 'Type de fichier non autorisé' });
   }
@@ -421,6 +458,29 @@ chantiersRouter.post('/:reference/documents', requireAuth, requireRattachement, 
     include: { auteur: true },
   });
   res.status(201).json({ document: doc });
+});
+
+// Suppression d'un document terrain (Module 8) — réservée à son auteur
+// (l'installateur qui l'a déposé) ou à un CA/Admin, jamais à un autre
+// installateur même rattaché au même chantier. Suppression immédiate et
+// définitive, y compris le fichier stocké sur Vercel Blob.
+chantiersRouter.delete('/:reference/documents/:docId', requireAuth, requireRattachement, async (req: ChantierScopedRequest, res) => {
+  const doc = await prisma.documentTerrain.findUnique({ where: { id: req.params.docId } });
+  if (!doc || doc.chantierId !== req.chantier!.id) {
+    return res.status(404).json({ error: 'Document introuvable' });
+  }
+
+  const estAuteur = doc.auteurId === req.auth!.userId;
+  const estCaOuAdmin = req.auth!.role === 'chargeAffaires' || req.auth!.role === 'admin';
+  if (!estAuteur && !estCaOuAdmin) {
+    return res.status(403).json({ error: 'Seul l\'auteur du document ou un CA/Admin peut le supprimer' });
+  }
+
+  if (doc.filePath) await deleteBlobFile(doc.filePath);
+  await prisma.documentTerrain.delete({ where: { id: doc.id } });
+
+  const chantier = await prisma.chantier.findUnique({ where: { id: req.chantier!.id }, include: CHANTIER_INCLUDE });
+  res.json({ chantier: serializeChantier(chantier!) });
 });
 
 const documentChantierSchema = z.object({

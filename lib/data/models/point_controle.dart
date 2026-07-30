@@ -23,7 +23,11 @@ class PointControle {
     this.valideAt,
   });
 
-  bool get isComplete => status != PointStatus.vide && (!photoRequise || photoPath != null);
+  /// Règle commune à tous les modules de contrôle (réception marchandises et
+  /// auto-contrôle) : un point conforme n'a plus besoin de photo pour être
+  /// complet ; seule une anomalie (nonConforme) exige une photo, pour en
+  /// apporter la preuve.
+  bool get isComplete => status == PointStatus.conforme || (status == PointStatus.nonConforme && photoPath != null);
 
   factory PointControle.fromJson(Map<String, dynamic> json) => PointControle(
         id: json['id'] as String,

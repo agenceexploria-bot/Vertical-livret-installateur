@@ -113,9 +113,6 @@ class _PointCardState extends State<_PointCard> {
   @override
   Widget build(BuildContext context) {
     final point = widget.point;
-    // Photo de détail bloquante : impossible de cocher un point de sécurité
-    // critique (ou tout point où la photo est requise) sans l'avoir prise.
-    final peutCocher = !point.photoRequise || point.photoPath != null;
 
     return AppCard(
       child: Column(
@@ -124,7 +121,7 @@ class _PointCardState extends State<_PointCard> {
           Row(
             children: [
               GestureDetector(
-                onTap: peutCocher ? () => _toggle(context) : null,
+                onTap: () => _toggle(context),
                 child: Container(
                   width: 24,
                   height: 24,
@@ -132,11 +129,7 @@ class _PointCardState extends State<_PointCard> {
                     shape: BoxShape.circle,
                     color: point.status == PointStatus.conforme ? AppColors.vert : Colors.transparent,
                     border: Border.all(
-                      color: point.status == PointStatus.conforme
-                          ? AppColors.vert
-                          : peutCocher
-                              ? AppColors.lignes
-                              : AppColors.lignes.withValues(alpha: 0.4),
+                      color: point.status == PointStatus.conforme ? AppColors.vert : AppColors.lignes,
                       width: 2,
                     ),
                   ),
@@ -185,13 +178,17 @@ class _PointCardState extends State<_PointCard> {
                           ? 'Capture en cours...'
                           : point.photoPath != null
                               ? 'Photo de détail jointe'
-                              : point.critique
-                                  ? 'Photo de détail obligatoire (sécurité)'
-                                  : 'Photo — appuyer',
+                              : point.status == PointStatus.nonConforme
+                                  ? 'Photo obligatoire (anomalie)'
+                                  : 'Photo (facultative) — appuyer',
                       style: TextStyle(
                         fontSize: 10.5,
                         fontWeight: FontWeight.bold,
-                        color: point.photoPath != null ? AppColors.vert : AppColors.orange,
+                        color: point.photoPath != null
+                            ? AppColors.vert
+                            : point.status == PointStatus.nonConforme
+                                ? AppColors.rouge
+                                : AppColors.orange,
                       ),
                     ),
                   ],
@@ -221,7 +218,15 @@ class _PointCardState extends State<_PointCard> {
     await context.read<ChantierState>().updatePoint(widget.reference, widget.point.id, status: next.name, validatedByName: nom);
   }
 
+  /// Une anomalie doit être prouvée par une photo — contrairement à la
+  /// validation d'un point conforme, qui n'en a plus besoin.
   Future<void> _signalerAnomalie(BuildContext context) async {
+    if (widget.point.photoPath == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Une photo est obligatoire pour signaler une anomalie.')),
+      );
+      return;
+    }
     final nom = context.read<AuthState>().currentUser?.fullName;
     await context.read<ChantierState>().updatePoint(widget.reference, widget.point.id, status: PointStatus.nonConforme.name, validatedByName: nom);
   }

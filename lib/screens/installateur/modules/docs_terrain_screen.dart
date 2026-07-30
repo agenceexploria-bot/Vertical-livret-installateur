@@ -36,6 +36,7 @@ class _DocsTerrainScreenState extends State<DocsTerrainScreen> {
     final chantierState = context.watch<ChantierState>();
     final chantier = chantierState.currentChantier!;
     final docs = chantier.docsTerrain;
+    final userId = context.watch<AuthState>().currentUser?.id;
 
     return ResponsiveLayout(
       appBar: GlassAppBar(
@@ -78,7 +79,7 @@ class _DocsTerrainScreenState extends State<DocsTerrainScreen> {
                 if (docs.isEmpty)
                   const Text('Aucun document déposé pour le moment.', style: TextStyle(color: AppColors.acierClair, fontSize: 12)),
                 for (final d in docs.reversed) ...[
-                  _buildDocItem(d),
+                  _buildDocItem(context, d, canDelete: d.auteurId != null && d.auteurId == userId),
                   const SizedBox(height: 8),
                 ],
               ],
@@ -169,7 +170,7 @@ class _DocsTerrainScreenState extends State<DocsTerrainScreen> {
     });
   }
 
-  Widget _buildDocItem(DocumentTerrain d) {
+  Widget _buildDocItem(BuildContext context, DocumentTerrain d, {required bool canDelete}) {
     return AppCard(
       onTap: d.filePath == null ? null : () => launchUrl(Uri.parse(d.filePath!)),
       child: Row(
@@ -197,7 +198,39 @@ class _DocsTerrainScreenState extends State<DocsTerrainScreen> {
               ),
               const SizedBox(width: 8),
               Text(d.envoye ? 'Envoyé' : 'En file', style: const TextStyle(fontSize: 11, color: AppColors.acierClair)),
+              if (canDelete && d.id != null)
+                IconButton(
+                  onPressed: () => _confirmerSuppression(context, d),
+                  icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.acierClair),
+                  tooltip: 'Supprimer',
+                  visualDensity: VisualDensity.compact,
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  padding: EdgeInsets.zero,
+                ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmerSuppression(BuildContext context, DocumentTerrain d) {
+    final chantierState = context.read<ChantierState>();
+    final reference = chantierState.currentChantier!.reference;
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Supprimer ce document ?'),
+        content: Text('« ${d.titre} » sera supprimé définitivement. Cette action est irréversible.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Annuler')),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppColors.rouge),
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              chantierState.deleteDocument(reference, d.id!);
+            },
+            child: const Text('Supprimer définitivement'),
           ),
         ],
       ),

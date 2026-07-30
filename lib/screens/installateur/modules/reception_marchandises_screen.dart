@@ -78,7 +78,6 @@ class _PointCardState extends State<_PointCard> {
   @override
   Widget build(BuildContext context) {
     final point = widget.point;
-    final peutValider = point.photoPath != null;
 
     return AppCard(
       child: Column(
@@ -119,18 +118,28 @@ class _PointCardState extends State<_PointCard> {
                 children: [
                   Icon(Icons.camera_alt,
                     size: 16,
-                    color: point.photoPath != null ? AppColors.vert : AppColors.orange),
+                    color: point.photoPath != null
+                        ? AppColors.vert
+                        : point.status == PointStatus.nonConforme
+                            ? AppColors.rouge
+                            : AppColors.orange),
                   const SizedBox(width: 8),
                   Text(
                     _isCapturing
                         ? 'Capture en cours...'
                         : point.photoPath != null
                             ? 'Photo jointe — reprendre'
-                            : 'Photo obligatoire — appuyer',
+                            : point.status == PointStatus.nonConforme
+                                ? 'Photo obligatoire (anomalie)'
+                                : 'Photo (facultative) — appuyer',
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
-                      color: point.photoPath != null ? AppColors.vert : AppColors.orange,
+                      color: point.photoPath != null
+                          ? AppColors.vert
+                          : point.status == PointStatus.nonConforme
+                              ? AppColors.rouge
+                              : AppColors.orange,
                     ),
                   ),
                 ],
@@ -141,9 +150,9 @@ class _PointCardState extends State<_PointCard> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: peutValider ? () => _valider(context) : null,
+              onPressed: () => _valider(context),
               style: ElevatedButton.styleFrom(backgroundColor: AppColors.vert),
-              child: Text(peutValider ? 'Valider le point' : 'Photo requise avant validation'),
+              child: const Text('Valider le point'),
             ),
           ),
         ],
@@ -185,9 +194,15 @@ class _PointCardState extends State<_PointCard> {
     await context.read<ChantierState>().updatePoint(widget.reference, widget.point.id, status: PointStatus.conforme.name, validatedByName: nom);
   }
 
-  /// Signalement d'anomalie en un geste : un seul tap suffit, sans attendre
-  /// une photo — l'installateur doit pouvoir alerter le CA immédiatement.
+  /// Une anomalie doit être prouvée par une photo — contrairement à la
+  /// validation d'un point conforme, qui n'en a plus besoin.
   Future<void> _signalerAnomalie(BuildContext context) async {
+    if (widget.point.photoPath == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Une photo est obligatoire pour signaler une anomalie.')),
+      );
+      return;
+    }
     final nom = context.read<AuthState>().currentUser?.fullName;
     await context.read<ChantierState>().updatePoint(widget.reference, widget.point.id, status: PointStatus.nonConforme.name, validatedByName: nom);
   }

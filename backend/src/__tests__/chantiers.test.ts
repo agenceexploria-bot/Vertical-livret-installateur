@@ -187,7 +187,7 @@ describe('Progression et modules', () => {
     expect(photoPath).toMatch(new RegExp(`^https://blob\\.vercel-storage\\.com/test/point-${pointId}-.+\\.jpeg$`));
   });
 
-  it('refuse de signer le PV tant que l\'auto-contrôle n\'est pas complet', async () => {
+  it('autorise la signature du PV même si l\'auto-contrôle n\'est pas complet (décision du back-office)', async () => {
     const ca = await createCa();
     await createChantier(ca.accessToken);
 
@@ -196,7 +196,8 @@ describe('Progression et modules', () => {
       .set('Authorization', `Bearer ${ca.accessToken}`)
       .send({ signataire: 'M. Weber' });
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(200);
+    expect(res.body.chantier.pvSigne).toBe(true);
   });
 
   it('signe le PV une fois l\'auto-contrôle complet, et refuse une seconde signature', async () => {

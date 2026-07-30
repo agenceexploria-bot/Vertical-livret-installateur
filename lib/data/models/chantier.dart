@@ -20,6 +20,8 @@ class Chantier {
   final String capacite;
   final int niveaux;
   final String referenceAffaire;
+  final String? chargeAffairesId;
+  final String? chargeAffairesNom;
   ChantierSyncStatus syncStatus;
 
   final List<PointControle> receptionMarchandises;
@@ -55,6 +57,8 @@ class Chantier {
     required this.capacite,
     required this.niveaux,
     required this.referenceAffaire,
+    this.chargeAffairesId,
+    this.chargeAffairesNom,
     this.syncStatus = ChantierSyncStatus.nouveau,
     required this.receptionMarchandises,
     required this.autoControle,
@@ -81,7 +85,11 @@ class Chantier {
       ? 0
       : autoControle.where((p) => p.isComplete).length / autoControle.length;
 
-  bool get canSignPV => progressionAutoControle == 1.0;
+  /// Le module PV se débloque soit parce que le back-office l'a déjà rempli
+  /// (pvSigne, vérifié séparément par l'appelant), soit dès que
+  /// l'auto-contrôle atteint 90% — la décision finale de signer reste au
+  /// back-office (voir refonte du flux PV).
+  bool get canSignPV => progressionAutoControle >= 0.9;
 
   factory Chantier.fromJson(Map<String, dynamic> json) => Chantier(
         reference: json['reference'] as String,
@@ -98,6 +106,8 @@ class Chantier {
         capacite: json['capacite'] as String,
         niveaux: json['niveaux'] as int,
         referenceAffaire: json['referenceAffaire'] as String,
+        chargeAffairesId: json['chargeAffairesId'] as String?,
+        chargeAffairesNom: json['chargeAffairesNom'] as String?,
         syncStatus: ChantierSyncStatus.values.firstWhere((s) => s.name == json['syncStatus'], orElse: () => ChantierSyncStatus.nouveau),
         receptionMarchandises: ((json['receptionMarchandises'] as List?) ?? [])
             .map((p) => PointControle.fromJson(p as Map<String, dynamic>))
@@ -140,6 +150,8 @@ class Chantier {
         'capacite': capacite,
         'niveaux': niveaux,
         'referenceAffaire': referenceAffaire,
+        'chargeAffairesId': chargeAffairesId,
+        'chargeAffairesNom': chargeAffairesNom,
         'syncStatus': syncStatus.name,
         'receptionMarchandises': receptionMarchandises.map((p) => p.toJson()).toList(),
         'autoControle': autoControle.map((p) => p.toJson()).toList(),

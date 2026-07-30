@@ -1,4 +1,5 @@
 import { Chantier, ChantierInstallateur, DocumentChantier, DocumentTerrain, Habilitation, PointControle, User } from '@prisma/client';
+import { isPointComplete } from './lib/pointControleStatus';
 
 export function serializeUser(user: User & { habilitations?: Habilitation[] }) {
   return {
@@ -45,6 +46,7 @@ export function serializeDocumentTerrain(d: DocumentTerrain & { auteur?: User })
     filePath: d.filePath,
     horodatage: d.horodatage,
     auteur: d.auteur ? `${d.auteur.prenom} ${d.auteur.nom}` : undefined,
+    auteurId: d.auteurId,
   };
 }
 
@@ -65,11 +67,11 @@ export function serializeChantier(
     installateurs?: (ChantierInstallateur & { user: User })[];
     documentsTerrain?: (DocumentTerrain & { auteur: User })[];
     documentsChantier?: DocumentChantier[];
+    chargeAffaires?: User | null;
   },
 ) {
   const reception = (c.pointsControle ?? []).filter((p) => p.type === 'reception');
   const autoControle = (c.pointsControle ?? []).filter((p) => p.type === 'autoControle');
-  const isComplete = (p: PointControle) => p.status !== 'vide' && (!p.photoRequise || p.photoPath != null);
 
   return {
     reference: c.reference,
@@ -86,6 +88,8 @@ export function serializeChantier(
     capacite: c.capacite,
     niveaux: c.niveaux,
     referenceAffaire: c.referenceAffaire,
+    chargeAffairesId: c.chargeAffairesId,
+    chargeAffairesNom: c.chargeAffaires ? `${c.chargeAffaires.prenom} ${c.chargeAffaires.nom}` : null,
     syncStatus: c.syncStatus,
     rexValide: c.rexValide,
     rexTranscription: c.rexTranscription,
@@ -97,8 +101,8 @@ export function serializeChantier(
     livretsOuverts: JSON.parse(c.livretsOuvertsJson) as string[],
     receptionMarchandises: reception.map(serializePointControle),
     autoControle: autoControle.map(serializePointControle),
-    progressionReception: reception.length === 0 ? 0 : reception.filter(isComplete).length / reception.length,
-    progressionAutoControle: autoControle.length === 0 ? 0 : autoControle.filter(isComplete).length / autoControle.length,
+    progressionReception: reception.length === 0 ? 0 : reception.filter(isPointComplete).length / reception.length,
+    progressionAutoControle: autoControle.length === 0 ? 0 : autoControle.filter(isPointComplete).length / autoControle.length,
     installateursRattaches: (c.installateurs ?? []).map((r) => serializeUser(r.user)),
     docsTerrain: (c.documentsTerrain ?? []).map((d) => serializeDocumentTerrain({ ...d, auteur: d.auteur })),
     documentsChantier: (c.documentsChantier ?? []).map(serializeDocumentChantier),

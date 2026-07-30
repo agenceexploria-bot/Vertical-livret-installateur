@@ -19,11 +19,11 @@ class _AutoControleRow {
   const _AutoControleRow(this.chantierRef, this.client, this.point);
 }
 
-/// Vue détaillée des auto-contrôles, tous chantiers confondus — atteinte en
-/// cliquant sur la section "Auto-contrôles & qualité" du tableau de bord CA
-/// (voir BoCaChantiersScreen). Chaque point de contrôle du module
-/// auto-contrôle (Module 6) est listé individuellement, avec export PDF/CSV
-/// des mêmes données pour un usage hors application (reporting qualité).
+/// Vue détaillée des auto-contrôles, tous chantiers confondus — atteinte via
+/// le bouton "Exports Qualité" de la barre du haut (voir BoShell). Chaque
+/// point de contrôle du module auto-contrôle (Module 6) est listé
+/// individuellement, avec export PDF/CSV des mêmes données pour un usage
+/// hors application (reporting qualité).
 class BoAutoControleDetailScreen extends StatelessWidget {
   const BoAutoControleDetailScreen({super.key});
 
