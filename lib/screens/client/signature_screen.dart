@@ -8,6 +8,7 @@ import 'package:image/image.dart' as img;
 import 'package:pdf/pdf.dart' hide PdfDocument;
 import 'package:pdf/widgets.dart' as pw;
 import 'package:pdfrx/pdfrx.dart';
+import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/pv_template_config.dart';
@@ -21,8 +22,10 @@ import '../../state/chantier_state.dart';
 /// L'installateur ne crée ni ne modifie jamais le contenu du PV : il consulte
 /// (lecture seule) le PDF déposé par le back-office, fait signer le client
 /// directement sur l'écran, et renseigne son nom/sa fonction. La signature
-/// tactile est ensuite fusionnée dans le PDF, à l'emplacement fixe du gabarit
-/// (voir PvTemplateConfig) — c'est cette soumission qui valide le PV.
+/// tactile est capturée puis figée (l'installateur ne peut plus la modifier,
+/// seuls nom/fonction restent éditables jusqu'à l'envoi), et fusionnée dans
+/// le PDF à l'emplacement fixe du gabarit (voir PvTemplateConfig) — c'est
+/// cette soumission qui valide le PV.
 class SignatureScreen extends StatefulWidget {
   const SignatureScreen({super.key});
 
@@ -39,7 +42,18 @@ class _SignatureScreenState extends State<SignatureScreen> {
   Uint8List? _pdfBytes;
   bool _isLoadingPdf = true;
   String? _loadError;
+
+  /// Image de la signature tactile une fois capturée — non nulle = la
+  /// signature est figée (lecture seule), distincte du texte du signataire
+  /// (nom/fonction) qui reste éditable jusqu'à l'envoi final.
+  Uint8List? _signatureBytes;
+  bool _isCapturingSignature = false;
   bool _isSubmitting = false;
+
+  /// PDF final (gabarit + signature fusionnés) conservé après un envoi
+  /// réussi, pour permettre de le consulter/télécharger immédiatement sans
+  /// round-trip réseau (voir le dialogue de succès dans [_valider]).
+  Uint8List? _pdfSigneBytes;
 
   @override
   void initState() {
@@ -73,8 +87,10 @@ class _SignatureScreenState extends State<SignatureScreen> {
     }
   }
 
+  bool get _peutValiderSignature => _points.isNotEmpty && !_isCapturingSignature;
+
   bool get _peutValider =>
-      !_isSubmitting && _points.isNotEmpty && _nomController.text.trim().isNotEmpty && _fonctionController.text.trim().isNotEmpty;
+      !_isSubmitting && _signatureBytes != null && _nomController.text.trim().isNotEmpty && _fonctionController.text.trim().isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
@@ -144,53 +160,95 @@ class _SignatureScreenState extends State<SignatureScreen> {
                   decoration: const InputDecoration(labelText: 'Fonction du signataire'),
                 ),
                 const SizedBox(height: 16),
-                const Text('Signature du client', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: 180,
-                  child: RepaintBoundary(
-                    key: _signatureKey,
-                    child: Container(
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: AppColors.fond,
-                        borderRadius: BorderRadius.circular(9),
-                        border: Border.all(color: AppColors.lignes),
-                      ),
-                      child: GestureDetector(
-                        onPanUpdate: _handlePanUpdate,
-                        onPanEnd: (details) => setState(() => _points.add(null)),
-                        child: CustomPaint(painter: _SignaturePainter(points: _points)),
-                      ),
-                    ),
-                  ),
+                Text(
+                  _signatureBytes == null ? 'Signature du client' : 'Signature du client (verrouillée)',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                 ),
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    TextButton.icon(
-                      onPressed: _points.isEmpty ? null : () => setState(() => _points.clear()),
-                      icon: const Icon(Icons.delete_outline, size: 18),
-                      label: const Text('Effacer'),
-                    ),
-                    const Spacer(),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(minimumSize: const Size(0, 48)),
-                      onPressed: _peutValider ? () => _valider(chantier) : null,
-                      child: _isSubmitting
-                          ? const SizedBox(
-                              height: 18,
-                              width: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                            )
-                          : const Text('Valider le procès-verbal'),
-                    ),
-                  ],
-                ),
+                SizedBox(height: 180, child: _buildSignatureZone()),
+                const SizedBox(height: 8),
+                _buildActionsRow(chantier),
                 const SizedBox(height: 16),
               ],
             ),
           ),
+        ),
+      ],
+    );
+  }
+
+  /// Zone de signature : canevas tactile tant que rien n'est figé, sinon
+  /// aperçu en lecture seule de l'image déjà capturée (voir [_validerSignature]).
+  Widget _buildSignatureZone() {
+    final signatureBytes = _signatureBytes;
+    if (signatureBytes != null) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: AppColors.fond,
+          borderRadius: BorderRadius.circular(9),
+          border: Border.all(color: AppColors.lignes),
+        ),
+        child: Image.memory(signatureBytes, fit: BoxFit.contain),
+      );
+    }
+    return RepaintBoundary(
+      key: _signatureKey,
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: AppColors.fond,
+          borderRadius: BorderRadius.circular(9),
+          border: Border.all(color: AppColors.lignes),
+        ),
+        child: GestureDetector(
+          onPanUpdate: _handlePanUpdate,
+          onPanEnd: (details) => setState(() => _points.add(null)),
+          child: CustomPaint(painter: _SignaturePainter(points: _points)),
+        ),
+      ),
+    );
+  }
+
+  /// Tant que la signature n'est pas figée : "Effacer" le tracé / "Valider la
+  /// signature" (la capture et la verrouille). Une fois figée : "Refaire la
+  /// signature" (déverrouille et efface) / "Valider le procès-verbal" (envoi
+  /// final, utilise la signature figée + le nom/fonction courants).
+  Widget _buildActionsRow(Chantier chantier) {
+    if (_signatureBytes == null) {
+      return Row(
+        children: [
+          TextButton.icon(
+            onPressed: _points.isEmpty ? null : () => setState(() => _points.clear()),
+            icon: const Icon(Icons.delete_outline, size: 18),
+            label: const Text('Effacer'),
+          ),
+          const Spacer(),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(minimumSize: const Size(0, 48)),
+            onPressed: _peutValiderSignature ? _validerSignature : null,
+            child: _isCapturingSignature
+                ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Text('Valider la signature'),
+          ),
+        ],
+      );
+    }
+    return Row(
+      children: [
+        TextButton.icon(
+          onPressed: _isSubmitting ? null : _refaireSignature,
+          icon: const Icon(Icons.refresh, size: 18),
+          label: const Text('Refaire la signature'),
+        ),
+        const Spacer(),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(minimumSize: const Size(0, 48)),
+          onPressed: _peutValider ? () => _valider(chantier) : null,
+          child: _isSubmitting
+              ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : const Text('Valider le procès-verbal'),
         ),
       ],
     );
@@ -217,18 +275,44 @@ class _SignatureScreenState extends State<SignatureScreen> {
     });
   }
 
-  Future<void> _valider(Chantier chantier) async {
-    setState(() => _isSubmitting = true);
+  /// Capture le tracé et le fige : la zone de dessin devient un aperçu en
+  /// lecture seule (voir [_buildSignatureZone]), seuls nom/fonction restent
+  /// modifiables jusqu'à l'envoi final.
+  Future<void> _validerSignature() async {
+    setState(() => _isCapturingSignature = true);
     try {
-      final signatureBytes = await _capturerSignature();
-      if (signatureBytes == null) {
+      final bytes = await _capturerSignature();
+      if (bytes == null) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Impossible de capturer la signature, réessayez.')),
         );
         return;
       }
+      setState(() => _signatureBytes = bytes);
+    } finally {
+      if (mounted) setState(() => _isCapturingSignature = false);
+    }
+  }
 
+  void _refaireSignature() {
+    setState(() {
+      _signatureBytes = null;
+      _points.clear();
+    });
+  }
+
+  /// Fusionne la signature déjà figée sur le PDF et l'envoie au backend.
+  /// Le bloc catch générique (en plus de celui dédié à [ApiException]) est
+  /// essentiel : une erreur de fusion PDF ou tout échec réseau non typé ne
+  /// doit jamais remonter jusqu'à faire planter l'écran, seulement afficher
+  /// un message et laisser l'installateur réessayer.
+  Future<void> _valider(Chantier chantier) async {
+    final signatureBytes = _signatureBytes;
+    if (signatureBytes == null) return;
+
+    setState(() => _isSubmitting = true);
+    try {
       final pdfSigneBytes = await _fusionnerSignatureDansPdf(signatureBytes);
       final dataUrl = 'data:application/pdf;base64,${base64Encode(pdfSigneBytes)}';
 
@@ -239,13 +323,63 @@ class _SignatureScreenState extends State<SignatureScreen> {
             fonctionSignataire: _fonctionController.text.trim(),
             file: dataUrl,
           );
+
       if (!mounted) return;
-      context.go('/confirmation');
+      _pdfSigneBytes = pdfSigneBytes;
+      await _afficherSucces(chantier);
     } on ApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e, st) {
+      debugPrint('SignatureScreen._valider: $e\n$st');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Une erreur est survenue lors de la validation du PV. Réessayez.')),
+      );
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  /// Dialogue de succès, avec accès immédiat au PDF final (déjà en mémoire,
+  /// pas besoin de le retélécharger) avant de rejoindre l'écran de confirmation.
+  Future<void> _afficherSucces(Chantier chantier) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(Icons.check_circle, color: AppColors.vert, size: 40),
+        title: const Text('PV validé avec succès'),
+        content: const Text('Le procès-verbal signé a bien été envoyé.'),
+        actions: [
+          TextButton.icon(
+            onPressed: () => _voirPdfSigne(chantier.reference),
+            icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+            label: const Text('Voir / télécharger le PDF'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Terminer'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    context.go('/confirmation');
+  }
+
+  Future<void> _voirPdfSigne(String reference) async {
+    final bytes = _pdfSigneBytes;
+    if (bytes == null) return;
+    try {
+      await Printing.layoutPdf(onLayout: (_) async => bytes, name: 'PV_$reference.pdf');
+    } catch (e, st) {
+      debugPrint('SignatureScreen._voirPdfSigne: $e\n$st');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Impossible d\'ouvrir le PDF.')),
+      );
     }
   }
 
