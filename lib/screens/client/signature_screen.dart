@@ -4,9 +4,10 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:http/http.dart' as http;
+import 'package:image/image.dart' as img;
 import 'package:pdf/pdf.dart' hide PdfDocument;
 import 'package:pdf/widgets.dart' as pw;
-import 'package:pdfx/pdfx.dart';
+import 'package:pdfrx/pdfrx.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/pv_template_config.dart';
@@ -35,7 +36,6 @@ class _SignatureScreenState extends State<SignatureScreen> {
   final _fonctionController = TextEditingController();
   final _signatureKey = GlobalKey();
 
-  PdfController? _pdfController;
   Uint8List? _pdfBytes;
   bool _isLoadingPdf = true;
   String? _loadError;
@@ -53,7 +53,6 @@ class _SignatureScreenState extends State<SignatureScreen> {
   void dispose() {
     _nomController.dispose();
     _fonctionController.dispose();
-    _pdfController?.dispose();
     super.dispose();
   }
 
@@ -67,7 +66,6 @@ class _SignatureScreenState extends State<SignatureScreen> {
       final response = await http.get(Uri.parse(pdfPath));
       if (response.statusCode != 200) throw Exception('HTTP ${response.statusCode}');
       _pdfBytes = response.bodyBytes;
-      _pdfController = PdfController(document: PdfDocument.openData(_pdfBytes!));
     } catch (_) {
       _loadError = 'Impossible de charger le PV déposé par le back-office.';
     } finally {
@@ -125,7 +123,7 @@ class _SignatureScreenState extends State<SignatureScreen> {
             margin: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(border: Border.all(color: AppColors.lignes), borderRadius: BorderRadius.circular(9)),
             clipBehavior: Clip.antiAlias,
-            child: PdfView(controller: _pdfController!, scrollDirection: Axis.vertical),
+            child: PdfViewer.data(_pdfBytes!, sourceName: 'pv-${chantier.reference}'),
           ),
         ),
         const Divider(height: 24),
@@ -271,24 +269,25 @@ class _SignatureScreenState extends State<SignatureScreen> {
   /// signature est superposée aux coordonnées fixes du gabarit (voir
   /// PvTemplateConfig) sur la page désignée.
   Future<Uint8List> _fusionnerSignatureDansPdf(Uint8List signatureBytes) async {
-    final sourceDoc = await PdfDocument.openData(_pdfBytes!);
-    final targetPageNumber = PvTemplateConfig.signaturePageNumber ?? sourceDoc.pagesCount;
+    final sourceDoc = await PdfDocument.openData(_pdfBytes!, sourceName: 'pv-gabarit');
+    final pages = sourceDoc.pages;
+    final targetPageNumber = PvTemplateConfig.signaturePageNumber ?? pages.length;
     final signatureImage = pw.MemoryImage(signatureBytes);
 
     final outDoc = pw.Document();
-    for (var pageNumber = 1; pageNumber <= sourceDoc.pagesCount; pageNumber++) {
-      final page = await sourceDoc.getPage(pageNumber);
-      final rendered = await page.render(
-        width: page.width * 2,
-        height: page.height * 2,
-        format: PdfPageImageFormat.png,
-      );
+    for (var pageNumber = 1; pageNumber <= pages.length; pageNumber++) {
+      final page = pages[pageNumber - 1];
       final pageWidth = page.width;
       final pageHeight = page.height;
-      await page.close();
+      final rendered = await page.render(
+        width: (pageWidth * 2).round(),
+        height: (pageHeight * 2).round(),
+      );
       if (rendered == null) continue;
+      final pngBytes = img.encodePng(rendered.createImageNF());
+      rendered.dispose();
 
-      final pageBackground = pw.MemoryImage(rendered.bytes);
+      final pageBackground = pw.MemoryImage(pngBytes);
       final pageFormat = PdfPageFormat(pageWidth, pageHeight, marginAll: 0);
 
       outDoc.addPage(
@@ -312,7 +311,7 @@ class _SignatureScreenState extends State<SignatureScreen> {
         ),
       );
     }
-    await sourceDoc.close();
+    await sourceDoc.dispose();
     return outDoc.save();
   }
 }
