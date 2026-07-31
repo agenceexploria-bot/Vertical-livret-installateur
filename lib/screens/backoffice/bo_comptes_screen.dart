@@ -211,14 +211,21 @@ class BoComptesScreen extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Validation d'un compte interne (CA/Qualité) fraîchement
-                // inscrit — /admin/comptes-internes/:id/valider (voir
-                // AdminState.validerCompteInterne) ne l'accepte que pour ces
-                // deux rôles, un installateur en attente est validé par le CA
-                // ailleurs (voir BoInstallateurDetailScreen).
+                // Validation d'un compte fraîchement inscrit — deux routes
+                // backend distinctes selon le rôle : comptes-internes/:id/valider
+                // (CA/Qualité, voir AdminState.validerCompteInterne) ou
+                // comptes/:id/valider (installateur uniquement, voir
+                // AdminState.validerCompte) ; direction/admin ne passent
+                // jamais par cet état "en attente" (créés déjà actifs).
                 if (!u.isActive && !u.suspendu && (u.role == UserRole.chargeAffaires || u.role == UserRole.qualite))
                   ElevatedButton(
                     onPressed: () => adminState.validerCompteInterne(u),
+                    style: ElevatedButton.styleFrom(minimumSize: const Size(0, 30), padding: const EdgeInsets.symmetric(horizontal: 10)),
+                    child: const Text('Valider', style: TextStyle(fontSize: 11)),
+                  ),
+                if (!u.isActive && !u.suspendu && u.role == UserRole.installateur)
+                  ElevatedButton(
+                    onPressed: () => adminState.validerCompte(u),
                     style: ElevatedButton.styleFrom(minimumSize: const Size(0, 30), padding: const EdgeInsets.symmetric(horizontal: 10)),
                     child: const Text('Valider', style: TextStyle(fontSize: 11)),
                   ),

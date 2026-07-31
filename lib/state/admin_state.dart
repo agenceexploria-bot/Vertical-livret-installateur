@@ -69,6 +69,15 @@ class AdminState extends ChangeNotifier {
     await fetch();
   }
 
+  /// Validation d'un installateur en attente — distincte de
+  /// [validerCompteInterne] (CA/Qualité uniquement) : POST /comptes/:id/valider
+  /// (comptes.ts) est réservé aux comptes installateur, mais déjà accessible
+  /// à l'Admin (comme au CA/Direction) côté backend.
+  Future<void> validerCompte(User user) async {
+    final data = await _api.validerCompte(user.id);
+    _replaceCompte(User.fromJson(data['user'] as Map<String, dynamic>));
+  }
+
   Future<void> suspendreCompte(User user) async {
     final data = await _api.suspendreCompteAdmin(user.id);
     _replaceCompte(User.fromJson(data['user'] as Map<String, dynamic>));
