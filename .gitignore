@@ -27,3 +27,6 @@ local.properties
 .env*
 !.env.example
 !**/.env.example
+
+devtools_options.yaml
+/package-lock.json
