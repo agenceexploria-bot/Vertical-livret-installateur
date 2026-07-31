@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../core/document_download.dart';
 import '../../../core/theme.dart';
 
 /// Affichage du PV signé (signataire, horodatage, image de signature
@@ -37,9 +38,10 @@ class PvSignaturePanel extends StatelessWidget {
     }
 
     final imageUrl = imagePath;
-    // Le PDF final (gabarit + signature fusionnés) est le cas normal depuis la
-    // refonte du workflow ; une image PNG ne peut subsister que sur un PV
-    // signé avant cette refonte (ancien flux de signature au doigt seul).
+    // Le PDF final (gabarit original fusionné avec la signature côté serveur,
+    // sans rastérisation — voir backend/src/lib/pvMerge.ts) est le cas normal
+    // depuis la refonte du workflow ; une image PNG ne peut subsister que sur
+    // un PV signé avant cette refonte (ancien flux de signature au doigt seul).
     if (imageUrl.toLowerCase().endsWith('.pdf')) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -47,9 +49,12 @@ class PvSignaturePanel extends StatelessWidget {
           caption,
           const SizedBox(height: 8),
           OutlinedButton.icon(
-            onPressed: () => launchUrl(Uri.parse(imageUrl), mode: LaunchMode.externalApplication),
-            icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
-            label: const Text('Ouvrir le PV signé (PDF)'),
+            // forceDownloadUri force Content-Disposition: attachment côté
+            // Vercel Blob, pour un vrai téléchargement plutôt qu'une
+            // ouverture dans un nouvel onglet.
+            onPressed: () => launchUrl(forceDownloadUri(imageUrl), mode: LaunchMode.externalApplication),
+            icon: const Icon(Icons.download_outlined, size: 18),
+            label: const Text('Télécharger le PV (PDF)'),
           ),
         ],
       );

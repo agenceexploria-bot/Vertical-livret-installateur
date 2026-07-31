@@ -4,7 +4,8 @@ import { z } from 'zod';
 import { prisma } from '../prisma';
 import { serializeChantier } from '../serializers';
 import { requireAuth, requireRole, AuthedRequest } from '../middleware/auth';
-import { saveBase64File, deleteBlobFile, isAllowedFileDataUrl } from '../lib/imageStorage';
+import { saveBase64File, saveBuffer, deleteBlobFile, isAllowedFileDataUrl } from '../lib/imageStorage';
+import { fetchBlobFile, fusionnerSignatureDansPdf } from '../lib/pvMerge';
 import { RECEPTION_POINTS, AUTO_CONTROLE_POINTS } from '../lib/checklistDefaults';
 import { isPointComplete } from '../lib/pointControleStatus';
 import { triggerChantierChanged, triggerChantierDeleted, triggerNotificationCreated } from '../lib/pusher';
@@ -474,12 +475,24 @@ chantiersRouter.post(
 const pvSignatureSchema = z.object({
   nomSignataire: z.string().min(1),
   fonctionSignataire: z.string().min(1),
-  file: z.string().min(1, 'Le PDF signé est requis'),
+  signatureImage: z.string().min(1, 'L\'image de la signature est requise'),
 });
 
+function isPngDataUrl(dataUrl: string): boolean {
+  return dataUrl.startsWith('data:image/png;base64,');
+}
+
 // Signature du PV par le client, soumise par l'installateur — SEULE façon de
-// faire passer pvSigne à true. Le fichier reçu est déjà le PDF final (gabarit
-// + signature fusionnés côté app, voir lib/screens/client/signature_screen.dart).
+// faire passer pvSigne à true. L'app envoie uniquement l'image PNG du tracé
+// de signature (pas un PDF déjà fusionné) : c'est le backend qui la
+// superpose sur le PDF gabarit original via pdf-lib (voir pvMerge.ts), en
+// préservant intégralement son texte et ses vecteurs — le gabarit n'est
+// jamais rasterisé.
+//
+// Un PV déjà signé ne peut plus être re-signé : c'est un verrou volontaire
+// (voir lib/screens/client/signature_screen.dart côté app), la seule façon
+// de recommencer est que le CA/Admin supprime le PV (DELETE .../pv
+// ci-dessous, qui repasse pvSigne à false).
 chantiersRouter.post(
   '/:reference/pv/signature',
   requireAuth,
@@ -488,16 +501,31 @@ chantiersRouter.post(
   async (req, res) => {
     const parsed = pvSignatureSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-    if (!isPdfDataUrl(parsed.data.file)) return res.status(400).json({ error: 'Le fichier doit être un PDF' });
+    if (!isPngDataUrl(parsed.data.signatureImage)) {
+      return res.status(400).json({ error: 'La signature doit être une image PNG' });
+    }
 
     const existing = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
     if (!existing) return res.status(404).json({ error: 'Chantier introuvable' });
     if (!existing.pvPdfPath) {
       return res.status(400).json({ error: 'Aucun PV à signer pour ce chantier — en attente du back-office' });
     }
+    if (existing.pvSigne) {
+      return res.status(400).json({ error: 'Ce PV est déjà signé — seul le CA/Admin peut le réinitialiser en le supprimant' });
+    }
+
+    let pdfSigneBytes: Buffer;
+    try {
+      const gabaritBytes = await fetchBlobFile(existing.pvPdfPath);
+      const signatureBytes = Buffer.from(parsed.data.signatureImage.split(',')[1] ?? '', 'base64');
+      pdfSigneBytes = await fusionnerSignatureDansPdf(gabaritBytes, signatureBytes);
+    } catch (err) {
+      console.error('Fusion de la signature sur le PV échouée:', err);
+      return res.status(502).json({ error: 'Impossible de fusionner la signature sur le PV, réessayez.' });
+    }
 
     if (existing.pvSignatureImagePath) await deleteBlobFile(existing.pvSignatureImagePath);
-    const pvSignatureImagePath = await saveBase64File(parsed.data.file, `pv-signe-${existing.id}`);
+    const pvSignatureImagePath = await saveBuffer(pdfSigneBytes, `pv-signe-${existing.id}`, 'application/pdf');
 
     const chantier = await prisma.chantier.update({
       where: { reference: req.params.reference },

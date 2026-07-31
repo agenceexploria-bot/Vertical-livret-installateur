@@ -244,15 +244,21 @@ class ChantierState extends ChangeNotifier {
     _replaceInList(updated);
   }
 
-  /// Signature du PV par le client, soumise par l'installateur — [file] est
-  /// déjà le PDF final (gabarit + signature fusionnés, voir signature_screen.dart).
+  /// Signature du PV par le client, soumise par l'installateur — [signatureImage]
+  /// est l'image PNG du tracé seul ; la fusion avec le PDF gabarit se fait
+  /// côté serveur (voir signature_screen.dart).
   Future<void> signPv(
     String reference, {
     required String nomSignataire,
     required String fonctionSignataire,
-    required String file,
+    required String signatureImage,
   }) async {
-    final updated = await _repository.signPv(reference, nomSignataire: nomSignataire, fonctionSignataire: fonctionSignataire, file: file);
+    final updated = await _repository.signPv(
+      reference,
+      nomSignataire: nomSignataire,
+      fonctionSignataire: fonctionSignataire,
+      signatureImage: signatureImage,
+    );
     _replaceInList(updated);
   }
 

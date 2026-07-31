@@ -4,14 +4,11 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:http/http.dart' as http;
-import 'package:image/image.dart' as img;
-import 'package:pdf/pdf.dart' hide PdfDocument;
-import 'package:pdf/widgets.dart' as pw;
 import 'package:pdfrx/pdfrx.dart';
-import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import '../../core/pv_template_config.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../../core/document_download.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/glass_app_bar.dart';
 import '../../core/widgets/responsive_layout.dart';
@@ -23,9 +20,12 @@ import '../../state/chantier_state.dart';
 /// (lecture seule) le PDF déposé par le back-office, fait signer le client
 /// directement sur l'écran, et renseigne son nom/sa fonction. La signature
 /// tactile est capturée puis figée (l'installateur ne peut plus la modifier,
-/// seuls nom/fonction restent éditables jusqu'à l'envoi), et fusionnée dans
-/// le PDF à l'emplacement fixe du gabarit (voir PvTemplateConfig) — c'est
-/// cette soumission qui valide le PV.
+/// seuls nom/fonction restent éditables jusqu'à l'envoi), et envoyée seule au
+/// backend qui la superpose sur le PDF gabarit original sans le rasteriser
+/// (voir backend/src/lib/pvMerge.ts). Une fois le PV signé (pvSigne == true),
+/// cet écran se verrouille totalement — voir le garde dans [build] — et ne
+/// se déverrouille que si un CA/Admin supprime le PV depuis le back-office
+/// (DELETE .../pv, qui repasse pvSigne à false).
 class SignatureScreen extends StatefulWidget {
   const SignatureScreen({super.key});
 
@@ -49,11 +49,6 @@ class _SignatureScreenState extends State<SignatureScreen> {
   Uint8List? _signatureBytes;
   bool _isCapturingSignature = false;
   bool _isSubmitting = false;
-
-  /// PDF final (gabarit + signature fusionnés) conservé après un envoi
-  /// réussi, pour permettre de le consulter/télécharger immédiatement sans
-  /// round-trip réseau (voir le dialogue de succès dans [_valider]).
-  Uint8List? _pdfSigneBytes;
 
   @override
   void initState() {
@@ -95,6 +90,18 @@ class _SignatureScreenState extends State<SignatureScreen> {
   @override
   Widget build(BuildContext context) {
     final chantier = context.watch<ChantierState>().currentChantier;
+
+    // Verrou : un PV déjà signé ne se rouvre jamais en mode édition, même en
+    // cas de navigation directe vers cette route (deep link, retour
+    // arrière...) — la seule porte de sortie est qu'un CA/Admin supprime le
+    // PV côté back-office, ce qui repasse pvSigne à false et débloque cet
+    // écran automatiquement (rebuild réactif via context.watch).
+    if (chantier != null && chantier.pvSigne) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) context.go('/confirmation');
+      });
+      return const ResponsiveLayout(child: Center(child: CircularProgressIndicator()));
+    }
 
     return ResponsiveLayout(
       appBar: GlassAppBar(
@@ -302,31 +309,30 @@ class _SignatureScreenState extends State<SignatureScreen> {
     });
   }
 
-  /// Fusionne la signature déjà figée sur le PDF et l'envoie au backend.
-  /// Le bloc catch générique (en plus de celui dédié à [ApiException]) est
-  /// essentiel : une erreur de fusion PDF ou tout échec réseau non typé ne
-  /// doit jamais remonter jusqu'à faire planter l'écran, seulement afficher
-  /// un message et laisser l'installateur réessayer.
+  /// Envoie la signature déjà figée (image PNG seule, jamais fusionnée
+  /// localement — voir backend/src/lib/pvMerge.ts pour la fusion réelle avec
+  /// le gabarit). Le bloc catch générique (en plus de celui dédié à
+  /// [ApiException]) est essentiel : tout échec réseau non typé ne doit
+  /// jamais remonter jusqu'à faire planter l'écran, seulement afficher un
+  /// message et laisser l'installateur réessayer.
   Future<void> _valider(Chantier chantier) async {
     final signatureBytes = _signatureBytes;
     if (signatureBytes == null) return;
 
     setState(() => _isSubmitting = true);
     try {
-      final pdfSigneBytes = await _fusionnerSignatureDansPdf(signatureBytes);
-      final dataUrl = 'data:application/pdf;base64,${base64Encode(pdfSigneBytes)}';
+      final dataUrl = 'data:image/png;base64,${base64Encode(signatureBytes)}';
 
       if (!mounted) return;
       await context.read<ChantierState>().signPv(
             chantier.reference,
             nomSignataire: _nomController.text.trim(),
             fonctionSignataire: _fonctionController.text.trim(),
-            file: dataUrl,
+            signatureImage: dataUrl,
           );
 
       if (!mounted) return;
-      _pdfSigneBytes = pdfSigneBytes;
-      await _afficherSucces(chantier);
+      await _afficherSucces();
     } on ApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
@@ -341,10 +347,12 @@ class _SignatureScreenState extends State<SignatureScreen> {
     }
   }
 
-  /// Dialogue de succès, avec accès immédiat au PDF final (déjà en mémoire,
-  /// pas besoin de le retélécharger) avant de rejoindre l'écran de confirmation.
-  Future<void> _afficherSucces(Chantier chantier) async {
+  /// Dialogue de succès, avec accès immédiat au PDF final (fusionné côté
+  /// serveur, déjà disponible via l'URL renvoyée dans le chantier mis à jour)
+  /// avant de rejoindre l'écran de confirmation.
+  Future<void> _afficherSucces() async {
     if (!mounted) return;
+    final pdfUrl = context.read<ChantierState>().currentChantier?.pvSignatureImagePath;
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -353,11 +361,12 @@ class _SignatureScreenState extends State<SignatureScreen> {
         title: const Text('PV validé avec succès'),
         content: const Text('Le procès-verbal signé a bien été envoyé.'),
         actions: [
-          TextButton.icon(
-            onPressed: () => _voirPdfSigne(chantier.reference),
-            icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
-            label: const Text('Voir / télécharger le PDF'),
-          ),
+          if (pdfUrl != null)
+            TextButton.icon(
+              onPressed: () => _telechargerPdfSigne(pdfUrl),
+              icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+              label: const Text('Télécharger le PDF'),
+            ),
           ElevatedButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('Terminer'),
@@ -369,22 +378,24 @@ class _SignatureScreenState extends State<SignatureScreen> {
     context.go('/confirmation');
   }
 
-  Future<void> _voirPdfSigne(String reference) async {
-    final bytes = _pdfSigneBytes;
-    if (bytes == null) return;
+  Future<void> _telechargerPdfSigne(String pdfUrl) async {
     try {
-      await Printing.layoutPdf(onLayout: (_) async => bytes, name: 'PV_$reference.pdf');
+      final ok = await launchUrl(forceDownloadUri(pdfUrl), mode: LaunchMode.externalApplication);
+      if (ok || !mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Impossible de télécharger le PDF.')),
+      );
     } catch (e, st) {
-      debugPrint('SignatureScreen._voirPdfSigne: $e\n$st');
+      debugPrint('SignatureScreen._telechargerPdfSigne: $e\n$st');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Impossible d\'ouvrir le PDF.')),
+        const SnackBar(content: Text('Impossible de télécharger le PDF.')),
       );
     }
   }
 
   /// Capture le tracé de signature en PNG (bytes bruts, pas encore encodé)
-  /// pour l'insérer dans le PDF final.
+  /// pour l'envoi au backend, qui le superpose sur le PDF gabarit.
   Future<Uint8List?> _capturerSignature() async {
     try {
       final boundary = _signatureKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
@@ -395,58 +406,6 @@ class _SignatureScreenState extends State<SignatureScreen> {
     } catch (_) {
       return null;
     }
-  }
-
-  /// Reconstruit le PDF page par page : chaque page du gabarit est rendue en
-  /// image puis réinsérée en fond de page (le package `pdf` ne sait
-  /// qu'écrire des PDF, pas éditer un PDF existant), et l'image de la
-  /// signature est superposée aux coordonnées fixes du gabarit (voir
-  /// PvTemplateConfig) sur la page désignée.
-  Future<Uint8List> _fusionnerSignatureDansPdf(Uint8List signatureBytes) async {
-    final sourceDoc = await PdfDocument.openData(_pdfBytes!, sourceName: 'pv-gabarit');
-    final pages = sourceDoc.pages;
-    final targetPageNumber = PvTemplateConfig.signaturePageNumber ?? pages.length;
-    final signatureImage = pw.MemoryImage(signatureBytes);
-
-    final outDoc = pw.Document();
-    for (var pageNumber = 1; pageNumber <= pages.length; pageNumber++) {
-      final page = pages[pageNumber - 1];
-      final pageWidth = page.width;
-      final pageHeight = page.height;
-      final rendered = await page.render(
-        width: (pageWidth * 2).round(),
-        height: (pageHeight * 2).round(),
-      );
-      if (rendered == null) continue;
-      final pngBytes = img.encodePng(rendered.createImageNF());
-      rendered.dispose();
-
-      final pageBackground = pw.MemoryImage(pngBytes);
-      final pageFormat = PdfPageFormat(pageWidth, pageHeight, marginAll: 0);
-
-      outDoc.addPage(
-        pw.Page(
-          pageFormat: pageFormat,
-          build: (pdfContext) => pw.Stack(
-            children: [
-              pw.Positioned.fill(child: pw.Image(pageBackground, fit: pw.BoxFit.fill)),
-              if (pageNumber == targetPageNumber)
-                pw.Positioned(
-                  left: PvTemplateConfig.signatureX,
-                  top: pageHeight - PvTemplateConfig.signatureY - PvTemplateConfig.signatureHeight,
-                  child: pw.SizedBox(
-                    width: PvTemplateConfig.signatureWidth,
-                    height: PvTemplateConfig.signatureHeight,
-                    child: pw.Image(signatureImage, fit: pw.BoxFit.contain),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      );
-    }
-    await sourceDoc.dispose();
-    return outDoc.save();
   }
 }
 

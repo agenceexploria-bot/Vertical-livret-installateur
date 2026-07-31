@@ -203,15 +203,20 @@ class ChantierRepository {
   }
 
   /// Signature du PV par le client, soumise par l'installateur — toujours en
-  /// ligne : la fusion gabarit + signature nécessite d'avoir déjà téléchargé
-  /// le PDF depuis le réseau, donc pas de file d'attente hors-ligne possible ici.
+  /// ligne : la fusion gabarit + signature se fait côté serveur (voir
+  /// ApiClient.signPv), donc pas de file d'attente hors-ligne possible ici.
   Future<Chantier> signPv(
     String reference, {
     required String nomSignataire,
     required String fonctionSignataire,
-    required String file,
+    required String signatureImage,
   }) async {
-    final data = await _api.signPv(reference, nomSignataire: nomSignataire, fonctionSignataire: fonctionSignataire, file: file);
+    final data = await _api.signPv(
+      reference,
+      nomSignataire: nomSignataire,
+      fonctionSignataire: fonctionSignataire,
+      signatureImage: signatureImage,
+    );
     return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
   }
 

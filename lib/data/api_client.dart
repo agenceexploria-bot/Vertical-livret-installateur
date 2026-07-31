@@ -344,18 +344,20 @@ class ApiClient {
     return _request('POST', '/chantiers/$reference/pv/document', body: {'file': file});
   }
 
-  /// Signature du PV par le client, soumise par l'installateur — le PDF final
-  /// (gabarit + signature fusionnés côté app) est envoyé dans [file].
+  /// Signature du PV par le client, soumise par l'installateur — seule
+  /// l'image PNG du tracé de signature est envoyée dans [signatureImage] ; la
+  /// fusion avec le PDF gabarit (préservation intégrale de son texte et ses
+  /// vecteurs) se fait côté serveur, voir backend/src/lib/pvMerge.ts.
   Future<Map<String, dynamic>> signPv(
     String reference, {
     required String nomSignataire,
     required String fonctionSignataire,
-    required String file,
+    required String signatureImage,
   }) {
     return _request('POST', '/chantiers/$reference/pv/signature', body: {
       'nomSignataire': nomSignataire,
       'fonctionSignataire': fonctionSignataire,
-      'file': file,
+      'signatureImage': signatureImage,
     });
   }
 

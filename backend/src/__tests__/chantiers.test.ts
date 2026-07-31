@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import request from 'supertest';
 import bcrypt from 'bcryptjs';
+import { PDFDocument } from 'pdf-lib';
 import { createApp } from '../app';
 import { prisma } from '../prisma';
 import { resetDb, signup as doSignup } from './helpers';
@@ -187,7 +188,18 @@ describe('Progression et modules', () => {
     expect(photoPath).toMatch(new RegExp(`^https://blob\\.vercel-storage\\.com/test/point-${pointId}-.+\\.jpeg$`));
   });
 
-  const PDF_DATA_URL = `data:application/pdf;base64,${ONE_PX_PNG_BASE64}`;
+  // Un vrai PDF valide est nécessaire depuis que la signature fusionne le
+  // gabarit côté serveur avec pdf-lib (voir pvMerge.ts) — contrairement à
+  // l'ancien flux, où le fichier reçu par /pv/signature n'était jamais
+  // réellement ouvert/parsé côté backend (déjà fusionné côté app).
+  async function minimalPdfDataUrl(): Promise<string> {
+    const doc = await PDFDocument.create();
+    doc.addPage([595, 842]);
+    const bytes = await doc.save();
+    return `data:application/pdf;base64,${Buffer.from(bytes).toString('base64')}`;
+  }
+
+  const SIGNATURE_PNG_DATA_URL = `data:image/png;base64,${ONE_PX_PNG_BASE64}`;
 
   it('le CA dépose le gabarit PV — ne le valide pas', async () => {
     const ca = await createCa();
@@ -196,14 +208,14 @@ describe('Progression et modules', () => {
     const res = await request(app)
       .post('/chantiers/LD64397/pv/document')
       .set('Authorization', `Bearer ${ca.accessToken}`)
-      .send({ file: PDF_DATA_URL });
+      .send({ file: await minimalPdfDataUrl() });
 
     expect(res.status).toBe(200);
     expect(res.body.chantier.pvPdfPath).toBeTruthy();
     expect(res.body.chantier.pvSigne).toBe(false);
   });
 
-  it('l\'installateur signe le PV déposé par le CA, et peut le modifier ensuite', async () => {
+  it('l\'installateur signe le PV déposé par le CA, avec la seule image de la signature', async () => {
     const ca = await createCa();
     await createChantier(ca.accessToken);
     const installateur = await createInstallateur({ isActive: true });
@@ -215,28 +227,55 @@ describe('Progression et modules', () => {
     await request(app)
       .post('/chantiers/LD64397/pv/document')
       .set('Authorization', `Bearer ${ca.accessToken}`)
-      .send({ file: PDF_DATA_URL });
+      .send({ file: await minimalPdfDataUrl() });
 
     const res = await request(app)
       .post('/chantiers/LD64397/pv/signature')
       .set('Authorization', `Bearer ${installateur.accessToken}`)
-      .send({ nomSignataire: 'M. Weber', fonctionSignataire: 'Client', file: PDF_DATA_URL });
+      .send({ nomSignataire: 'M. Weber', fonctionSignataire: 'Client', signatureImage: SIGNATURE_PNG_DATA_URL });
 
     expect(res.status).toBe(200);
     expect(res.body.chantier.pvSigne).toBe(true);
     expect(res.body.chantier.pvSigneur).toBe('M. Weber');
     expect(res.body.chantier.pvFonctionSignataire).toBe('Client');
+  });
 
-    // Le PV n'est plus verrouillé après signature : l'installateur peut
-    // soumettre une nouvelle signature (suppression définitive réservée à
-    // DELETE .../pv, séparée d'une simple modification).
+  it('refuse de re-signer un PV déjà signé — seule une suppression par le CA/Admin déverrouille', async () => {
+    const ca = await createCa();
+    await createChantier(ca.accessToken);
+    const installateur = await createInstallateur({ isActive: true });
+    await request(app)
+      .post('/chantiers/LD64397/rattacher')
+      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .send({ userId: installateur.user.id });
+    await request(app)
+      .post('/chantiers/LD64397/pv/document')
+      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .send({ file: await minimalPdfDataUrl() });
+    await request(app)
+      .post('/chantiers/LD64397/pv/signature')
+      .set('Authorization', `Bearer ${installateur.accessToken}`)
+      .send({ nomSignataire: 'M. Weber', fonctionSignataire: 'Client', signatureImage: SIGNATURE_PNG_DATA_URL });
+
     const second = await request(app)
       .post('/chantiers/LD64397/pv/signature')
       .set('Authorization', `Bearer ${installateur.accessToken}`)
-      .send({ nomSignataire: 'Un autre', fonctionSignataire: 'Responsable technique', file: PDF_DATA_URL });
-    expect(second.status).toBe(200);
-    expect(second.body.chantier.pvSigneur).toBe('Un autre');
-  });
+      .send({ nomSignataire: 'Un autre', fonctionSignataire: 'Responsable technique', signatureImage: SIGNATURE_PNG_DATA_URL });
+    expect(second.status).toBe(400);
+
+    // La suppression par le CA repasse pvSigne à false : la signature redevient possible.
+    await request(app).delete('/chantiers/LD64397/pv').set('Authorization', `Bearer ${ca.accessToken}`);
+    await request(app)
+      .post('/chantiers/LD64397/pv/document')
+      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .send({ file: await minimalPdfDataUrl() });
+    const third = await request(app)
+      .post('/chantiers/LD64397/pv/signature')
+      .set('Authorization', `Bearer ${installateur.accessToken}`)
+      .send({ nomSignataire: 'Un autre', fonctionSignataire: 'Responsable technique', signatureImage: SIGNATURE_PNG_DATA_URL });
+    expect(third.status).toBe(200);
+    expect(third.body.chantier.pvSigneur).toBe('Un autre');
+  }, 30000);
 
   it('refuse de signer si le CA n\'a pas encore déposé de gabarit', async () => {
     const ca = await createCa();
@@ -250,11 +289,11 @@ describe('Progression et modules', () => {
     const res = await request(app)
       .post('/chantiers/LD64397/pv/signature')
       .set('Authorization', `Bearer ${installateur.accessToken}`)
-      .send({ nomSignataire: 'M. Weber', fonctionSignataire: 'Client', file: PDF_DATA_URL });
+      .send({ nomSignataire: 'M. Weber', fonctionSignataire: 'Client', signatureImage: SIGNATURE_PNG_DATA_URL });
     expect(res.status).toBe(400);
-  });
+  }, 30000);
 
-  it('enregistre le PDF signé sur le stockage distant et renvoie son URL', async () => {
+  it('enregistre le PDF fusionné sur le stockage distant et renvoie son URL', async () => {
     const ca = await createCa();
     await createChantier(ca.accessToken);
     const installateur = await createInstallateur({ isActive: true });
@@ -265,17 +304,17 @@ describe('Progression et modules', () => {
     await request(app)
       .post('/chantiers/LD64397/pv/document')
       .set('Authorization', `Bearer ${ca.accessToken}`)
-      .send({ file: PDF_DATA_URL });
+      .send({ file: await minimalPdfDataUrl() });
 
     const res = await request(app)
       .post('/chantiers/LD64397/pv/signature')
       .set('Authorization', `Bearer ${installateur.accessToken}`)
-      .send({ nomSignataire: 'M. Weber', fonctionSignataire: 'Client', file: PDF_DATA_URL });
+      .send({ nomSignataire: 'M. Weber', fonctionSignataire: 'Client', signatureImage: SIGNATURE_PNG_DATA_URL });
 
     expect(res.status).toBe(200);
     const imagePath = res.body.chantier.pvSignatureImagePath as string;
     expect(imagePath).toMatch(/^https:\/\/blob\.vercel-storage\.com\/test\/pv-signe-.+\.pdf$/);
-  });
+  }, 30000);
 });
 
 describe('POST /chantiers/:reference/rex', () => {

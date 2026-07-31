@@ -26,8 +26,16 @@ export async function saveBase64File(dataUrl: string, prefix: string): Promise<s
   const mime = match ? `${match[1]}/${match[2]}` : '';
   const extension = EXTENSION_BY_MIME[mime] ?? (match ? match[2] : 'bin');
   const base64 = match ? match[3] : dataUrl;
-  const filename = `${prefix}-${Date.now()}-${Math.round(Math.random() * 1e6)}.${extension}`;
-  const blob = await put(filename, Buffer.from(base64, 'base64'), {
+  return saveBuffer(Buffer.from(base64, 'base64'), prefix, mime, extension);
+}
+
+/// Dépose un buffer déjà décodé sur Vercel Blob — utilisé pour les fichiers
+/// produits côté serveur (ex. le PDF du PV fusionné avec la signature, voir
+/// pvMerge.ts) plutôt que reçus tels quels en base64 depuis l'app.
+export async function saveBuffer(buffer: Buffer, prefix: string, mime: string, extension?: string): Promise<string> {
+  const resolvedExtension = extension ?? EXTENSION_BY_MIME[mime] ?? mime.split('/')[1] ?? 'bin';
+  const filename = `${prefix}-${Date.now()}-${Math.round(Math.random() * 1e6)}.${resolvedExtension}`;
+  const blob = await put(filename, buffer, {
     access: 'public',
     contentType: mime || undefined,
   });

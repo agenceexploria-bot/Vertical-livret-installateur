@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import request from 'supertest';
 import bcrypt from 'bcryptjs';
+import { PDFDocument } from 'pdf-lib';
 import { createApp } from '../app';
 import { prisma } from '../prisma';
 import { resetDb, signup as doSignup } from './helpers';
@@ -9,6 +10,15 @@ const app = createApp();
 
 const ONE_PX_PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+
+// Un vrai PDF valide est nécessaire depuis que la signature fusionne le
+// gabarit côté serveur avec pdf-lib (voir backend/src/lib/pvMerge.ts).
+async function minimalPdfDataUrl(): Promise<string> {
+  const doc = await PDFDocument.create();
+  doc.addPage([595, 842]);
+  const bytes = await doc.save();
+  return `data:application/pdf;base64,${Buffer.from(bytes).toString('base64')}`;
+}
 
 async function createAdmin() {
   const passwordHash = await bcrypt.hash('demodemo', 10);
@@ -221,11 +231,11 @@ describe("Tableau de bord d'activité Admin", () => {
     await request(app)
       .post('/chantiers/LD64397/pv/document')
       .set('Authorization', `Bearer ${ca.accessToken}`)
-      .send({ file: `data:application/pdf;base64,${ONE_PX_PNG_BASE64}` });
+      .send({ file: await minimalPdfDataUrl() });
     await request(app)
       .post('/chantiers/LD64397/pv/signature')
       .set('Authorization', `Bearer ${installateurToken}`)
-      .send({ nomSignataire: 'M. Weber', fonctionSignataire: 'Client', file: `data:application/pdf;base64,${ONE_PX_PNG_BASE64}` });
+      .send({ nomSignataire: 'M. Weber', fonctionSignataire: 'Client', signatureImage: `data:image/png;base64,${ONE_PX_PNG_BASE64}` });
 
     const feed = await request(app).get('/admin/activity').set('Authorization', `Bearer ${adminToken}`);
     expect(feed.status).toBe(200);
@@ -288,11 +298,11 @@ describe('GET /admin/stats', () => {
     await request(app)
       .post('/chantiers/LD64397/pv/document')
       .set('Authorization', `Bearer ${ca.accessToken}`)
-      .send({ file: `data:application/pdf;base64,${ONE_PX_PNG_BASE64}` });
+      .send({ file: await minimalPdfDataUrl() });
     await request(app)
       .post('/chantiers/LD64397/pv/signature')
       .set('Authorization', `Bearer ${installateurToken}`)
-      .send({ nomSignataire: 'M. Weber', fonctionSignataire: 'Client', file: `data:application/pdf;base64,${ONE_PX_PNG_BASE64}` });
+      .send({ nomSignataire: 'M. Weber', fonctionSignataire: 'Client', signatureImage: `data:image/png;base64,${ONE_PX_PNG_BASE64}` });
 
     const res = await request(app).get('/admin/stats').set('Authorization', `Bearer ${adminToken}`);
     expect(res.status).toBe(200);
