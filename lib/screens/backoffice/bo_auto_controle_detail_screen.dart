@@ -5,12 +5,16 @@ import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
 import '../../core/platform/file_downloader.dart';
 import '../../core/theme.dart';
+import '../../core/widgets/empty_state.dart';
+import '../../core/widgets/status_badge.dart';
 import '../../core/widgets/status_indicator.dart';
 import '../../data/models/chantier.dart';
 import '../../data/models/point_controle.dart';
 import '../../state/chantier_state.dart';
 import 'widgets/bo_shell.dart';
+import 'widgets/bo_panel.dart';
 import 'widgets/bo_responsive_table.dart';
+import 'widgets/bo_table_row.dart';
 
 class _AutoControleRow {
   final String chantierRef;
@@ -77,38 +81,44 @@ class BoAutoControleDetailScreen extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          BoResponsiveTable(
-            child: Container(
-              decoration: BoxDecoration(
-                color: AppColors.blanc,
-                border: Border.all(color: AppColors.lignes),
-                borderRadius: BorderRadius.circular(7),
+          const SizedBox(height: 20),
+          if (rows.isEmpty)
+            BoPanel(
+              child: EmptyState(
+                icon: Icons.fact_check_outlined,
+                message: 'Aucun point d\'auto-contrôle enregistré pour l\'instant.',
               ),
-              child: Column(
-                children: [
-                  _headerRow(),
-                  if (rows.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Text('Aucun point d\'auto-contrôle enregistré.', style: TextStyle(fontSize: 11, color: AppColors.acierClair)),
-                    )
-                  else
-                    for (final r in rows) _dataRow(r),
-                ],
+            )
+          else
+            BoResponsiveTable(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: AppColors.blanc,
+                  border: Border.all(color: AppColors.lignes),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(color: AppColors.encre.withValues(alpha: 0.04), blurRadius: 16, offset: const Offset(0, 6)),
+                  ],
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  children: [
+                    _headerRow(),
+                    for (final (i, r) in rows.indexed) _dataRow(r, i),
+                  ],
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
   }
 
   Widget _headerRow() {
-    const style = TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: AppColors.acier, letterSpacing: 0.5);
+    const style = TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppColors.acier, letterSpacing: 0.5);
     return Container(
       color: const Color(0xFFEDF0F2),
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: const Row(
         children: [
           Expanded(flex: 2, child: Text('AFFAIRE', style: style)),
@@ -121,30 +131,30 @@ class BoAutoControleDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _dataRow(_AutoControleRow r) {
+  Widget _dataRow(_AutoControleRow r, int index) {
     final (label, type) = _statutOf(r.point);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 9),
-      decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.lignes))),
+    return BoTableRow(
+      border: const Border(top: BorderSide(color: AppColors.lignes)),
+      backgroundColor: index.isOdd ? const Color(0xFFF7F8F9) : null,
       child: Row(
         children: [
-          Expanded(flex: 2, child: Text(r.chantierRef, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
-          Expanded(flex: 2, child: Text(r.client, style: const TextStyle(fontSize: 12))),
+          Expanded(flex: 2, child: Text(r.chantierRef, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+          Expanded(flex: 2, child: Text(r.client, style: const TextStyle(fontSize: 13))),
           Expanded(
             flex: 4,
             child: Text(
               '${r.point.libelle}${r.point.critique ? ' (sécurité)' : ''}',
-              style: const TextStyle(fontSize: 12),
+              style: const TextStyle(fontSize: 13),
             ),
           ),
-          Expanded(flex: 2, child: StatusIndicator(label: label, type: type)),
+          Expanded(flex: 2, child: StatusBadge(label: label, type: type)),
           Expanded(
             flex: 3,
             child: Text(
               r.point.validePar != null
                   ? '${r.point.validePar} · ${DateFormat('dd/MM HH:mm').format(r.point.valideAt!)}'
                   : '—',
-              style: const TextStyle(fontSize: 11.5, color: AppColors.acier),
+              style: const TextStyle(fontSize: 12.5, color: AppColors.acier),
             ),
           ),
         ],

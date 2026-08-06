@@ -81,21 +81,21 @@ class _BoNewChantierScreenState extends State<BoNewChantierScreen> {
             children: [
               Text('Nouveau chantier', style: Theme.of(context).textTheme.titleMedium),
               const Spacer(),
-              Text('Temps de saisie : $_elapsedLabel', style: const TextStyle(fontSize: 10, color: AppColors.acier)),
+              Text('Temps de saisie : $_elapsedLabel', style: const TextStyle(fontSize: 12, color: AppColors.acier)),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           LayoutBuilder(
             builder: (context, constraints) {
               final isWide = constraints.maxWidth > 800;
               final left = _buildLeftColumn(isAdmin: isAdmin, chargesAffaires: chargesAffaires);
               final right = _buildRightColumn();
-              if (!isWide) return Column(children: [left, const SizedBox(height: 12), right]);
+              if (!isWide) return Column(children: [left, const SizedBox(height: 4), right]);
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(child: left),
-                  const SizedBox(width: 20),
+                  const SizedBox(width: 24),
                   Expanded(child: right),
                 ],
               );
@@ -103,10 +103,11 @@ class _BoNewChantierScreenState extends State<BoNewChantierScreen> {
           ),
           const SizedBox(height: 8),
           SizedBox(
-            width: 220,
-            child: ElevatedButton(
+            width: 260,
+            child: ElevatedButton.icon(
               onPressed: () => _creerChantier(context),
-              child: const Text('Créer le chantier'),
+              icon: const Icon(Icons.check_circle_outline, size: 20),
+              label: const Text('Créer le chantier'),
             ),
           ),
         ],
@@ -312,16 +313,17 @@ class _BoNewChantierScreenState extends State<BoNewChantierScreen> {
           const SizedBox(height: 8),
           Row(
             children: [
-              ElevatedButton(
+              ElevatedButton.icon(
                 onPressed: _parseCollage,
-                style: ElevatedButton.styleFrom(minimumSize: const Size(0, 32), padding: const EdgeInsets.symmetric(horizontal: 14)),
-                child: const Text('Valider le découpage', style: TextStyle(fontSize: 11.5)),
+                icon: const Icon(Icons.auto_fix_high, size: 16),
+                label: const Text('Valider le découpage'),
+                style: ElevatedButton.styleFrom(minimumSize: const Size(0, 38), padding: const EdgeInsets.symmetric(horizontal: 16)),
               ),
               if (_collageValide) ...[
-                const SizedBox(width: 8),
+                const SizedBox(width: 10),
                 const Icon(Icons.check_circle, color: AppColors.vert, size: 18),
-                const SizedBox(width: 4),
-                const Text('Relisez et corrigez si besoin ci-dessus', style: TextStyle(fontSize: 10, color: AppColors.acier)),
+                const SizedBox(width: 6),
+                const Text('Relisez et corrigez si besoin ci-dessus', style: TextStyle(fontSize: 11.5, color: AppColors.acier)),
               ],
             ],
           ),
@@ -332,17 +334,17 @@ class _BoNewChantierScreenState extends State<BoNewChantierScreen> {
 
   Widget _editableKv(String label, TextEditingController controller) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          SizedBox(width: 70, child: Text(label, style: const TextStyle(fontSize: 11, color: AppColors.acier))),
+          SizedBox(width: 78, child: Text(label, style: const TextStyle(fontSize: 12.5, color: AppColors.acier))),
           Expanded(
             child: TextField(
               controller: controller,
-              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
               decoration: const InputDecoration(
                 isDense: true,
-                contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               ),
             ),
           ),

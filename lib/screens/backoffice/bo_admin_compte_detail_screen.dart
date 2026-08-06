@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme.dart';
+import '../../core/widgets/status_badge.dart';
 import '../../core/widgets/status_indicator.dart';
 import '../../data/models/user.dart';
 import '../../state/admin_state.dart';
@@ -57,36 +58,38 @@ class BoAdminCompteDetailScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            runSpacing: 8,
             children: [
               Text(u.fullName, style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(width: 10),
-              StatusIndicator(label: statutLabel, type: statutType),
+              StatusBadge(label: statutLabel, type: statutType),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           BoPanel(
             title: 'Informations',
             child: Column(
               children: [
-                BoKv(label: 'Rôle', value: Text(_roleLabel(u.role), style: const TextStyle(fontSize: 11.5))),
+                BoKv(label: 'Rôle', value: Text(_roleLabel(u.role), style: const TextStyle(fontSize: 12.5))),
                 BoKv(
                   label: 'Statut d\'emploi',
                   value: Text(
                     u.status == UserStatus.sousTraitant ? 'Sous-traitant' : 'Salarié',
-                    style: const TextStyle(fontSize: 11.5),
+                    style: const TextStyle(fontSize: 12.5),
                   ),
                 ),
-                BoKv(label: 'Email', value: Text(u.email ?? '—', style: const TextStyle(fontSize: 11.5))),
-                BoKv(label: 'Mobile', value: Text(u.mobile ?? '—', style: const TextStyle(fontSize: 11.5))),
-                BoKv(label: 'Société', value: Text(u.societe ?? '—', style: const TextStyle(fontSize: 11.5))),
+                BoKv(label: 'Email', value: Text(u.email ?? '—', style: const TextStyle(fontSize: 12.5))),
+                BoKv(label: 'Mobile', value: Text(u.mobile ?? '—', style: const TextStyle(fontSize: 12.5))),
+                BoKv(label: 'Société', value: Text(u.societe ?? '—', style: const TextStyle(fontSize: 12.5))),
               ],
             ),
           ),
           BoPanel(
             title: 'Habilitations (${u.habilitations.length})',
             child: u.habilitations.isEmpty
-                ? const Text('Aucune habilitation enregistrée.', style: TextStyle(fontSize: 11, color: AppColors.acierClair))
+                ? const Text('Aucune habilitation enregistrée.', style: TextStyle(fontSize: 12.5, color: AppColors.acierClair))
                 : Column(children: [for (final h in u.habilitations) _habilitationRow(h)]),
           ),
         ],
@@ -117,14 +120,14 @@ class BoAdminCompteDetailScreen extends StatelessWidget {
             : ('À jour', StatusType.conforme);
 
     return BoTableRow(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 9),
       border: const Border(bottom: BorderSide(color: Color(0xFFEEF1F3))),
       child: Row(
         children: [
           Expanded(
             child: Text(
               '${h.titre} · ${DateFormat('dd/MM/yyyy').format(h.dateExpiration)}',
-              style: const TextStyle(fontSize: 11.5),
+              style: const TextStyle(fontSize: 12.5),
             ),
           ),
           StatusIndicator(label: label, type: type),

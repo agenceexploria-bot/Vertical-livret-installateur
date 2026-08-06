@@ -28,12 +28,15 @@ class _BoLoginScreenState extends State<BoLoginScreen> {
       body: Center(
         child: SingleChildScrollView(
           child: Container(
-            width: 380,
-            padding: const EdgeInsets.all(32),
+            width: 400,
+            padding: const EdgeInsets.all(36),
             decoration: BoxDecoration(
               color: AppColors.blanc,
               border: Border.all(color: AppColors.lignes),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(color: AppColors.encre.withValues(alpha: 0.06), blurRadius: 30, offset: const Offset(0, 12)),
+              ],
             ),
             child: Column(
               children: [

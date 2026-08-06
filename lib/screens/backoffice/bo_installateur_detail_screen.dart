@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/password_field.dart';
+import '../../core/widgets/status_badge.dart';
 import '../../core/widgets/status_indicator.dart';
 import '../../data/models/user.dart';
 import '../../state/auth_state.dart';
@@ -47,61 +48,70 @@ class BoInstallateurDetailScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            runSpacing: 8,
             children: [
               Text(installateur.fullName, style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(width: 10),
-              StatusIndicator(label: compteLabel, type: compteType),
-              const Spacer(),
-              OutlinedButton(
+              StatusBadge(label: compteLabel, type: compteType),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              OutlinedButton.icon(
                 onPressed: () => _openModifierProfilDialog(context, installateur),
-                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 34), padding: const EdgeInsets.symmetric(horizontal: 16)),
-                child: const Text('Modifier le profil', style: TextStyle(fontSize: 12)),
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                label: const Text('Modifier le profil'),
+                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 42), padding: const EdgeInsets.symmetric(horizontal: 16)),
               ),
-              const SizedBox(width: 8),
               if (installateur.isActive && !installateur.suspendu)
-                OutlinedButton(
+                OutlinedButton.icon(
                   onPressed: () => context.read<ComptesState>().suspendre(installateur),
-                  style: OutlinedButton.styleFrom(minimumSize: const Size(0, 34), padding: const EdgeInsets.symmetric(horizontal: 16)),
-                  child: const Text('Suspendre', style: TextStyle(fontSize: 12)),
+                  icon: const Icon(Icons.pause_circle_outline, size: 18),
+                  label: const Text('Suspendre'),
+                  style: OutlinedButton.styleFrom(minimumSize: const Size(0, 42), padding: const EdgeInsets.symmetric(horizontal: 16)),
                 )
               else if (installateur.suspendu)
-                OutlinedButton(
+                OutlinedButton.icon(
                   onPressed: () => context.read<ComptesState>().reactiver(installateur),
-                  style: OutlinedButton.styleFrom(minimumSize: const Size(0, 34), padding: const EdgeInsets.symmetric(horizontal: 16)),
-                  child: const Text('Réactiver', style: TextStyle(fontSize: 12)),
+                  icon: const Icon(Icons.refresh, size: 18),
+                  label: const Text('Réactiver'),
+                  style: OutlinedButton.styleFrom(minimumSize: const Size(0, 42), padding: const EdgeInsets.symmetric(horizontal: 16)),
                 ),
-              const SizedBox(width: 8),
-              OutlinedButton(
+              OutlinedButton.icon(
                 onPressed: () => _openReinitDialog(context, installateur),
-                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 34), padding: const EdgeInsets.symmetric(horizontal: 16)),
-                child: const Text('Réinit. mot de passe', style: TextStyle(fontSize: 12)),
+                icon: const Icon(Icons.lock_reset_outlined, size: 18),
+                label: const Text('Réinit. mot de passe'),
+                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 42), padding: const EdgeInsets.symmetric(horizontal: 16)),
               ),
-              if (isAdmin) ...[
-                const SizedBox(width: 8),
-                OutlinedButton(
+              if (isAdmin)
+                OutlinedButton.icon(
                   onPressed: () => _confirmerSuppression(context, installateur),
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  label: const Text('Supprimer le compte'),
                   style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(0, 34),
+                    minimumSize: const Size(0, 42),
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     foregroundColor: AppColors.rouge,
                     side: const BorderSide(color: AppColors.rouge),
                   ),
-                  child: const Text('Supprimer le compte', style: TextStyle(fontSize: 12)),
                 ),
-              ],
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           LayoutBuilder(
             builder: (context, constraints) {
               final isWide = constraints.maxWidth > 800;
               final left = _buildInfos(installateur);
               final right = _buildHabilitationsEtChantiers(installateur, chantiers.map((c) => c.reference).toList());
-              if (!isWide) return Column(children: [left, const SizedBox(height: 12), right]);
+              if (!isWide) return Column(children: [left, const SizedBox(height: 4), right]);
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [Expanded(child: left), const SizedBox(width: 20), Expanded(child: right)],
+                children: [Expanded(child: left), const SizedBox(width: 24), Expanded(child: right)],
               );
             },
           ),
@@ -236,9 +246,9 @@ class BoInstallateurDetailScreen extends StatelessWidget {
       title: 'Informations',
       child: Column(
         children: [
-          BoKv(label: 'Statut', value: Text(statutLabel, style: const TextStyle(fontSize: 11.5))),
-          BoKv(label: 'Mobile', value: Text(u.mobile ?? '—', style: const TextStyle(fontSize: 11.5))),
-          BoKv(label: 'Email', value: Text(u.email ?? '—', style: const TextStyle(fontSize: 11.5))),
+          BoKv(label: 'Statut', value: Text(statutLabel, style: const TextStyle(fontSize: 12.5))),
+          BoKv(label: 'Mobile', value: Text(u.mobile ?? '—', style: const TextStyle(fontSize: 12.5))),
+          BoKv(label: 'Email', value: Text(u.email ?? '—', style: const TextStyle(fontSize: 12.5))),
         ],
       ),
     );
@@ -250,17 +260,17 @@ class BoInstallateurDetailScreen extends StatelessWidget {
         BoPanel(
           title: 'Habilitations (${u.habilitations.length})',
           child: u.habilitations.isEmpty
-              ? const Text('Aucune habilitation enregistrée.', style: TextStyle(fontSize: 11, color: AppColors.acierClair))
+              ? const Text('Aucune habilitation enregistrée.', style: TextStyle(fontSize: 12.5, color: AppColors.acierClair))
               : Column(children: [for (final h in u.habilitations) _habilitationRow(h)]),
         ),
         BoPanel(
           title: 'Chantiers rattachés (${chantierRefs.length})',
           child: chantierRefs.isEmpty
-              ? const Text('Aucun chantier rattaché.', style: TextStyle(fontSize: 11, color: AppColors.acierClair))
+              ? const Text('Aucun chantier rattaché.', style: TextStyle(fontSize: 12.5, color: AppColors.acierClair))
               : Wrap(
                   spacing: 8,
                   runSpacing: 8,
-                  children: [for (final ref in chantierRefs) Chip(label: Text(ref, style: const TextStyle(fontSize: 11)))],
+                  children: [for (final ref in chantierRefs) Chip(label: Text(ref, style: const TextStyle(fontSize: 12.5)))],
                 ),
         ),
       ],
@@ -275,14 +285,14 @@ class BoInstallateurDetailScreen extends StatelessWidget {
             : ('À jour', StatusType.conforme);
 
     return BoTableRow(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 9),
       border: const Border(bottom: BorderSide(color: Color(0xFFEEF1F3))),
       child: Row(
         children: [
           Expanded(
             child: Text(
               '${h.titre} · ${DateFormat('dd/MM/yyyy').format(h.dateExpiration)}',
-              style: const TextStyle(fontSize: 11.5),
+              style: const TextStyle(fontSize: 12.5),
             ),
           ),
           StatusIndicator(label: label, type: type),
@@ -290,8 +300,8 @@ class BoInstallateurDetailScreen extends StatelessWidget {
             const SizedBox(width: 8),
             TextButton(
               onPressed: () => launchUrl(Uri.parse(h.filePath!)),
-              style: TextButton.styleFrom(minimumSize: const Size(0, 28), padding: const EdgeInsets.symmetric(horizontal: 8)),
-              child: const Text('Voir', style: TextStyle(fontSize: 11)),
+              style: TextButton.styleFrom(minimumSize: const Size(0, 32), padding: const EdgeInsets.symmetric(horizontal: 10)),
+              child: const Text('Voir', style: TextStyle(fontSize: 12)),
             ),
           ],
         ],

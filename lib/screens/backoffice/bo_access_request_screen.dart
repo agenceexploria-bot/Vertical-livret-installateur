@@ -35,7 +35,10 @@ class _BoAccessRequestScreenState extends State<BoAccessRequestScreen> {
             decoration: BoxDecoration(
               color: AppColors.blanc,
               border: Border.all(color: AppColors.lignes),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(color: AppColors.encre.withValues(alpha: 0.06), blurRadius: 30, offset: const Offset(0, 12)),
+              ],
             ),
             child: Column(
               children: [
