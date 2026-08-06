@@ -55,58 +55,57 @@ class BoInstallateurDetailScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 12,
-            runSpacing: 8,
+          const BoBackButton(),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(installateur.fullName, style: Theme.of(context).textTheme.titleMedium),
-              StatusBadge(label: compteLabel, type: compteType),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              OutlinedButton.icon(
-                onPressed: () => _openModifierProfilDialog(context, installateur),
-                icon: const Icon(Icons.edit_outlined, size: 18),
-                label: const Text('Modifier le profil'),
-                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 42), padding: const EdgeInsets.symmetric(horizontal: 16)),
-              ),
-              if (installateur.isActive && !installateur.suspendu)
-                OutlinedButton.icon(
-                  onPressed: () => context.read<ComptesState>().suspendre(installateur),
-                  icon: const Icon(Icons.pause_circle_outline, size: 18),
-                  label: const Text('Suspendre'),
-                  style: OutlinedButton.styleFrom(minimumSize: const Size(0, 42), padding: const EdgeInsets.symmetric(horizontal: 16)),
-                )
-              else if (installateur.suspendu)
-                OutlinedButton.icon(
-                  onPressed: () => context.read<ComptesState>().reactiver(installateur),
-                  icon: const Icon(Icons.refresh, size: 18),
-                  label: const Text('Réactiver'),
-                  style: OutlinedButton.styleFrom(minimumSize: const Size(0, 42), padding: const EdgeInsets.symmetric(horizontal: 16)),
+              Expanded(
+                child: Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 12,
+                  runSpacing: 8,
+                  children: [
+                    Text(installateur.fullName, style: Theme.of(context).textTheme.titleMedium),
+                    StatusBadge(label: compteLabel, type: compteType),
+                  ],
                 ),
-              OutlinedButton.icon(
-                onPressed: () => _openReinitDialog(context, installateur),
-                icon: const Icon(Icons.lock_reset_outlined, size: 18),
-                label: const Text('Réinit. mot de passe'),
-                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 42), padding: const EdgeInsets.symmetric(horizontal: 16)),
               ),
-              if (isAdmin)
-                OutlinedButton.icon(
-                  onPressed: () => _confirmerSuppression(context, installateur),
-                  icon: const Icon(Icons.delete_outline, size: 18),
-                  label: const Text('Supprimer le compte'),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(0, 42),
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    foregroundColor: AppColors.rouge,
-                    side: const BorderSide(color: AppColors.rouge),
+              PopupMenuButton<String>(
+                tooltip: 'Actions',
+                icon: const Icon(Icons.more_vert, color: AppColors.acier),
+                onSelected: (value) => _onMenuAction(context, installateur, value),
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'modifier',
+                    child: Row(children: [Icon(Icons.edit, color: AppColors.acier, size: 18), SizedBox(width: 10), Text('Modifier le profil')]),
                   ),
-                ),
+                  if (installateur.isActive && !installateur.suspendu)
+                    const PopupMenuItem(
+                      value: 'suspendre',
+                      child: Row(children: [Icon(Icons.block, color: AppColors.acier, size: 18), SizedBox(width: 10), Text('Suspendre')]),
+                    )
+                  else if (installateur.suspendu)
+                    const PopupMenuItem(
+                      value: 'reactiver',
+                      child: Row(children: [Icon(Icons.refresh, color: AppColors.acier, size: 18), SizedBox(width: 10), Text('Réactiver')]),
+                    ),
+                  const PopupMenuItem(
+                    value: 'reinit',
+                    child: Row(children: [Icon(Icons.lock_reset, color: AppColors.acier, size: 18), SizedBox(width: 10), Text('Réinit. mot de passe')]),
+                  ),
+                  if (isAdmin)
+                    const PopupMenuItem(
+                      value: 'supprimer',
+                      child: Row(
+                        children: [
+                          Icon(Icons.delete_outline, color: AppColors.rouge, size: 18),
+                          SizedBox(width: 10),
+                          Text('Supprimer le compte', style: TextStyle(color: AppColors.rouge)),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
             ],
           ),
           const SizedBox(height: 20),
@@ -125,6 +124,26 @@ class BoInstallateurDetailScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  void _onMenuAction(BuildContext context, User installateur, String value) {
+    switch (value) {
+      case 'modifier':
+        _openModifierProfilDialog(context, installateur);
+        break;
+      case 'suspendre':
+        context.read<ComptesState>().suspendre(installateur);
+        break;
+      case 'reactiver':
+        context.read<ComptesState>().reactiver(installateur);
+        break;
+      case 'reinit':
+        _openReinitDialog(context, installateur);
+        break;
+      case 'supprimer':
+        _confirmerSuppression(context, installateur);
+        break;
+    }
   }
 
   void _openModifierProfilDialog(BuildContext context, User u) {
