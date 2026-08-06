@@ -8,6 +8,7 @@ import '../../data/models/user.dart';
 import '../../state/admin_state.dart';
 import '../../state/auth_state.dart';
 import '../../state/chantier_state.dart';
+import 'widgets/bo_back_button.dart';
 import 'widgets/bo_shell.dart';
 import 'widgets/bo_panel.dart';
 
@@ -77,6 +78,7 @@ class _BoNewChantierScreenState extends State<BoNewChantierScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const BoBackButton(),
           Row(
             children: [
               Text('Nouveau chantier', style: Theme.of(context).textTheme.titleMedium),

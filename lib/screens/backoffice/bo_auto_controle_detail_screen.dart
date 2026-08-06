@@ -11,6 +11,7 @@ import '../../core/widgets/status_indicator.dart';
 import '../../data/models/chantier.dart';
 import '../../data/models/point_controle.dart';
 import '../../state/chantier_state.dart';
+import 'widgets/bo_back_button.dart';
 import 'widgets/bo_shell.dart';
 import 'widgets/bo_panel.dart';
 import 'widgets/bo_responsive_table.dart';
@@ -62,6 +63,7 @@ class BoAutoControleDetailScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const BoBackButton(),
           Row(
             children: [
               Text('Auto-contrôles & qualité — détail (${rows.length})', style: Theme.of(context).textTheme.titleMedium),

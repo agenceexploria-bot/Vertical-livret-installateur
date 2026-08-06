@@ -11,6 +11,7 @@ import '../../data/models/user.dart';
 import '../../state/auth_state.dart';
 import '../../state/chantier_state.dart';
 import '../../state/comptes_state.dart';
+import 'widgets/bo_back_button.dart';
 import 'widgets/bo_shell.dart';
 import 'widgets/bo_panel.dart';
 import 'widgets/bo_table_row.dart';
@@ -28,7 +29,13 @@ class BoInstallateurDetailScreen extends StatelessWidget {
     }
 
     if (u == null) {
-      return const BoShell(activeNav: 'comptes', child: Text('Installateur introuvable'));
+      return const BoShell(
+        activeNav: 'comptes',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [BoBackButton(), Text('Installateur introuvable')],
+        ),
+      );
     }
     final installateur = u;
 

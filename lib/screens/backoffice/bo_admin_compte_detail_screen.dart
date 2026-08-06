@@ -7,6 +7,7 @@ import '../../core/widgets/status_badge.dart';
 import '../../core/widgets/status_indicator.dart';
 import '../../data/models/user.dart';
 import '../../state/admin_state.dart';
+import 'widgets/bo_back_button.dart';
 import 'widgets/bo_panel.dart';
 import 'widgets/bo_shell.dart';
 import 'widgets/bo_table_row.dart';
@@ -40,9 +41,13 @@ class BoAdminCompteDetailScreen extends StatelessWidget {
       }
       return BoShell(
         activeNav: 'comptes',
-        child: adminState.isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : const Text('Compte introuvable'),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const BoBackButton(),
+            if (adminState.isLoading) const Center(child: CircularProgressIndicator()) else const Text('Compte introuvable'),
+          ],
+        ),
       );
     }
     final u = compte;
@@ -58,6 +63,7 @@ class BoAdminCompteDetailScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const BoBackButton(),
           Wrap(
             crossAxisAlignment: WrapCrossAlignment.center,
             spacing: 12,

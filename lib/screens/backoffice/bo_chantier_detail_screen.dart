@@ -18,6 +18,7 @@ import '../../data/models/user.dart';
 import '../../state/auth_state.dart';
 import '../../state/chantier_state.dart';
 import '../../state/comptes_state.dart';
+import 'widgets/bo_back_button.dart';
 import 'widgets/bo_shell.dart';
 import 'widgets/bo_panel.dart';
 import 'widgets/bo_table_row.dart';
@@ -70,6 +71,7 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const BoBackButton(),
           Wrap(
             crossAxisAlignment: WrapCrossAlignment.center,
             spacing: 12,
