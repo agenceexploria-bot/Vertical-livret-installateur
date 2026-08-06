@@ -8,6 +8,7 @@ import '../../core/document_download.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/ajouter_document_chantier_dialog.dart';
 import '../../core/widgets/renseigner_pv_dialog.dart';
+import '../../core/widgets/status_badge.dart';
 import '../../core/widgets/status_indicator.dart';
 import '../../data/models/chantier.dart';
 import '../../data/models/document_chantier.dart';
@@ -22,8 +23,26 @@ import 'widgets/bo_panel.dart';
 import 'widgets/bo_table_row.dart';
 import 'widgets/pv_signature_panel.dart';
 
-class BoChantierDetailScreen extends StatelessWidget {
+class BoChantierDetailScreen extends StatefulWidget {
   const BoChantierDetailScreen({super.key});
+
+  @override
+  State<BoChantierDetailScreen> createState() => _BoChantierDetailScreenState();
+}
+
+/// Fiche chantier regroupée en onglets (Vue d'ensemble / Documents / Qualité
+/// / PV) plutôt qu'un long empilement vertical de sections — un
+/// [TabController] gère l'onglet actif ; le contenu de chaque onglet est
+/// construit à la demande (pas de [TabBarView], qui exige une hauteur bornée
+/// incompatible avec le [SingleChildScrollView] de [BoShell]).
+class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with SingleTickerProviderStateMixin {
+  late final TabController _tabController = TabController(length: 4, vsync: this)..addListener(() => setState(() {}));
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,65 +60,138 @@ class BoChantierDetailScreen extends StatelessWidget {
     final role = context.watch<AuthState>().currentUser?.role;
     final isAdmin = role == UserRole.admin;
     final canModifier = isAdmin || role == UserRole.chargeAffaires || role == UserRole.direction;
+    final canRenseignerPv = role == UserRole.admin || role == UserRole.chargeAffaires || role == UserRole.direction;
+    // Suppression réservée au CA/Admin, comme côté backend (DELETE .../pv) —
+    // Direction peut renseigner le PV mais pas le supprimer.
+    final canSupprimerPv = role == UserRole.admin || role == UserRole.chargeAffaires;
 
     return BoShell(
       activeNav: 'chantiers',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            runSpacing: 8,
             children: [
               Text('${chantier.reference} — ${chantier.client}, ${chantier.ville}', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(width: 10),
-              StatusIndicator(
+              StatusBadge(
                 label: livretOk ? 'Prêt' : 'En attente',
                 type: livretOk ? StatusType.conforme : StatusType.enCours,
               ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
               const Spacer(),
               if (canModifier) ...[
-                OutlinedButton(
+                OutlinedButton.icon(
                   onPressed: () => _openModifierDialog(context, chantier),
-                  style: OutlinedButton.styleFrom(minimumSize: const Size(0, 34), padding: const EdgeInsets.symmetric(horizontal: 16)),
-                  child: const Text('Modifier', style: TextStyle(fontSize: 12)),
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  label: const Text('Modifier'),
+                  style: OutlinedButton.styleFrom(minimumSize: const Size(0, 42), padding: const EdgeInsets.symmetric(horizontal: 16)),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 10),
               ],
               if (isAdmin)
-                OutlinedButton(
+                OutlinedButton.icon(
                   onPressed: () => _confirmerSuppression(context, chantier),
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  label: const Text('Supprimer'),
                   style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(0, 34),
+                    minimumSize: const Size(0, 42),
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     foregroundColor: AppColors.rouge,
                     side: const BorderSide(color: AppColors.rouge),
                   ),
-                  child: const Text('Supprimer', style: TextStyle(fontSize: 12)),
                 ),
             ],
           ),
-          const SizedBox(height: 16),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isWide = constraints.maxWidth > 800;
-              final left = _buildLeftColumn(context, chantier);
-              final right = _buildRightColumn(chantier);
-              if (!isWide) return Column(children: [left, const SizedBox(height: 12), right]);
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: left),
-                  const SizedBox(width: 20),
-                  Expanded(child: right),
-                ],
-              );
-            },
+          const SizedBox(height: 20),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.blanc,
+              border: Border.all(color: AppColors.lignes),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: TabBar(
+              controller: _tabController,
+              isScrollable: true,
+              labelColor: AppColors.orange,
+              unselectedLabelColor: AppColors.acier,
+              indicatorColor: AppColors.orange,
+              indicatorSize: TabBarIndicatorSize.label,
+              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              tabs: const [
+                Tab(text: 'Vue d\'ensemble'),
+                Tab(text: 'Documents'),
+                Tab(text: 'Qualité'),
+                Tab(text: 'PV'),
+              ],
+            ),
           ),
           const SizedBox(height: 20),
-          _buildAutoControle(chantier),
-          const SizedBox(height: 12),
-          _buildRex(context, chantier, role),
+          switch (_tabController.index) {
+            0 => _buildVueEnsembleTab(context, chantier),
+            1 => _buildDocumentsTab(context, chantier),
+            2 => _buildQualiteTab(context, chantier, role),
+            _ => _buildPvTab(context, chantier, canRenseignerPv: canRenseignerPv, canSupprimerPv: canSupprimerPv),
+          },
         ],
       ),
+    );
+  }
+
+  Widget _buildVueEnsembleTab(BuildContext context, Chantier chantier) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth > 800;
+        final left = Column(children: [_buildInstallateursPanel(context, chantier), _buildFiletSecoursPanel()]);
+        final right = _buildAvancementPanel(chantier);
+        if (!isWide) return Column(children: [left, const SizedBox(height: 4), right]);
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: left),
+            const SizedBox(width: 24),
+            Expanded(child: right),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildDocumentsTab(BuildContext context, Chantier chantier) {
+    return Column(
+      children: [
+        BoPanel(
+          title: 'Documents chantier — Modules 1 à 3',
+          child: _buildDocumentsChantier(context, chantier),
+        ),
+        BoPanel(
+          title: 'Documents terrain déposés par les installateurs (Module 8)',
+          child: _buildDocsTerrain(context, chantier),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQualiteTab(BuildContext context, Chantier chantier, UserRole? role) {
+    return Column(
+      children: [
+        _buildAutoControle(chantier),
+        _buildRex(context, chantier, role),
+      ],
+    );
+  }
+
+  Widget _buildPvTab(BuildContext context, Chantier chantier, {required bool canRenseignerPv, required bool canSupprimerPv}) {
+    return BoPanel(
+      title: 'Procès-verbal de réception',
+      child: _buildPvPanel(context, chantier, canRenseignerPv: canRenseignerPv, canSupprimerPv: canSupprimerPv),
     );
   }
 
@@ -109,14 +201,14 @@ class BoChantierDetailScreen extends StatelessWidget {
     return BoPanel(
       title: 'Auto-contrôle & qualité (${(chantier.progressionAutoControle * 100).toInt()}%)',
       child: chantier.autoControle.isEmpty
-          ? const Text('Aucun point d\'auto-contrôle pour ce chantier.', style: TextStyle(fontSize: 11, color: AppColors.acierClair))
+          ? const Text('Aucun point d\'auto-contrôle pour ce chantier.', style: TextStyle(fontSize: 12.5, color: AppColors.acierClair))
           : Column(
               children: [
                 Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.only(bottom: 10),
                   child: Row(
                     children: [
-                      StatusIndicator(
+                      StatusBadge(
                         label: '$done/$total conforme(s)',
                         type: done == total ? StatusType.conforme : done > 0 ? StatusType.enCours : StatusType.attente,
                       ),
@@ -136,25 +228,25 @@ class BoChantierDetailScreen extends StatelessWidget {
       PointStatus.vide => ('À faire', StatusType.attente),
     };
     return BoTableRow(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 9),
       border: const Border(bottom: BorderSide(color: Color(0xFFEEF1F3))),
       child: Row(
         children: [
           Expanded(
             child: Text(
               '${p.libelle}${p.critique ? ' (sécurité)' : ''}',
-              style: const TextStyle(fontSize: 11.5),
+              style: const TextStyle(fontSize: 12.5),
             ),
           ),
           StatusIndicator(label: label, type: type),
           const SizedBox(width: 8),
           SizedBox(
-            width: 120,
+            width: 130,
             child: Text(
               p.validePar != null && p.valideAt != null
                   ? '${p.validePar} · ${DateFormat('dd/MM HH:mm').format(p.valideAt!)}'
                   : '—',
-              style: const TextStyle(fontSize: 10.5, color: AppColors.acierClair),
+              style: const TextStyle(fontSize: 11, color: AppColors.acierClair),
               textAlign: TextAlign.end,
             ),
           ),
@@ -168,14 +260,14 @@ class BoChantierDetailScreen extends StatelessWidget {
     return BoPanel(
       title: 'Retour d\'expérience (REX)',
       child: !chantier.rexValide
-          ? const Text('Aucun REX soumis pour l\'instant.', style: TextStyle(fontSize: 11, color: AppColors.acierClair))
+          ? const Text('Aucun REX soumis pour l\'instant.', style: TextStyle(fontSize: 12.5, color: AppColors.acierClair))
           : Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
                   child: Text(
                     chantier.rexTranscription ?? '(note vocale sans transcription)',
-                    style: const TextStyle(fontSize: 12, color: AppColors.acier),
+                    style: const TextStyle(fontSize: 13, color: AppColors.acier),
                   ),
                 ),
                 if (peutSupprimer) ...[
@@ -239,53 +331,92 @@ class BoChantierDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildLeftColumn(BuildContext context, Chantier chantier) {
-    final role = context.watch<AuthState>().currentUser?.role;
-    final canRenseignerPv = role == UserRole.admin || role == UserRole.chargeAffaires || role == UserRole.direction;
-    // Suppression réservée au CA/Admin, comme côté backend (DELETE .../pv) —
-    // Direction peut renseigner le PV mais pas le supprimer.
-    final canSupprimerPv = role == UserRole.admin || role == UserRole.chargeAffaires;
-    return Column(
-      children: [
-        BoPanel(
-          title: 'Installateurs rattachés',
-          child: Column(
-            children: [
-              if (chantier.installateursRattaches.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 8),
-                  child: Text('Aucun installateur rattaché pour l\'instant.', style: TextStyle(fontSize: 11, color: AppColors.acierClair)),
-                ),
-              for (final u in chantier.installateursRattaches) _installateurRow(context, chantier, u),
-              const SizedBox(height: 8),
-              ElevatedButton(
-                onPressed: () => _openRattacherDialog(context, chantier),
-                style: ElevatedButton.styleFrom(minimumSize: const Size(0, 32), padding: const EdgeInsets.symmetric(horizontal: 14)),
-                child: const Text('+ Rattacher', style: TextStyle(fontSize: 11.5)),
-              ),
-            ],
+  Widget _buildInstallateursPanel(BuildContext context, Chantier chantier) {
+    return BoPanel(
+      title: 'Installateurs rattachés',
+      child: Column(
+        children: [
+          if (chantier.installateursRattaches.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 10),
+              child: Text('Aucun installateur rattaché pour l\'instant.', style: TextStyle(fontSize: 12.5, color: AppColors.acierClair)),
+            ),
+          for (final u in chantier.installateursRattaches) _installateurRow(context, chantier, u),
+          const SizedBox(height: 10),
+          ElevatedButton.icon(
+            onPressed: () => _openRattacherDialog(context, chantier),
+            icon: const Icon(Icons.person_add_alt_1_outlined, size: 18),
+            label: const Text('Rattacher un installateur'),
+            style: ElevatedButton.styleFrom(minimumSize: const Size(0, 42), padding: const EdgeInsets.symmetric(horizontal: 16)),
           ),
-        ),
-        const BoPanel(
-          title: 'Filet de secours',
-          child: Text(
-            'PDF récapitulatif (fiche + consignes) envoyé automatiquement à chaque rattachement — lisible sans app ni compte.',
-            style: TextStyle(fontSize: 10.5, color: AppColors.acier),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFiletSecoursPanel() {
+    return const BoPanel(
+      title: 'Filet de secours',
+      child: Text(
+        'PDF récapitulatif (fiche + consignes) envoyé automatiquement à chaque rattachement — lisible sans app ni compte.',
+        style: TextStyle(fontSize: 12, color: AppColors.acier),
+      ),
+    );
+  }
+
+  Widget _buildAvancementPanel(Chantier chantier) {
+    return BoPanel(
+      title: 'Avancement des 8 modules',
+      child: Column(
+        children: [
+          BoKv(
+            label: '1-3 · Consultation',
+            value: chantier.documentsChantier.isEmpty
+                ? const Text('—', style: TextStyle(fontSize: 12.5, color: AppColors.acierClair))
+                : StatusIndicator(label: '${chantier.documentsChantier.length} document(s)', type: StatusType.conforme),
           ),
-        ),
-        BoPanel(
-          title: 'Documents chantier — Modules 1 à 3',
-          child: _buildDocumentsChantier(context, chantier),
-        ),
-        BoPanel(
-          title: 'Documents terrain déposés par les installateurs (Module 8)',
-          child: _buildDocsTerrain(context, chantier),
-        ),
-        BoPanel(
-          title: 'Procès-verbal de réception',
-          child: _buildPvPanel(context, chantier, canRenseignerPv: canRenseignerPv, canSupprimerPv: canSupprimerPv),
-        ),
-      ],
+          BoKv(
+            label: '4 · Réception',
+            value: StatusIndicator(
+              label: '${(chantier.progressionReception * 100).toInt()}%',
+              type: chantier.progressionReception == 0
+                  ? StatusType.attente
+                  : chantier.progressionReception == 1
+                      ? StatusType.conforme
+                      : StatusType.enCours,
+            ),
+          ),
+          BoKv(
+            label: '5 · Auto-contrôle',
+            value: StatusIndicator(
+              label: '${(chantier.progressionAutoControle * 100).toInt()}%',
+              type: chantier.progressionAutoControle == 0
+                  ? StatusType.attente
+                  : chantier.progressionAutoControle == 1
+                      ? StatusType.conforme
+                      : StatusType.enCours,
+            ),
+          ),
+          BoKv(
+            label: '6 · PV',
+            value: chantier.pvSigne
+                ? const StatusIndicator(label: 'Signé', type: StatusType.conforme)
+                : const Text('—', style: TextStyle(fontSize: 12.5, color: AppColors.acierClair)),
+          ),
+          BoKv(
+            label: '7 · REX',
+            value: chantier.rexValide
+                ? const StatusIndicator(label: 'Envoyé', type: StatusType.conforme)
+                : const Text('—', style: TextStyle(fontSize: 12.5, color: AppColors.acierClair)),
+          ),
+          BoKv(
+            label: '8 · Docs terrain',
+            value: chantier.docsTerrain.isEmpty
+                ? const Text('—', style: TextStyle(fontSize: 12.5, color: AppColors.acierClair))
+                : StatusIndicator(label: '${chantier.docsTerrain.length} déposé(s)', type: StatusType.enCours),
+          ),
+        ],
+      ),
     );
   }
 
@@ -310,16 +441,17 @@ class BoChantierDetailScreen extends StatelessWidget {
             signatureImagePath: chantier.pvSignatureImagePath,
           ),
           if (canSupprimerPv) ...[
-            const SizedBox(height: 12),
-            OutlinedButton(
+            const SizedBox(height: 14),
+            OutlinedButton.icon(
               onPressed: () => _confirmerSuppressionPv(context, chantier),
+              icon: const Icon(Icons.delete_outline, size: 18),
+              label: const Text('Supprimer le PV'),
               style: OutlinedButton.styleFrom(
-                minimumSize: const Size(0, 32),
-                padding: const EdgeInsets.symmetric(horizontal: 14),
+                minimumSize: const Size(0, 42),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 foregroundColor: AppColors.rouge,
                 side: const BorderSide(color: AppColors.rouge),
               ),
-              child: const Text('Supprimer le PV', style: TextStyle(fontSize: 11.5)),
             ),
           ],
         ],
@@ -332,35 +464,38 @@ class BoChantierDetailScreen extends StatelessWidget {
         children: [
           const Text(
             'En attente de signature par le client — l\'installateur consulte le PDF déposé et le fait signer sur place.',
-            style: TextStyle(fontSize: 11, color: AppColors.acier),
+            style: TextStyle(fontSize: 12.5, color: AppColors.acier),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: () => launchUrl(Uri.parse(chantier.pvPdfPath!), mode: LaunchMode.externalApplication),
             icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
-            label: const Text('Ouvrir le PV déposé', style: TextStyle(fontSize: 11.5)),
+            label: const Text('Ouvrir le PV déposé'),
+            style: OutlinedButton.styleFrom(minimumSize: const Size(0, 42), padding: const EdgeInsets.symmetric(horizontal: 16)),
           ),
           if (canRenseignerPv || canSupprimerPv) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Row(
               children: [
                 if (canRenseignerPv)
-                  OutlinedButton(
+                  OutlinedButton.icon(
                     onPressed: () => _openRenseignerPvDialog(context, chantier),
-                    style: OutlinedButton.styleFrom(minimumSize: const Size(0, 32), padding: const EdgeInsets.symmetric(horizontal: 14)),
-                    child: const Text('Remplacer le PV', style: TextStyle(fontSize: 11.5)),
+                    icon: const Icon(Icons.upload_file_outlined, size: 18),
+                    label: const Text('Remplacer le PV'),
+                    style: OutlinedButton.styleFrom(minimumSize: const Size(0, 42), padding: const EdgeInsets.symmetric(horizontal: 16)),
                   ),
-                if (canRenseignerPv && canSupprimerPv) const SizedBox(width: 8),
+                if (canRenseignerPv && canSupprimerPv) const SizedBox(width: 10),
                 if (canSupprimerPv)
-                  OutlinedButton(
+                  OutlinedButton.icon(
                     onPressed: () => _confirmerSuppressionPv(context, chantier),
+                    icon: const Icon(Icons.close, size: 18),
+                    label: const Text('Annuler'),
                     style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(0, 32),
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      minimumSize: const Size(0, 42),
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
                       foregroundColor: AppColors.rouge,
                       side: const BorderSide(color: AppColors.rouge),
                     ),
-                    child: const Text('Annuler', style: TextStyle(fontSize: 11.5)),
                   ),
               ],
             ),
@@ -375,19 +510,20 @@ class BoChantierDetailScreen extends StatelessWidget {
         children: [
           const Text(
             'Déposez le PDF du PV — l\'installateur le fera signer par le client sur place.',
-            style: TextStyle(fontSize: 11, color: AppColors.acier),
+            style: TextStyle(fontSize: 12.5, color: AppColors.acier),
           ),
-          const SizedBox(height: 8),
-          ElevatedButton(
+          const SizedBox(height: 12),
+          ElevatedButton.icon(
             onPressed: () => _openRenseignerPvDialog(context, chantier),
-            style: ElevatedButton.styleFrom(minimumSize: const Size(0, 32), padding: const EdgeInsets.symmetric(horizontal: 14)),
-            child: const Text('Déposer le PV', style: TextStyle(fontSize: 11.5)),
+            icon: const Icon(Icons.upload_file_outlined, size: 18),
+            label: const Text('Déposer le PV'),
+            style: ElevatedButton.styleFrom(minimumSize: const Size(0, 42), padding: const EdgeInsets.symmetric(horizontal: 16)),
           ),
         ],
       );
     }
 
-    return const Text('En attente du back-office.', style: TextStyle(fontSize: 11, color: AppColors.acierClair));
+    return const Text('En attente du back-office.', style: TextStyle(fontSize: 12.5, color: AppColors.acierClair));
   }
 
   static const _modulesDocuments = [
@@ -401,42 +537,39 @@ class BoChantierDetailScreen extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         for (final (type, label) in _modulesDocuments) ...[
-          Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.acier)),
-          const SizedBox(height: 4),
+          Text(label, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppColors.acier)),
+          const SizedBox(height: 6),
           () {
             final docs = chantier.documentsChantier.where((d) => d.type == type).toList();
             if (docs.isEmpty) {
               return const Padding(
-                padding: EdgeInsets.only(bottom: 12),
-                child: Text('Aucun document.', style: TextStyle(fontSize: 11, color: AppColors.acierClair)),
+                padding: EdgeInsets.only(bottom: 14),
+                child: Text('Aucun document.', style: TextStyle(fontSize: 12.5, color: AppColors.acierClair)),
               );
             }
             return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.only(bottom: 14),
               child: Column(children: [for (final d in docs) _documentChantierRow(context, chantier, d)]),
             );
           }(),
         ],
-        ElevatedButton(
+        ElevatedButton.icon(
           onPressed: () => _openAjouterDocumentDialog(context, chantier),
-          style: ElevatedButton.styleFrom(minimumSize: const Size(0, 32), padding: const EdgeInsets.symmetric(horizontal: 14)),
-          child: const Text('+ Ajouter un document', style: TextStyle(fontSize: 11.5)),
+          icon: const Icon(Icons.upload_file_outlined, size: 18),
+          label: const Text('Ajouter un document'),
+          style: ElevatedButton.styleFrom(minimumSize: const Size(0, 42), padding: const EdgeInsets.symmetric(horizontal: 16)),
         ),
       ],
     );
   }
 
   Widget _buildDocsTerrain(BuildContext context, Chantier chantier) {
+    if (chantier.docsTerrain.isEmpty) {
+      return const Text('Aucun document terrain déposé pour l\'instant.', style: TextStyle(fontSize: 12.5, color: AppColors.acierClair));
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (chantier.docsTerrain.isEmpty)
-          const Padding(
-            padding: EdgeInsets.only(bottom: 8),
-            child: Text('Aucun document terrain déposé pour l\'instant.', style: TextStyle(fontSize: 11, color: AppColors.acierClair)),
-          ),
-        for (final d in chantier.docsTerrain.reversed) _docTerrainRow(context, d),
-      ],
+      children: [for (final d in chantier.docsTerrain.reversed) _docTerrainRow(context, d)],
     );
   }
 
@@ -462,21 +595,21 @@ class BoChantierDetailScreen extends StatelessWidget {
 
   Widget _docTerrainRow(BuildContext context, DocumentTerrain d) {
     return BoTableRow(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 9),
       border: const Border(bottom: BorderSide(color: Color(0xFFEEF1F3))),
       onTap: d.filePath == null ? null : () => _ouvrirDocument(context, d.filePath!),
       child: Row(
         children: [
-          Icon(d.filePath != null ? Icons.description_outlined : Icons.image_outlined, size: 16, color: AppColors.acierClair),
-          const SizedBox(width: 8),
+          Icon(d.filePath != null ? Icons.description_outlined : Icons.image_outlined, size: 18, color: AppColors.acierClair),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(d.titre, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
+                Text(d.titre, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
                 Text(
                   '${d.categorieLabel} · ${DateFormat('dd/MM HH:mm').format(d.horodatage)} · ${d.auteur}',
-                  style: const TextStyle(fontSize: 10, color: AppColors.acierClair),
+                  style: const TextStyle(fontSize: 11, color: AppColors.acierClair),
                 ),
               ],
             ),
@@ -499,7 +632,7 @@ class BoChantierDetailScreen extends StatelessWidget {
       TypeDocumentChantier.technique => Icons.description_outlined,
     };
     return BoTableRow(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 9),
       border: const Border(bottom: BorderSide(color: Color(0xFFEEF1F3))),
       onTap: () => _ouvrirDocument(context, d.filePath),
       child: Row(
@@ -507,17 +640,17 @@ class BoChantierDetailScreen extends StatelessWidget {
           Expanded(
             child: Row(
               children: [
-                Icon(icon, size: 16, color: AppColors.acierClair),
-                const SizedBox(width: 8),
+                Icon(icon, size: 18, color: AppColors.acierClair),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(d.nom, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600)),
+                      Text(d.nom, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
                       if (d.nomFichierOriginal != null && d.nomFichierOriginal != d.nom)
                         Text(
                           d.nomFichierOriginal!,
-                          style: const TextStyle(fontSize: 10, color: AppColors.acierClair),
+                          style: const TextStyle(fontSize: 11, color: AppColors.acierClair),
                         ),
                     ],
                   ),
@@ -602,13 +735,13 @@ class BoChantierDetailScreen extends StatelessWidget {
     final ouvert = chantier.livretsOuverts.contains(u.id);
     final initials = '${u.prenom.isNotEmpty ? u.prenom[0] : ''}${u.nom.isNotEmpty ? u.nom[0] : ''}';
     return BoTableRow(
-      padding: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.symmetric(vertical: 9),
       border: const Border(bottom: BorderSide(color: Color(0xFFEEF1F3))),
       child: Row(
         children: [
-          CircleAvatar(radius: 10, backgroundColor: AppColors.acier, child: Text(initials, style: const TextStyle(fontSize: 8, color: Colors.white, fontWeight: FontWeight.bold))),
-          const SizedBox(width: 8),
-          Expanded(child: Text('${u.fullName} (${u.status == UserStatus.sousTraitant ? 'sous-traitant' : 'salarié'})', style: const TextStyle(fontSize: 11.5))),
+          CircleAvatar(radius: 12, backgroundColor: AppColors.acier, child: Text(initials, style: const TextStyle(fontSize: 9, color: Colors.white, fontWeight: FontWeight.bold))),
+          const SizedBox(width: 10),
+          Expanded(child: Text('${u.fullName} (${u.status == UserStatus.sousTraitant ? 'sous-traitant' : 'salarié'})', style: const TextStyle(fontSize: 12.5))),
           StatusIndicator(
             label: ouvert ? 'Prêt hors-ligne' : 'Livret non ouvert',
             type: ouvert ? StatusType.conforme : StatusType.nonConforme,
@@ -705,62 +838,6 @@ class BoChantierDetailScreen extends StatelessWidget {
               if (context.mounted) context.go('/backoffice/ca');
             },
             child: const Text('Supprimer définitivement'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRightColumn(Chantier chantier) {
-    return BoPanel(
-      title: 'Avancement des 8 modules',
-      child: Column(
-        children: [
-          BoKv(
-            label: '1-3 · Consultation',
-            value: chantier.documentsChantier.isEmpty
-                ? const Text('—', style: TextStyle(fontSize: 11, color: AppColors.acierClair))
-                : StatusIndicator(label: '${chantier.documentsChantier.length} document(s)', type: StatusType.conforme),
-          ),
-          BoKv(
-            label: '4 · Réception',
-            value: StatusIndicator(
-              label: '${(chantier.progressionReception * 100).toInt()}%',
-              type: chantier.progressionReception == 0
-                  ? StatusType.attente
-                  : chantier.progressionReception == 1
-                      ? StatusType.conforme
-                      : StatusType.enCours,
-            ),
-          ),
-          BoKv(
-            label: '5 · Auto-contrôle',
-            value: StatusIndicator(
-              label: '${(chantier.progressionAutoControle * 100).toInt()}%',
-              type: chantier.progressionAutoControle == 0
-                  ? StatusType.attente
-                  : chantier.progressionAutoControle == 1
-                      ? StatusType.conforme
-                      : StatusType.enCours,
-            ),
-          ),
-          BoKv(
-            label: '6 · PV',
-            value: chantier.pvSigne
-                ? const StatusIndicator(label: 'Signé', type: StatusType.conforme)
-                : const Text('—', style: TextStyle(fontSize: 11, color: AppColors.acierClair)),
-          ),
-          BoKv(
-            label: '7 · REX',
-            value: chantier.rexValide
-                ? const StatusIndicator(label: 'Envoyé', type: StatusType.conforme)
-                : const Text('—', style: TextStyle(fontSize: 11, color: AppColors.acierClair)),
-          ),
-          BoKv(
-            label: '8 · Docs terrain',
-            value: chantier.docsTerrain.isEmpty
-                ? const Text('—', style: TextStyle(fontSize: 11, color: AppColors.acierClair))
-                : StatusIndicator(label: '${chantier.docsTerrain.length} déposé(s)', type: StatusType.enCours),
           ),
         ],
       ),
@@ -868,4 +945,3 @@ class _ModifierChantierDialogState extends State<_ModifierChantierDialog> {
     );
   }
 }
-

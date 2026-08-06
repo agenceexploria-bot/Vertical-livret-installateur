@@ -129,7 +129,7 @@ class BoShell extends StatelessWidget {
           Expanded(
             child: SingleChildScrollView(
               child: Padding(
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 28),
                 child: child,
               ),
             ),

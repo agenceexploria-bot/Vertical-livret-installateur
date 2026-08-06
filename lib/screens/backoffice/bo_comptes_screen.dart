@@ -3,7 +3,9 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme.dart';
+import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/password_field.dart';
+import '../../core/widgets/status_badge.dart';
 import '../../core/widgets/status_indicator.dart';
 import '../../data/models/user.dart';
 import '../../state/admin_state.dart';
@@ -52,33 +54,46 @@ class BoComptesScreen extends StatelessWidget {
               Text('Comptes installateurs', style: Theme.of(context).textTheme.titleMedium),
               const Spacer(),
               SizedBox(
-                width: 200,
+                width: 220,
                 child: TextField(
                   decoration: const InputDecoration(
                     hintText: 'Rechercher...',
+                    prefixIcon: Icon(Icons.search, size: 20),
                     isDense: true,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          BoResponsiveTable(
-            child: Container(
-              decoration: BoxDecoration(
-                color: AppColors.blanc,
-                border: Border.all(color: AppColors.lignes),
-                borderRadius: BorderRadius.circular(7),
+          const SizedBox(height: 18),
+          if (comptesState.installateurs.isEmpty)
+            BoPanel(
+              child: EmptyState(
+                icon: Icons.groups_outlined,
+                message: 'Aucun compte installateur pour l\'instant.',
               ),
-              child: Column(
-                children: [
-                  _headerRow(),
-                  for (final u in comptesState.installateurs) _dataRow(context, u, chantiers, comptesState),
-                ],
+            )
+          else
+            BoResponsiveTable(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: AppColors.blanc,
+                  border: Border.all(color: AppColors.lignes),
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(color: AppColors.encre.withValues(alpha: 0.04), blurRadius: 16, offset: const Offset(0, 6)),
+                  ],
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  children: [
+                    _headerRow(),
+                    for (final (i, u) in comptesState.installateurs.indexed) _dataRow(context, u, chantiers, comptesState, i),
+                  ],
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -103,15 +118,22 @@ class BoComptesScreen extends StatelessWidget {
         const SizedBox(height: 4),
         const Text(
           'Tous les comptes installateurs et chargés d\'affaires du système.',
-          style: TextStyle(fontSize: 11, color: AppColors.acierClair),
+          style: TextStyle(fontSize: 12.5, color: AppColors.acierClair),
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 18),
+        if (comptes.isEmpty)
+          const BoPanel(
+            child: EmptyState(
+              icon: Icons.groups_outlined,
+              message: 'Aucun compte enregistré pour l\'instant.',
+            ),
+          ),
         for (final role in _ordreGroupes) ...[
           () {
             final groupe = comptes.where((u) => u.role == role).toList();
             if (groupe.isEmpty) return const SizedBox.shrink();
             return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.only(bottom: 16),
               child: BoPanel(
                 title: '${_roleLabelPluriel(role)} (${groupe.length})',
                 child: BoResponsiveTable(
@@ -119,12 +141,13 @@ class BoComptesScreen extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: AppColors.blanc,
                       border: Border.all(color: AppColors.lignes),
-                      borderRadius: BorderRadius.circular(7),
+                      borderRadius: BorderRadius.circular(14),
                     ),
+                    clipBehavior: Clip.antiAlias,
                     child: Column(
                       children: [
                         _comptesHeaderRow(),
-                        for (final u in groupe) _comptesDataRow(context, adminState, u),
+                        for (final (i, u) in groupe.indexed) _comptesDataRow(context, adminState, u, i),
                       ],
                     ),
                   ),
@@ -168,10 +191,10 @@ class BoComptesScreen extends StatelessWidget {
   }
 
   Widget _comptesHeaderRow() {
-    const style = TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: AppColors.acier, letterSpacing: 0.5);
+    const style = TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppColors.acier, letterSpacing: 0.5);
     return Container(
       color: const Color(0xFFEDF0F2),
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: const Row(
         children: [
           Expanded(flex: 3, child: Text('COMPTE', style: style)),
@@ -184,7 +207,7 @@ class BoComptesScreen extends StatelessWidget {
     );
   }
 
-  Widget _comptesDataRow(BuildContext context, AdminState adminState, User u) {
+  Widget _comptesDataRow(BuildContext context, AdminState adminState, User u, int index) {
     final (statutLabel, statutType) = u.suspendu
         ? ('Suspendu', StatusType.attente)
         : !u.isActive
@@ -194,18 +217,19 @@ class BoComptesScreen extends StatelessWidget {
     return BoTableRow(
       onTap: () => context.push('/backoffice/admin/comptes/${u.id}'),
       border: const Border(top: BorderSide(color: AppColors.lignes)),
+      backgroundColor: index.isOdd ? const Color(0xFFF7F8F9) : null,
       child: Row(
         children: [
           Expanded(
             flex: 3,
             child: Text(
               u.fullName,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, decoration: TextDecoration.underline),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, decoration: TextDecoration.underline),
             ),
           ),
-          Expanded(flex: 2, child: Text(_roleLabel(u.role), style: const TextStyle(fontSize: 11.5, color: AppColors.acier))),
-          Expanded(flex: 3, child: Text(u.email ?? '—', style: const TextStyle(fontSize: 11.5, color: AppColors.acier))),
-          Expanded(flex: 2, child: StatusIndicator(label: statutLabel, type: statutType)),
+          Expanded(flex: 2, child: Text(_roleLabel(u.role), style: const TextStyle(fontSize: 12.5, color: AppColors.acier))),
+          Expanded(flex: 3, child: Text(u.email ?? '—', style: const TextStyle(fontSize: 12.5, color: AppColors.acier))),
+          Expanded(flex: 2, child: StatusBadge(label: statutLabel, type: statutType)),
           Expanded(
             flex: 2,
             child: Row(
@@ -218,22 +242,25 @@ class BoComptesScreen extends StatelessWidget {
                 // AdminState.validerCompte) ; direction/admin ne passent
                 // jamais par cet état "en attente" (créés déjà actifs).
                 if (!u.isActive && !u.suspendu && (u.role == UserRole.chargeAffaires || u.role == UserRole.qualite))
-                  ElevatedButton(
+                  ElevatedButton.icon(
                     onPressed: () => adminState.validerCompteInterne(u),
-                    style: ElevatedButton.styleFrom(minimumSize: const Size(0, 30), padding: const EdgeInsets.symmetric(horizontal: 10)),
-                    child: const Text('Valider', style: TextStyle(fontSize: 11)),
+                    icon: const Icon(Icons.check, size: 16),
+                    label: const Text('Valider'),
+                    style: ElevatedButton.styleFrom(minimumSize: const Size(0, 36), padding: const EdgeInsets.symmetric(horizontal: 12)),
                   ),
                 if (!u.isActive && !u.suspendu && u.role == UserRole.installateur)
-                  ElevatedButton(
+                  ElevatedButton.icon(
                     onPressed: () => adminState.validerCompte(u),
-                    style: ElevatedButton.styleFrom(minimumSize: const Size(0, 30), padding: const EdgeInsets.symmetric(horizontal: 10)),
-                    child: const Text('Valider', style: TextStyle(fontSize: 11)),
+                    icon: const Icon(Icons.check, size: 16),
+                    label: const Text('Valider'),
+                    style: ElevatedButton.styleFrom(minimumSize: const Size(0, 36), padding: const EdgeInsets.symmetric(horizontal: 12)),
                   ),
                 if (u.suspendu)
-                  OutlinedButton(
+                  OutlinedButton.icon(
                     onPressed: () => adminState.reactiverCompte(u),
-                    style: OutlinedButton.styleFrom(minimumSize: const Size(0, 30), padding: const EdgeInsets.symmetric(horizontal: 10)),
-                    child: const Text('Réactiver', style: TextStyle(fontSize: 11)),
+                    icon: const Icon(Icons.refresh, size: 16),
+                    label: const Text('Réactiver'),
+                    style: OutlinedButton.styleFrom(minimumSize: const Size(0, 36), padding: const EdgeInsets.symmetric(horizontal: 12)),
                   ),
                 PopupMenuButton<String>(
                   icon: const Icon(Icons.more_vert, size: 18, color: AppColors.acierClair),
@@ -371,10 +398,10 @@ class BoComptesScreen extends StatelessWidget {
   }
 
   Widget _headerRow() {
-    const style = TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: AppColors.acier, letterSpacing: 0.5);
+    const style = TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: AppColors.acier, letterSpacing: 0.5);
     return Container(
       color: const Color(0xFFEDF0F2),
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: const Row(
         children: [
           Expanded(flex: 3, child: Text('INSTALLATEUR', style: style)),
@@ -388,7 +415,7 @@ class BoComptesScreen extends StatelessWidget {
     );
   }
 
-  Widget _dataRow(BuildContext context, User u, List chantiers, ComptesState comptesState) {
+  Widget _dataRow(BuildContext context, User u, List chantiers, ComptesState comptesState, int index) {
     final (compteLabel, compteType) = u.suspendu
         ? ('Suspendu', StatusType.attente)
         : !u.isActive
@@ -409,16 +436,18 @@ class BoComptesScreen extends StatelessWidget {
 
     Widget? primaryAction;
     if (!u.isActive) {
-      primaryAction = ElevatedButton(
+      primaryAction = ElevatedButton.icon(
         onPressed: () => comptesState.valider(u),
-        style: ElevatedButton.styleFrom(minimumSize: const Size(0, 30), padding: const EdgeInsets.symmetric(horizontal: 10)),
-        child: const Text('Valider', style: TextStyle(fontSize: 11)),
+        icon: const Icon(Icons.check, size: 16),
+        label: const Text('Valider'),
+        style: ElevatedButton.styleFrom(minimumSize: const Size(0, 36), padding: const EdgeInsets.symmetric(horizontal: 12)),
       );
     } else if (u.suspendu) {
-      primaryAction = OutlinedButton(
+      primaryAction = OutlinedButton.icon(
         onPressed: () => comptesState.reactiver(u),
-        style: OutlinedButton.styleFrom(minimumSize: const Size(0, 30), padding: const EdgeInsets.symmetric(horizontal: 10)),
-        child: const Text('Réactiver', style: TextStyle(fontSize: 11)),
+        icon: const Icon(Icons.refresh, size: 16),
+        label: const Text('Réactiver'),
+        style: OutlinedButton.styleFrom(minimumSize: const Size(0, 36), padding: const EdgeInsets.symmetric(horizontal: 12)),
       );
     }
 
@@ -440,17 +469,18 @@ class BoComptesScreen extends StatelessWidget {
     return BoTableRow(
       onTap: () => context.push('/backoffice/ca/comptes/${u.id}'),
       border: const Border(top: BorderSide(color: AppColors.lignes)),
+      backgroundColor: index.isOdd ? const Color(0xFFF7F8F9) : null,
       child: Row(
         children: [
           Expanded(
             flex: 3,
             child: Text(
               u.fullName,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, decoration: TextDecoration.underline),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, decoration: TextDecoration.underline),
             ),
           ),
-          Expanded(flex: 3, child: Text(statutLabel, style: const TextStyle(fontSize: 11.5, color: AppColors.acier))),
-          Expanded(flex: 2, child: StatusIndicator(label: compteLabel, type: compteType)),
+          Expanded(flex: 3, child: Text(statutLabel, style: const TextStyle(fontSize: 12.5, color: AppColors.acier))),
+          Expanded(flex: 2, child: StatusBadge(label: compteLabel, type: compteType)),
           Expanded(
             flex: 3,
             child: GestureDetector(
@@ -460,7 +490,7 @@ class BoComptesScreen extends StatelessWidget {
               child: StatusIndicator(label: habLabel, type: habType),
             ),
           ),
-          Expanded(flex: 2, child: Text(mesChantiers.isEmpty ? '—' : mesChantiers, style: const TextStyle(fontSize: 11.5))),
+          Expanded(flex: 2, child: Text(mesChantiers.isEmpty ? '—' : mesChantiers, style: const TextStyle(fontSize: 12.5))),
           Expanded(flex: 2, child: action),
         ],
       ),

@@ -18,12 +18,18 @@ class BoTableRow extends StatefulWidget {
   final EdgeInsetsGeometry padding;
   final Border? border;
 
+  /// Fond de la ligne au repos (avant survol) — utilisé pour le zébrage
+  /// (une ligne sur deux légèrement teintée) dans les tableaux denses, plus
+  /// lisibles qu'un fond uniforme sur une longue liste.
+  final Color? backgroundColor;
+
   const BoTableRow({
     super.key,
     required this.child,
     this.onTap,
-    this.padding = const EdgeInsets.symmetric(horizontal: 9, vertical: 9),
+    this.padding = const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
     this.border,
+    this.backgroundColor,
   });
 
   @override
@@ -51,7 +57,7 @@ class _BoTableRowState extends State<BoTableRow> {
           curve: Curves.easeOut,
           padding: widget.padding,
           decoration: BoxDecoration(
-            color: _hovered ? AppColors.acier.withValues(alpha: 0.07) : Colors.transparent,
+            color: _hovered ? AppColors.acier.withValues(alpha: 0.07) : (widget.backgroundColor ?? Colors.transparent),
             border: widget.border,
           ),
           child: widget.child,

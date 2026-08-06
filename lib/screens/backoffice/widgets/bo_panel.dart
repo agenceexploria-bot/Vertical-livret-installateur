@@ -10,34 +10,36 @@ class BoPanel extends StatelessWidget {
     super.key,
     this.title,
     required this.child,
-    this.padding = const EdgeInsets.all(14),
+    this.padding = const EdgeInsets.all(20),
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.only(bottom: 16),
       padding: padding,
       decoration: BoxDecoration(
         color: AppColors.blanc,
         border: Border.all(color: AppColors.lignes),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(color: AppColors.encre.withValues(alpha: 0.04), blurRadius: 16, offset: const Offset(0, 6)),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (title != null) ...[
             Text(
-              title!.toUpperCase(),
+              title!,
               style: const TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.5,
-                color: AppColors.acier,
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: AppColors.encre,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 14),
           ],
           child,
         ],
@@ -55,12 +57,12 @@ class BoKv extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 5),
+      padding: const EdgeInsets.symmetric(vertical: 10),
       decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFEEF1F3)))),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontSize: 11, color: AppColors.acier)),
+          Text(label, style: const TextStyle(fontSize: 12.5, color: AppColors.acier)),
           value,
         ],
       ),
