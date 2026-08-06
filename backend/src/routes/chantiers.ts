@@ -476,6 +476,15 @@ const pvSignatureSchema = z.object({
   nomSignataire: z.string().min(1),
   fonctionSignataire: z.string().min(1),
   signatureImage: z.string().min(1, 'L\'image de la signature est requise'),
+  // Emplacement du tracé sur le PDF gabarit, calculé par l'app à partir de
+  // la position réelle du dessin sur le document affiché (le client signe
+  // directement sur sa case, il n'y a plus de coordonnées fixes) — voir
+  // SignaturePlacement dans pvMerge.ts.
+  pageNumber: z.number().int().min(1),
+  x: z.number(),
+  y: z.number(),
+  width: z.number().positive(),
+  height: z.number().positive(),
 });
 
 function isPngDataUrl(dataUrl: string): boolean {
@@ -483,11 +492,11 @@ function isPngDataUrl(dataUrl: string): boolean {
 }
 
 // Signature du PV par le client, soumise par l'installateur — SEULE façon de
-// faire passer pvSigne à true. L'app envoie uniquement l'image PNG du tracé
-// de signature (pas un PDF déjà fusionné) : c'est le backend qui la
-// superpose sur le PDF gabarit original via pdf-lib (voir pvMerge.ts), en
-// préservant intégralement son texte et ses vecteurs — le gabarit n'est
-// jamais rasterisé.
+// faire passer pvSigne à true. L'app envoie l'image PNG du tracé de
+// signature et son emplacement sur le document (pas un PDF déjà fusionné) :
+// c'est le backend qui la superpose sur le PDF gabarit original via pdf-lib
+// (voir pvMerge.ts), en préservant intégralement son texte et ses vecteurs —
+// le gabarit n'est jamais rasterisé.
 //
 // Un PV déjà signé ne peut plus être re-signé : c'est un verrou volontaire
 // (voir lib/screens/client/signature_screen.dart côté app), la seule façon
@@ -518,7 +527,13 @@ chantiersRouter.post(
     try {
       const gabaritBytes = await fetchBlobFile(existing.pvPdfPath);
       const signatureBytes = Buffer.from(parsed.data.signatureImage.split(',')[1] ?? '', 'base64');
-      pdfSigneBytes = await fusionnerSignatureDansPdf(gabaritBytes, signatureBytes);
+      pdfSigneBytes = await fusionnerSignatureDansPdf(gabaritBytes, signatureBytes, {
+        pageNumber: parsed.data.pageNumber,
+        x: parsed.data.x,
+        y: parsed.data.y,
+        width: parsed.data.width,
+        height: parsed.data.height,
+      });
     } catch (err) {
       console.error('Fusion de la signature sur le PV échouée:', err);
       return res.status(502).json({ error: 'Impossible de fusionner la signature sur le PV, réessayez.' });

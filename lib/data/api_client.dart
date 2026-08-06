@@ -344,20 +344,33 @@ class ApiClient {
     return _request('POST', '/chantiers/$reference/pv/document', body: {'file': file});
   }
 
-  /// Signature du PV par le client, soumise par l'installateur — seule
-  /// l'image PNG du tracé de signature est envoyée dans [signatureImage] ; la
-  /// fusion avec le PDF gabarit (préservation intégrale de son texte et ses
-  /// vecteurs) se fait côté serveur, voir backend/src/lib/pvMerge.ts.
+  /// Signature du PV par le client, soumise par l'installateur — le client
+  /// signe directement sur le PDF affiché, [signatureImage] est l'image PNG
+  /// du tracé seul et [pageNumber]/[x]/[y]/[width]/[height] sa position sur
+  /// le document (points PDF, origine bas-gauche — voir
+  /// lib/screens/client/signature_screen.dart) ; la fusion avec le PDF
+  /// gabarit (préservation intégrale de son texte et ses vecteurs) se fait
+  /// côté serveur, voir backend/src/lib/pvMerge.ts.
   Future<Map<String, dynamic>> signPv(
     String reference, {
     required String nomSignataire,
     required String fonctionSignataire,
     required String signatureImage,
+    required int pageNumber,
+    required double x,
+    required double y,
+    required double width,
+    required double height,
   }) {
     return _request('POST', '/chantiers/$reference/pv/signature', body: {
       'nomSignataire': nomSignataire,
       'fonctionSignataire': fonctionSignataire,
       'signatureImage': signatureImage,
+      'pageNumber': pageNumber,
+      'x': x,
+      'y': y,
+      'width': width,
+      'height': height,
     });
   }
 

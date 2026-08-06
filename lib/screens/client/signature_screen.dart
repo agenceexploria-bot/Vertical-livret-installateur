@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:http/http.dart' as http;
 import 'package:pdfrx/pdfrx.dart';
 import 'package:provider/provider.dart';
@@ -17,14 +16,18 @@ import '../../data/models/chantier.dart';
 import '../../state/chantier_state.dart';
 
 /// L'installateur ne crée ni ne modifie jamais le contenu du PV : il consulte
-/// (lecture seule) le PDF déposé par le back-office, fait signer le client
-/// directement sur l'écran, et renseigne son nom/sa fonction. La signature
-/// tactile est capturée puis figée (l'installateur ne peut plus la modifier,
-/// seuls nom/fonction restent éditables jusqu'à l'envoi), et envoyée seule au
-/// backend qui la superpose sur le PDF gabarit original sans le rasteriser
-/// (voir backend/src/lib/pvMerge.ts). Une fois le PV signé (pvSigne == true),
-/// cet écran se verrouille totalement — voir le garde dans [build] — et ne
-/// se déverrouille que si un CA/Admin supprime le PV depuis le back-office
+/// le PDF déposé par le back-office et fait signer le client DIRECTEMENT sur
+/// le rendu du document (calque de dessin transparent superposé au
+/// visualiseur PDF, voir [_buildPdfAvecCalque]), à l'endroit exact prévu
+/// pour la signature — il n'y a plus de zone de signature séparée. Le tracé
+/// est capturé en coordonnées "document" (indépendantes du zoom/scroll, voir
+/// [PdfViewerController.globalToDocument]), ce qui permet de calculer sa
+/// position PDF exacte (page, x, y, largeur, hauteur en points) au moment de
+/// l'envoi — voir [_calculerPlacementSignature]. Le backend superpose alors
+/// l'image sur le PDF gabarit original sans le rasteriser (voir
+/// backend/src/lib/pvMerge.ts). Une fois le PV signé (pvSigne == true), cet
+/// écran se verrouille totalement — voir le garde dans [build] — et ne se
+/// déverrouille que si un CA/Admin supprime le PV depuis le back-office
 /// (DELETE .../pv, qui repasse pvSigne à false).
 class SignatureScreen extends StatefulWidget {
   const SignatureScreen({super.key});
@@ -34,21 +37,31 @@ class SignatureScreen extends StatefulWidget {
 }
 
 class _SignatureScreenState extends State<SignatureScreen> {
-  final List<Offset?> _points = [];
+  /// Tracé du client en coordonnées "document" du PDF (indépendantes du
+  /// zoom/scroll courants) — un point `null` "lève le stylo" entre deux
+  /// traits. C'est la seule source de vérité du tracé : l'affichage à
+  /// l'écran (voir [_PdfSignatureOverlay]) et le placement final envoyé au
+  /// backend en sont tous deux dérivés, jamais l'inverse.
+  final List<Offset?> _pointsDocument = [];
   final _nomController = TextEditingController();
   final _fonctionController = TextEditingController();
-  final _signatureKey = GlobalKey();
+  final _overlayKey = GlobalKey();
+  final _pdfController = PdfViewerController();
+
+  /// Mode Lecture (le doigt fait défiler/zoome le PDF) / Mode Signature (le
+  /// doigt dessine sur le calque) — évite que le client dessine par
+  /// accident en essayant de scroller jusqu'à sa case. Désactive aussi le
+  /// pan/zoom du visualiseur pendant la signature (voir [_buildPdfAvecCalque]).
+  bool _modeSignature = false;
 
   Uint8List? _pdfBytes;
   bool _isLoadingPdf = true;
   String? _loadError;
-
-  /// Image de la signature tactile une fois capturée — non nulle = la
-  /// signature est figée (lecture seule), distincte du texte du signataire
-  /// (nom/fonction) qui reste éditable jusqu'à l'envoi final.
-  Uint8List? _signatureBytes;
-  bool _isCapturingSignature = false;
   bool _isSubmitting = false;
+
+  static const double _epaisseurTraitPdf = 1.6; // en points PDF
+  static const double _margeSignaturePdf = 4.0; // marge autour du tracé, en points PDF
+  static const double _resolutionRasterisation = 4.0; // pixels PNG par point PDF
 
   @override
   void initState() {
@@ -82,10 +95,11 @@ class _SignatureScreenState extends State<SignatureScreen> {
     }
   }
 
-  bool get _peutValiderSignature => _points.isNotEmpty && !_isCapturingSignature;
-
   bool get _peutValider =>
-      !_isSubmitting && _signatureBytes != null && _nomController.text.trim().isNotEmpty && _fonctionController.text.trim().isNotEmpty;
+      !_isSubmitting &&
+      _pointsDocument.any((p) => p != null) &&
+      _nomController.text.trim().isNotEmpty &&
+      _fonctionController.text.trim().isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
@@ -133,22 +147,22 @@ class _SignatureScreenState extends State<SignatureScreen> {
   Widget _buildContent(BuildContext context, Chantier chantier) {
     return Column(
       children: [
-        const Padding(
-          padding: EdgeInsets.fromLTRB(16, 8, 16, 8),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text('PV à faire signer par le client (lecture seule)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Faites signer le client directement sur le document, à l\'endroit prévu',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+              ),
+              const SizedBox(width: 12),
+              _buildToggleMode(),
+            ],
           ),
         ),
-        Expanded(
-          flex: 3,
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(border: Border.all(color: AppColors.lignes), borderRadius: BorderRadius.circular(9)),
-            clipBehavior: Clip.antiAlias,
-            child: PdfViewer.data(_pdfBytes!, sourceName: 'pv-${chantier.reference}'),
-          ),
-        ),
+        Expanded(flex: 4, child: _buildPdfAvecCalque(chantier)),
         const Divider(height: 24),
         Expanded(
           flex: 2,
@@ -167,13 +181,6 @@ class _SignatureScreenState extends State<SignatureScreen> {
                   decoration: const InputDecoration(labelText: 'Fonction du signataire'),
                 ),
                 const SizedBox(height: 16),
-                Text(
-                  _signatureBytes == null ? 'Signature du client' : 'Signature du client (verrouillée)',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                ),
-                const SizedBox(height: 8),
-                SizedBox(height: 180, child: _buildSignatureZone()),
-                const SizedBox(height: 8),
                 _buildActionsRow(chantier),
                 const SizedBox(height: 16),
               ],
@@ -184,70 +191,64 @@ class _SignatureScreenState extends State<SignatureScreen> {
     );
   }
 
-  /// Zone de signature : canevas tactile tant que rien n'est figé, sinon
-  /// aperçu en lecture seule de l'image déjà capturée (voir [_validerSignature]).
-  Widget _buildSignatureZone() {
-    final signatureBytes = _signatureBytes;
-    if (signatureBytes != null) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: AppColors.fond,
-          borderRadius: BorderRadius.circular(9),
-          border: Border.all(color: AppColors.lignes),
-        ),
-        child: Image.memory(signatureBytes, fit: BoxFit.contain),
-      );
-    }
-    return RepaintBoundary(
-      key: _signatureKey,
-      child: Container(
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: AppColors.fond,
-          borderRadius: BorderRadius.circular(9),
-          border: Border.all(color: AppColors.lignes),
-        ),
-        child: GestureDetector(
-          onPanUpdate: _handlePanUpdate,
-          onPanEnd: (details) => setState(() => _points.add(null)),
-          child: CustomPaint(painter: _SignaturePainter(points: _points)),
-        ),
+  Widget _buildToggleMode() {
+    return SegmentedButton<bool>(
+      segments: const [
+        ButtonSegment(value: false, icon: Icon(Icons.pan_tool_outlined, size: 18), label: Text('Lecture')),
+        ButtonSegment(value: true, icon: Icon(Icons.draw_outlined, size: 18), label: Text('Signature')),
+      ],
+      selected: {_modeSignature},
+      onSelectionChanged: (selection) => setState(() => _modeSignature = selection.first),
+    );
+  }
+
+  /// PDF en lecture seule (défilable/zoomable en Mode Lecture) avec, par
+  /// dessus, un calque transparent qui capte le tracé de signature en Mode
+  /// Signature seulement — voir [_modeSignature]. Le pan/zoom du visualiseur
+  /// est désactivé pendant la signature ([PdfViewerParams.panEnabled]/
+  /// [scaleEnabled]) pour qu'aucun geste ne soit ambigu entre défilement et
+  /// dessin, en plus du calque qui absorbe déjà tous les gestes en mode
+  /// signature.
+  Widget _buildPdfAvecCalque(Chantier chantier) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(border: Border.all(color: AppColors.lignes), borderRadius: BorderRadius.circular(9)),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        children: [
+          PdfViewer.data(
+            _pdfBytes!,
+            sourceName: 'pv-${chantier.reference}',
+            controller: _pdfController,
+            params: PdfViewerParams(panEnabled: !_modeSignature, scaleEnabled: !_modeSignature),
+          ),
+          Positioned.fill(
+            child: IgnorePointer(
+              ignoring: !_modeSignature,
+              child: GestureDetector(
+                key: _overlayKey,
+                behavior: HitTestBehavior.opaque,
+                onPanUpdate: _handlePanUpdate,
+                onPanEnd: (_) => setState(() => _pointsDocument.add(null)),
+                child: ListenableBuilder(
+                  listenable: _pdfController,
+                  builder: (context, _) => CustomPaint(painter: _SignaturePainter(points: _pointsEnEcran(), strokeWidth: _epaisseurEcran())),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  /// Tant que la signature n'est pas figée : "Effacer" le tracé / "Valider la
-  /// signature" (la capture et la verrouille). Une fois figée : "Refaire la
-  /// signature" (déverrouille et efface) / "Valider le procès-verbal" (envoi
-  /// final, utilise la signature figée + le nom/fonction courants).
   Widget _buildActionsRow(Chantier chantier) {
-    if (_signatureBytes == null) {
-      return Row(
-        children: [
-          TextButton.icon(
-            onPressed: _points.isEmpty ? null : () => setState(() => _points.clear()),
-            icon: const Icon(Icons.delete_outline, size: 18),
-            label: const Text('Effacer'),
-          ),
-          const Spacer(),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(minimumSize: const Size(0, 48)),
-            onPressed: _peutValiderSignature ? _validerSignature : null,
-            child: _isCapturingSignature
-                ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Text('Valider la signature'),
-          ),
-        ],
-      );
-    }
     return Row(
       children: [
         TextButton.icon(
-          onPressed: _isSubmitting ? null : _refaireSignature,
-          icon: const Icon(Icons.refresh, size: 18),
-          label: const Text('Refaire la signature'),
+          onPressed: _isSubmitting || _pointsDocument.isEmpty ? null : () => setState(_pointsDocument.clear),
+          icon: const Icon(Icons.delete_outline, size: 18),
+          label: const Text('Effacer la signature'),
         ),
         const Spacer(),
         ElevatedButton(
@@ -261,66 +262,138 @@ class _SignatureScreenState extends State<SignatureScreen> {
     );
   }
 
-  /// Coordonnées locales à la zone de dessin (RepaintBoundary [_signatureKey]),
-  /// pas au contexte de l'écran entier — sans ça, globalToLocal calcule par
-  /// rapport à la mauvaise origine et le tracé se décale par rapport au
-  /// doigt. Les points hors du carré de signature sont ignorés (le tracé
-  /// s'arrête net au bord) ; un point null "lève le stylo" pour ne pas relier
-  /// le dernier point valide à celui où le doigt revient dans le cadre.
+  /// Coordonnées locales au calque ([_overlayKey]), pas au contexte de
+  /// l'écran entier — sans ça, globalToLocal calcule par rapport à la
+  /// mauvaise origine et le tracé se décale par rapport au doigt. Converti
+  /// immédiatement en coordonnées "document" (via [PdfViewerController]),
+  /// indépendantes du zoom/scroll courants, pour que le tracé reste
+  /// visuellement attaché au document même si le client scrolle/zoome entre
+  /// deux traits (voir [_pointsEnEcran], reconverti à chaque frame). Les
+  /// points hors du calque sont ignorés (le tracé s'arrête net au bord) ; un
+  /// point null "lève le stylo" pour ne pas relier le dernier point valide à
+  /// celui où le doigt revient dans le cadre.
   void _handlePanUpdate(DragUpdateDetails details) {
-    final renderBox = _signatureKey.currentContext?.findRenderObject() as RenderBox?;
+    final renderBox = _overlayKey.currentContext?.findRenderObject() as RenderBox?;
     if (renderBox == null) return;
     final local = renderBox.globalToLocal(details.globalPosition);
     final inBounds = (Offset.zero & renderBox.size).contains(local);
 
-    setState(() {
-      if (inBounds) {
-        _points.add(local);
-      } else if (_points.isNotEmpty && _points.last != null) {
-        _points.add(null);
+    if (!inBounds) {
+      if (_pointsDocument.isNotEmpty && _pointsDocument.last != null) {
+        setState(() => _pointsDocument.add(null));
       }
-    });
-  }
-
-  /// Capture le tracé et le fige : la zone de dessin devient un aperçu en
-  /// lecture seule (voir [_buildSignatureZone]), seuls nom/fonction restent
-  /// modifiables jusqu'à l'envoi final.
-  Future<void> _validerSignature() async {
-    setState(() => _isCapturingSignature = true);
-    try {
-      final bytes = await _capturerSignature();
-      if (bytes == null) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Impossible de capturer la signature, réessayez.')),
-        );
-        return;
-      }
-      setState(() => _signatureBytes = bytes);
-    } finally {
-      if (mounted) setState(() => _isCapturingSignature = false);
+      return;
     }
+    final doc = _pdfController.globalToDocument(details.globalPosition);
+    if (doc == null) return;
+    setState(() => _pointsDocument.add(doc));
   }
 
-  void _refaireSignature() {
-    setState(() {
-      _signatureBytes = null;
-      _points.clear();
-    });
+  /// Reconvertit le tracé (stocké en coordonnées document) vers l'écran pour
+  /// l'affichage courant — appelé à chaque frame ([ListenableBuilder] écoute
+  /// [_pdfController]) pour que le tracé suive le PDF pendant un défilement
+  /// ou un zoom en Mode Lecture. Avant que le visualiseur soit prêt (premier
+  /// frame), renvoie une liste vide plutôt que de planter.
+  List<Offset?> _pointsEnEcran() {
+    final renderBox = _overlayKey.currentContext?.findRenderObject() as RenderBox?;
+    if (renderBox == null || !_pdfController.isReady) return const [];
+    return _pointsDocument.map((p) {
+      if (p == null) return null;
+      final global = _pdfController.documentToGlobal(p);
+      if (global == null) return null;
+      return renderBox.globalToLocal(global);
+    }).toList(growable: false);
   }
 
-  /// Envoie la signature déjà figée (image PNG seule, jamais fusionnée
-  /// localement — voir backend/src/lib/pvMerge.ts pour la fusion réelle avec
-  /// le gabarit). Le bloc catch générique (en plus de celui dédié à
-  /// [ApiException]) est essentiel : tout échec réseau non typé ne doit
-  /// jamais remonter jusqu'à faire planter l'écran, seulement afficher un
-  /// message et laisser l'installateur réessayer.
+  double _epaisseurEcran() => _epaisseurTraitPdf * (_pdfController.isReady ? _pdfController.currentZoom : 1.0);
+
+  /// Calcule la page et les coordonnées PDF (points, origine BAS-GAUCHE —
+  /// convention pdf-lib, voir backend/src/lib/pvMerge.ts) du tracé de
+  /// signature, à partir de sa position en coordonnées "document" du
+  /// visualiseur. Retourne `null` si le tracé est vide ou si le visualiseur
+  /// n'a pas encore de mise en page (ne devrait pas arriver : le tracé
+  /// suppose que l'utilisateur a déjà dessiné sur un PDF chargé).
+  ({int pageNumber, double x, double y, double width, double height, Rect bboxDocument})? _calculerPlacementSignature() {
+    if (!_pdfController.isReady) return null;
+
+    double minX = double.infinity, minY = double.infinity;
+    double maxX = double.negativeInfinity, maxY = double.negativeInfinity;
+    for (final p in _pointsDocument) {
+      if (p == null) continue;
+      if (p.dx < minX) minX = p.dx;
+      if (p.dy < minY) minY = p.dy;
+      if (p.dx > maxX) maxX = p.dx;
+      if (p.dy > maxY) maxY = p.dy;
+    }
+    if (minX == double.infinity) return null;
+    final bbox = Rect.fromLTRB(minX, minY, maxX, maxY).inflate(_margeSignaturePdf);
+
+    final pageLayouts = _pdfController.layout.pageLayouts;
+    if (pageLayouts.isEmpty) return null;
+    final center = bbox.center;
+    var pageIndex = pageLayouts.indexWhere((r) => r.contains(center));
+    if (pageIndex == -1) {
+      // Le tracé déborde légèrement dans la marge entre deux pages : on
+      // rattache à la page la plus proche verticalement plutôt que
+      // d'échouer.
+      var meilleureDistance = double.infinity;
+      for (var i = 0; i < pageLayouts.length; i++) {
+        final distance = (pageLayouts[i].center.dy - center.dy).abs();
+        if (distance < meilleureDistance) {
+          meilleureDistance = distance;
+          pageIndex = i;
+        }
+      }
+    }
+
+    final pageRect = pageLayouts[pageIndex];
+    return (
+      pageNumber: pageIndex + 1,
+      x: bbox.left - pageRect.left,
+      y: pageRect.bottom - bbox.bottom,
+      width: bbox.width,
+      height: bbox.height,
+      bboxDocument: bbox,
+    );
+  }
+
+  /// Rasterise le tracé (coordonnées document) en PNG cadré sur [bboxDocument]
+  /// seul — indépendant du zoom d'écran courant, pour une netteté constante
+  /// quel que soit le niveau de zoom utilisé au moment de la validation.
+  Future<Uint8List?> _rasteriserSignature(Rect bboxDocument) async {
+    final width = (bboxDocument.width * _resolutionRasterisation).ceil();
+    final height = (bboxDocument.height * _resolutionRasterisation).ceil();
+    if (width <= 0 || height <= 0) return null;
+
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    canvas.scale(_resolutionRasterisation);
+    canvas.translate(-bboxDocument.left, -bboxDocument.top);
+    _SignaturePainter(points: _pointsDocument, strokeWidth: _epaisseurTraitPdf).paint(canvas, bboxDocument.size);
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(width, height);
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    return byteData?.buffer.asUint8List();
+  }
+
+  /// Calcule le placement, rasterise le tracé puis envoie tout au backend
+  /// (qui superpose la signature sur le PDF gabarit, voir pvMerge.ts). Le
+  /// try-catch couvre aussi bien un échec de calcul de position (PDF pas
+  /// encore prêt, tracé hors page...) qu'un échec réseau : dans tous les cas
+  /// l'écran ne doit jamais planter, seulement afficher un message et
+  /// laisser l'installateur réessayer.
   Future<void> _valider(Chantier chantier) async {
-    final signatureBytes = _signatureBytes;
-    if (signatureBytes == null) return;
-
+    if (!_peutValider) return;
     setState(() => _isSubmitting = true);
     try {
+      final placement = _calculerPlacementSignature();
+      if (placement == null) {
+        throw Exception('Impossible de déterminer la position de la signature sur le document.');
+      }
+      final signatureBytes = await _rasteriserSignature(placement.bboxDocument);
+      if (signatureBytes == null) {
+        throw Exception('Impossible de générer l\'image de la signature.');
+      }
       final dataUrl = 'data:image/png;base64,${base64Encode(signatureBytes)}';
 
       if (!mounted) return;
@@ -329,6 +402,11 @@ class _SignatureScreenState extends State<SignatureScreen> {
             nomSignataire: _nomController.text.trim(),
             fonctionSignataire: _fonctionController.text.trim(),
             signatureImage: dataUrl,
+            pageNumber: placement.pageNumber,
+            x: placement.x,
+            y: placement.y,
+            width: placement.width,
+            height: placement.height,
           );
 
       if (!mounted) return;
@@ -393,32 +471,19 @@ class _SignatureScreenState extends State<SignatureScreen> {
       );
     }
   }
-
-  /// Capture le tracé de signature en PNG (bytes bruts, pas encore encodé)
-  /// pour l'envoi au backend, qui le superpose sur le PDF gabarit.
-  Future<Uint8List?> _capturerSignature() async {
-    try {
-      final boundary = _signatureKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-      if (boundary == null) return null;
-      final image = await boundary.toImage(pixelRatio: 3.0);
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      return byteData?.buffer.asUint8List();
-    } catch (_) {
-      return null;
-    }
-  }
 }
 
 class _SignaturePainter extends CustomPainter {
   final List<Offset?> points;
-  _SignaturePainter({required this.points});
+  final double strokeWidth;
+  _SignaturePainter({required this.points, required this.strokeWidth});
 
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
       ..color = AppColors.encre
       ..strokeCap = StrokeCap.round
-      ..strokeWidth = 3.0;
+      ..strokeWidth = strokeWidth;
 
     for (int i = 0; i < points.length - 1; i++) {
       if (points[i] != null && points[i + 1] != null) {

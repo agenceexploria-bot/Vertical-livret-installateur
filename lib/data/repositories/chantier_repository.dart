@@ -210,12 +210,22 @@ class ChantierRepository {
     required String nomSignataire,
     required String fonctionSignataire,
     required String signatureImage,
+    required int pageNumber,
+    required double x,
+    required double y,
+    required double width,
+    required double height,
   }) async {
     final data = await _api.signPv(
       reference,
       nomSignataire: nomSignataire,
       fonctionSignataire: fonctionSignataire,
       signatureImage: signatureImage,
+      pageNumber: pageNumber,
+      x: x,
+      y: y,
+      width: width,
+      height: height,
     );
     return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
   }

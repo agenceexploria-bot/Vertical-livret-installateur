@@ -200,6 +200,9 @@ describe('Progression et modules', () => {
   }
 
   const SIGNATURE_PNG_DATA_URL = `data:image/png;base64,${ONE_PX_PNG_BASE64}`;
+  // Emplacement quelconque, valide pour une page A4 (595 x 842 pts) — voir
+  // minimalPdfDataUrl ci-dessus.
+  const SIGNATURE_PLACEMENT = { pageNumber: 1, x: 350, y: 80, width: 180, height: 70 };
 
   it('le CA dépose le gabarit PV — ne le valide pas', async () => {
     const ca = await createCa();
@@ -232,7 +235,7 @@ describe('Progression et modules', () => {
     const res = await request(app)
       .post('/chantiers/LD64397/pv/signature')
       .set('Authorization', `Bearer ${installateur.accessToken}`)
-      .send({ nomSignataire: 'M. Weber', fonctionSignataire: 'Client', signatureImage: SIGNATURE_PNG_DATA_URL });
+      .send({ nomSignataire: 'M. Weber', fonctionSignataire: 'Client', signatureImage: SIGNATURE_PNG_DATA_URL, ...SIGNATURE_PLACEMENT });
 
     expect(res.status).toBe(200);
     expect(res.body.chantier.pvSigne).toBe(true);
@@ -255,12 +258,12 @@ describe('Progression et modules', () => {
     await request(app)
       .post('/chantiers/LD64397/pv/signature')
       .set('Authorization', `Bearer ${installateur.accessToken}`)
-      .send({ nomSignataire: 'M. Weber', fonctionSignataire: 'Client', signatureImage: SIGNATURE_PNG_DATA_URL });
+      .send({ nomSignataire: 'M. Weber', fonctionSignataire: 'Client', signatureImage: SIGNATURE_PNG_DATA_URL, ...SIGNATURE_PLACEMENT });
 
     const second = await request(app)
       .post('/chantiers/LD64397/pv/signature')
       .set('Authorization', `Bearer ${installateur.accessToken}`)
-      .send({ nomSignataire: 'Un autre', fonctionSignataire: 'Responsable technique', signatureImage: SIGNATURE_PNG_DATA_URL });
+      .send({ nomSignataire: 'Un autre', fonctionSignataire: 'Responsable technique', signatureImage: SIGNATURE_PNG_DATA_URL, ...SIGNATURE_PLACEMENT });
     expect(second.status).toBe(400);
 
     // La suppression par le CA repasse pvSigne à false : la signature redevient possible.
@@ -272,7 +275,7 @@ describe('Progression et modules', () => {
     const third = await request(app)
       .post('/chantiers/LD64397/pv/signature')
       .set('Authorization', `Bearer ${installateur.accessToken}`)
-      .send({ nomSignataire: 'Un autre', fonctionSignataire: 'Responsable technique', signatureImage: SIGNATURE_PNG_DATA_URL });
+      .send({ nomSignataire: 'Un autre', fonctionSignataire: 'Responsable technique', signatureImage: SIGNATURE_PNG_DATA_URL, ...SIGNATURE_PLACEMENT });
     expect(third.status).toBe(200);
     expect(third.body.chantier.pvSigneur).toBe('Un autre');
   }, 30000);
@@ -289,7 +292,7 @@ describe('Progression et modules', () => {
     const res = await request(app)
       .post('/chantiers/LD64397/pv/signature')
       .set('Authorization', `Bearer ${installateur.accessToken}`)
-      .send({ nomSignataire: 'M. Weber', fonctionSignataire: 'Client', signatureImage: SIGNATURE_PNG_DATA_URL });
+      .send({ nomSignataire: 'M. Weber', fonctionSignataire: 'Client', signatureImage: SIGNATURE_PNG_DATA_URL, ...SIGNATURE_PLACEMENT });
     expect(res.status).toBe(400);
   }, 30000);
 
@@ -309,7 +312,7 @@ describe('Progression et modules', () => {
     const res = await request(app)
       .post('/chantiers/LD64397/pv/signature')
       .set('Authorization', `Bearer ${installateur.accessToken}`)
-      .send({ nomSignataire: 'M. Weber', fonctionSignataire: 'Client', signatureImage: SIGNATURE_PNG_DATA_URL });
+      .send({ nomSignataire: 'M. Weber', fonctionSignataire: 'Client', signatureImage: SIGNATURE_PNG_DATA_URL, ...SIGNATURE_PLACEMENT });
 
     expect(res.status).toBe(200);
     const imagePath = res.body.chantier.pvSignatureImagePath as string;

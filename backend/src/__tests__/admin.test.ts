@@ -235,7 +235,7 @@ describe("Tableau de bord d'activité Admin", () => {
     await request(app)
       .post('/chantiers/LD64397/pv/signature')
       .set('Authorization', `Bearer ${installateurToken}`)
-      .send({ nomSignataire: 'M. Weber', fonctionSignataire: 'Client', signatureImage: `data:image/png;base64,${ONE_PX_PNG_BASE64}` });
+      .send({ nomSignataire: 'M. Weber', fonctionSignataire: 'Client', signatureImage: `data:image/png;base64,${ONE_PX_PNG_BASE64}`, pageNumber: 1, x: 350, y: 80, width: 180, height: 70 });
 
     const feed = await request(app).get('/admin/activity').set('Authorization', `Bearer ${adminToken}`);
     expect(feed.status).toBe(200);
@@ -302,7 +302,7 @@ describe('GET /admin/stats', () => {
     await request(app)
       .post('/chantiers/LD64397/pv/signature')
       .set('Authorization', `Bearer ${installateurToken}`)
-      .send({ nomSignataire: 'M. Weber', fonctionSignataire: 'Client', signatureImage: `data:image/png;base64,${ONE_PX_PNG_BASE64}` });
+      .send({ nomSignataire: 'M. Weber', fonctionSignataire: 'Client', signatureImage: `data:image/png;base64,${ONE_PX_PNG_BASE64}`, pageNumber: 1, x: 350, y: 80, width: 180, height: 70 });
 
     const res = await request(app).get('/admin/stats').set('Authorization', `Bearer ${adminToken}`);
     expect(res.status).toBe(200);
