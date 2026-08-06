@@ -3,13 +3,21 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/document_capture.dart';
+import '../../core/platform/mobile_detector.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/glass_app_bar.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../data/api_client.dart';
 import '../../data/models/user.dart';
 import '../../state/auth_state.dart';
+import '../backoffice/widgets/bo_back_button.dart';
 
+/// Écran de profil, partagé par l'app mobile installateur et le back-office
+/// Web (atteint depuis le menu "Profil" de BoShell) — [isMobileDevice] fait
+/// diverger l'affichage : cadre "téléphone" simulé ([ResponsiveLayout]) sur
+/// mobile, mise en page centrée et aérée façon back-office sur desktop (voir
+/// [_buildDesktop]). Les dialogues d'édition/ajout de certificat sont
+/// partagés entre les deux.
 class ProfilScreen extends StatelessWidget {
   const ProfilScreen({super.key});
 
@@ -18,6 +26,10 @@ class ProfilScreen extends StatelessWidget {
     final authState = context.watch<AuthState>();
     final user = authState.currentUser;
     final offlineExpiry = authState.offlineExpiry;
+
+    if (!isMobileDevice()) {
+      return _buildDesktop(context, user, offlineExpiry);
+    }
 
     return ResponsiveLayout(
       appBar: GlassAppBar(
@@ -58,6 +70,166 @@ class ProfilScreen extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Version desktop (back-office Web) : centrée, largeur bornée à 860px
+  /// pour rester lisible sur grand écran, informations regroupées dans des
+  /// `Card` Material plutôt que dans le bloc de texte brut de la version
+  /// mobile.
+  Widget _buildDesktop(BuildContext context, User? user, DateTime? offlineExpiry) {
+    return Scaffold(
+      backgroundColor: AppColors.fond,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 860),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const BoBackButton(),
+                Text('Mon profil', style: Theme.of(context).textTheme.titleLarge),
+                const SizedBox(height: 24),
+                _buildInfosCardDesktop(context, user),
+                const SizedBox(height: 20),
+                _buildSecuriteCardDesktop(context, offlineExpiry),
+                const SizedBox(height: 20),
+                _buildHabilitationsCardDesktop(context, user),
+                const SizedBox(height: 32),
+                const Center(
+                  child: Text(
+                    'Vertical Monte-Charges — v1.0.0 · Les certificats sont confidentiels.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 12, color: AppColors.acierClair),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfosCardDesktop(BuildContext context, User? user) {
+    final statutLabel = user == null
+        ? '—'
+        : user.status == UserStatus.sousTraitant
+            ? 'Sous-traitant${user.societe != null ? ' · ${user.societe}' : ''}'
+            : 'Salarié Vertical';
+
+    return Card(
+      elevation: 2,
+      color: AppColors.blanc,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Text('Informations personnelles', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.encre)),
+                const Spacer(),
+                if (user != null)
+                  IconButton(
+                    onPressed: () => _openEditProfilDialog(context, user),
+                    icon: const Icon(Icons.edit_outlined, color: AppColors.acier, size: 20),
+                    tooltip: 'Modifier mon profil',
+                  ),
+              ],
+            ),
+            const Divider(height: 24, color: AppColors.lignes),
+            _infoRow(Icons.person_outline, 'Nom', user?.fullName ?? '—'),
+            _infoRow(Icons.badge_outlined, 'Statut', statutLabel),
+            _infoRow(Icons.phone_outlined, 'Mobile', user?.mobile ?? '—'),
+            _infoRow(Icons.email_outlined, 'Email', user?.email ?? '—', isLast: true),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSecuriteCardDesktop(BuildContext context, DateTime? offlineExpiry) {
+    return Card(
+      elevation: 2,
+      color: AppColors.blanc,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Session et sécurité', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.encre)),
+            const Divider(height: 24, color: AppColors.lignes),
+            _infoRow(
+              Icons.schedule_outlined,
+              'Session',
+              offlineExpiry != null ? 'Valable hors-ligne jusqu\'au ${DateFormat('dd/MM/yyyy').format(offlineExpiry)}' : '—',
+              isLast: true,
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: () => context.read<AuthState>().logout(),
+              icon: const Icon(Icons.logout, size: 20),
+              label: const Text('Déconnexion'),
+              style: ElevatedButton.styleFrom(minimumSize: const Size(220, 48)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHabilitationsCardDesktop(BuildContext context, User? user) {
+    final habilitations = user?.habilitations ?? const <Habilitation>[];
+    return Card(
+      elevation: 2,
+      color: AppColors.blanc,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Habilitations / Certificats', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.encre)),
+            const SizedBox(height: 16),
+            if (habilitations.isEmpty)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 16),
+                child: Text('Aucune habilitation enregistrée.', style: TextStyle(fontSize: 13, color: AppColors.acierClair)),
+              )
+            else ...[
+              for (final h in habilitations) _buildHabilitationItem(h),
+              const SizedBox(height: 8),
+            ],
+            OutlinedButton.icon(
+              onPressed: () => _openAddCertificatDialog(context),
+              icon: const Icon(Icons.add, size: 20),
+              label: const Text('Ajouter un certificat'),
+              style: OutlinedButton.styleFrom(minimumSize: const Size(220, 46)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Ligne icône + libellé + valeur des cartes desktop — [isLast] omet le
+  /// séparateur bas (dernière ligne d'une carte).
+  Widget _infoRow(IconData icon, String label, String value, {bool isLast = false}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: isLast ? null : const BoxDecoration(border: Border(bottom: BorderSide(color: Color(0xFFEEF1F3)))),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: AppColors.acier),
+          const SizedBox(width: 14),
+          SizedBox(width: 90, child: Text(label, style: const TextStyle(fontSize: 13, color: AppColors.acierClair))),
+          Expanded(child: Text(value, style: const TextStyle(fontSize: 14, color: AppColors.encre, fontWeight: FontWeight.w600))),
+        ],
       ),
     );
   }
