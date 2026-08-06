@@ -12,6 +12,7 @@ export function serializeUser(user: User & { habilitations?: Habilitation[] }) {
     role: user.role,
     status: user.status,
     societe: user.societe,
+    avatarUrl: user.avatarUrl,
     isActive: user.isActive,
     suspendu: user.suspendu,
     habilitations: (user.habilitations ?? []).map(serializeHabilitation),

@@ -30,6 +30,7 @@ model User {
   role          UserRole
   status        UserStatus?
   societe       String?
+  avatarUrl     String?
   isActive      Boolean  @default(false)
   suspendu      Boolean  @default(false)
   createdAt     DateTime @default(now())

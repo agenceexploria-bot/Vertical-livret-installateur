@@ -261,6 +261,13 @@ class ApiClient {
     });
   }
 
+  /// [file] : photo de profil en data URL base64 (JPEG/PNG), même convention
+  /// que les autres pièces jointes de l'app — voir PhotoCapture côté app et
+  /// imageStorage.ts côté serveur.
+  Future<Map<String, dynamic>> uploadAvatar(String file) {
+    return _request('POST', '/comptes/moi/avatar', body: {'file': file});
+  }
+
   // ---- Admin ----
 
   Future<List<dynamic>> getComptesInternes() async {

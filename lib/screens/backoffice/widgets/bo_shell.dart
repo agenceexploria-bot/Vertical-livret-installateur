@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/theme.dart';
+import '../../../core/widgets/user_avatar.dart';
 import '../../../core/widgets/vertical_logo.dart';
 import 'package:intl/intl.dart';
 import '../../../data/models/user.dart';
@@ -79,10 +80,6 @@ class BoShell extends StatelessWidget {
       return const Scaffold(body: SizedBox.shrink());
     }
 
-    final initials = user == null
-        ? '?'
-        : '${user.prenom.isNotEmpty ? user.prenom[0] : ''}${user.nom.isNotEmpty ? user.nom[0] : ''}';
-
     // L'Admin a maintenant aussi accès aux chantiers et aux comptes
     // installateurs (voir la refonte des rôles : l'Admin a toutes les
     // fonctionnalités du CA en plus des siennes), donc il précharge les mêmes
@@ -125,7 +122,7 @@ class BoShell extends StatelessWidget {
       backgroundColor: AppColors.fond,
       body: Column(
         children: [
-          _TopBar(activeNav: activeNav, initials: initials, space: space ?? const _BoSpace('', [])),
+          _TopBar(activeNav: activeNav, user: user, space: space ?? const _BoSpace('', [])),
           Expanded(
             child: SingleChildScrollView(
               child: Padding(
@@ -142,10 +139,10 @@ class BoShell extends StatelessWidget {
 
 class _TopBar extends StatelessWidget {
   final String activeNav;
-  final String initials;
+  final User? user;
   final _BoSpace space;
 
-  const _TopBar({required this.activeNav, required this.initials, required this.space});
+  const _TopBar({required this.activeNav, required this.user, required this.space});
 
   @override
   Widget build(BuildContext context) {
@@ -263,11 +260,7 @@ class _TopBar extends StatelessWidget {
                 ),
               ),
             ],
-            child: CircleAvatar(
-              radius: 15,
-              backgroundColor: AppColors.acier,
-              child: Text(initials, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
-            ),
+            child: UserAvatar(user: user, radius: 15),
           ),
         ],
       ),

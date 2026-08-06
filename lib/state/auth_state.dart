@@ -245,6 +245,30 @@ class AuthState extends ChangeNotifier {
     }
   }
 
+  /// Envoie la nouvelle photo de profil ([file] : data URL base64, JPEG/PNG —
+  /// voir PhotoCapture) et remplace [currentUser] par la réponse serveur.
+  /// Pas d'optimisme ici (contrairement à [addHabilitation]) : on affiche la
+  /// vraie URL renvoyée par le serveur plutôt qu'un aperçu local temporaire.
+  Future<bool> uploadAvatar(String file) async {
+    _isLoading = true;
+    _lastError = null;
+    notifyListeners();
+    try {
+      _currentUser = await _repository.uploadAvatar(file);
+      return true;
+    } on ApiException catch (e) {
+      _lastError = e.message;
+      return false;
+    } catch (e, st) {
+      debugPrint('AuthState.uploadAvatar: $e\n$st');
+      _lastError = 'Impossible de contacter le serveur';
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   /// Ajoute un certificat au profil connecté. Optimiste : la liste locale est
   /// mise à jour immédiatement (fonctionne hors-ligne), un rafraîchissement
   /// réseau est tenté en tâche de fond pour rester en phase avec le serveur.

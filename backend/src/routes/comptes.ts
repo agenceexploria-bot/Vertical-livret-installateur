@@ -81,6 +81,7 @@ comptesRouter.delete('/:id', requireAuth, requireRole('admin'), async (req: Auth
   if (!existing) return res.status(404).json({ error: 'Compte introuvable' });
 
   const filePaths = [
+    existing.avatarUrl,
     ...existing.habilitations.map((h) => h.filePath),
     ...existing.documentsTerrain.map((d) => d.filePath),
   ].filter((p): p is string => !!p);
@@ -172,6 +173,40 @@ comptesRouter.patch('/:id', requireAuth, requireRole('chargeAffaires', 'directio
   const user = await prisma.user.update({
     where: { id: req.params.id },
     data: parsed.data,
+    include: { habilitations: true },
+  });
+  res.json({ user: serializeUser(user) });
+});
+
+const avatarSchema = z.object({
+  file: z.string().min(1, 'La photo est requise'),
+});
+
+// Photo de profil, tout rôle confondu (installateur, CA, Admin...) — même
+// convention que le reste de l'app pour les fichiers (data URL base64, voir
+// lib/imageStorage.ts) plutôt que multipart/form-data, que rien d'autre ici
+// ne parle : ni le reste du backend, ni l'app Flutter (Web compris, où
+// dart:io File n'existe pas — voir PhotoCapture côté app, même mécanisme).
+comptesRouter.post('/moi/avatar', requireAuth, async (req: AuthedRequest, res) => {
+  const parsed = avatarSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  const mime = parsed.data.file.match(/^data:([\w-]+\/[\w.+-]+);base64,/)?.[1];
+  if (mime !== 'image/jpeg' && mime !== 'image/png') {
+    return res.status(400).json({ error: 'La photo de profil doit être une image (JPEG ou PNG)' });
+  }
+
+  const existing = await prisma.user.findUnique({ where: { id: req.auth!.userId } });
+  if (!existing) return res.status(404).json({ error: 'Compte introuvable' });
+
+  const avatarUrl = await saveBase64File(parsed.data.file, `avatar-${req.auth!.userId}`);
+  // Remplace l'ancienne photo : jamais deux fichiers orphelins facturés sur
+  // Vercel Blob pour un seul avatar.
+  if (existing.avatarUrl) await deleteBlobFile(existing.avatarUrl);
+
+  const user = await prisma.user.update({
+    where: { id: req.auth!.userId },
+    data: { avatarUrl },
     include: { habilitations: true },
   });
   res.json({ user: serializeUser(user) });

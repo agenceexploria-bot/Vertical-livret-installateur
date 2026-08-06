@@ -93,6 +93,17 @@ class AuthRepository {
     return user;
   }
 
+  /// [file] : photo de profil en data URL base64 — toujours en ligne, pas de
+  /// file d'attente hors-ligne (contrairement à [addHabilitation]) : l'upload
+  /// est déclenché par un geste explicite de l'utilisateur qui reste sur
+  /// l'écran, pas une action terrain à ne jamais perdre.
+  Future<User> uploadAvatar(String file) async {
+    final data = await _api.uploadAvatar(file);
+    final user = User.fromJson(data['user'] as Map<String, dynamic>);
+    await _persistUser(user);
+    return user;
+  }
+
   /// [file] : certificat réel (PDF ou image), en data URL base64. Mis en
   /// file d'attente hors-ligne comme les autres pièces jointes terrain si le
   /// réseau échoue — rejoué par le SyncEngine au retour du réseau.

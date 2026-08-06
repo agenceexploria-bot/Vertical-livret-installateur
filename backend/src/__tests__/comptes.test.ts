@@ -165,6 +165,53 @@ describe('DELETE /comptes/:id (suppression définitive, Admin uniquement)', () =
   });
 });
 
+describe('POST /comptes/moi/avatar', () => {
+  it('téléverse une photo de profil et enregistre le fichier sur le stockage distant', async () => {
+    const token = await createInstallateur();
+
+    const res = await request(app)
+      .post('/comptes/moi/avatar')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ file: `data:image/png;base64,${ONE_PX_PNG_BASE64}` });
+
+    expect(res.status).toBe(200);
+    expect(res.body.user.avatarUrl).toMatch(/^https:\/\/blob\.vercel-storage\.com\/test\/avatar-.+\.png$/);
+  });
+
+  it('remplace la photo précédente plutôt que d\'en accumuler plusieurs', async () => {
+    const token = await createInstallateur();
+
+    const first = await request(app)
+      .post('/comptes/moi/avatar')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ file: `data:image/png;base64,${ONE_PX_PNG_BASE64}` });
+    const second = await request(app)
+      .post('/comptes/moi/avatar')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ file: `data:image/png;base64,${ONE_PX_PNG_BASE64}` });
+
+    expect(second.status).toBe(200);
+    expect(second.body.user.avatarUrl).not.toBe(first.body.user.avatarUrl);
+  });
+
+  it('refuse un fichier qui n\'est pas une image', async () => {
+    const token = await createInstallateur();
+
+    const res = await request(app)
+      .post('/comptes/moi/avatar')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ file: `data:application/pdf;base64,${ONE_PX_PNG_BASE64}` });
+    expect(res.status).toBe(400);
+  });
+
+  it('refuse une requête sans fichier', async () => {
+    const token = await createInstallateur();
+
+    const res = await request(app).post('/comptes/moi/avatar').set('Authorization', `Bearer ${token}`).send({});
+    expect(res.status).toBe(400);
+  });
+});
+
 describe('PATCH /comptes/moi', () => {
   it('modifie le nom et le prénom du compte connecté', async () => {
     const token = await createInstallateur();

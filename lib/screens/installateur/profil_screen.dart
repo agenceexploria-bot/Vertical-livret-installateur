@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../core/avatar_capture.dart';
 import '../../core/document_capture.dart';
 import '../../core/platform/mobile_detector.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/glass_app_bar.dart';
 import '../../core/widgets/responsive_layout.dart';
+import '../../core/widgets/user_avatar.dart';
 import '../../data/api_client.dart';
 import '../../data/models/user.dart';
 import '../../state/auth_state.dart';
@@ -90,7 +92,9 @@ class ProfilScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const BoBackButton(),
-                Text('Mon profil', style: Theme.of(context).textTheme.titleLarge),
+                Center(child: _ProfileAvatarPicker(user: user, radius: 56)),
+                const SizedBox(height: 16),
+                Center(child: Text('Mon profil', style: Theme.of(context).textTheme.titleLarge)),
                 const SizedBox(height: 24),
                 _buildInfosCardDesktop(context, user),
                 const SizedBox(height: 20),
@@ -252,6 +256,8 @@ class ProfilScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Center(child: _ProfileAvatarPicker(user: user, radius: 44)),
+          const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
@@ -347,6 +353,84 @@ class ProfilScreen extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Grand avatar avec pastille appareil photo en overlay (bas-droite) —
+/// ouvre [AvatarCapture.pickViaBottomSheet] au clic, puis envoie le résultat
+/// via [AuthState.uploadAvatar]. Affiche un indicateur de chargement à la
+/// place de l'avatar pendant l'envoi plutôt qu'un état bloqué sans retour.
+class _ProfileAvatarPicker extends StatefulWidget {
+  final User? user;
+  final double radius;
+
+  const _ProfileAvatarPicker({required this.user, required this.radius});
+
+  @override
+  State<_ProfileAvatarPicker> createState() => _ProfileAvatarPickerState();
+}
+
+class _ProfileAvatarPickerState extends State<_ProfileAvatarPicker> {
+  bool _isUploading = false;
+
+  Future<void> _pickAndUpload() async {
+    final dataUrl = await AvatarCapture.pickViaBottomSheet(context);
+    if (dataUrl == null || !mounted) return;
+
+    setState(() => _isUploading = true);
+    final ok = await context.read<AuthState>().uploadAvatar(dataUrl);
+    if (!mounted) return;
+    setState(() => _isUploading = false);
+    if (!ok) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.read<AuthState>().lastError ?? 'Impossible d\'envoyer la photo.')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final diameter = widget.radius * 2;
+    return SizedBox(
+      width: diameter + 8,
+      height: diameter + 8,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: 4,
+            top: 4,
+            child: _isUploading
+                ? SizedBox(
+                    width: diameter,
+                    height: diameter,
+                    child: const DecoratedBox(
+                      decoration: BoxDecoration(color: AppColors.lignes, shape: BoxShape.circle),
+                      child: Center(child: CircularProgressIndicator(color: AppColors.orange, strokeWidth: 2.5)),
+                    ),
+                  )
+                : UserAvatar(user: widget.user, radius: widget.radius),
+          ),
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: GestureDetector(
+              onTap: _isUploading ? null : _pickAndUpload,
+              child: Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: AppColors.orange,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2.5),
+                ),
+                child: const Icon(Icons.camera_alt, color: Colors.white, size: 16),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

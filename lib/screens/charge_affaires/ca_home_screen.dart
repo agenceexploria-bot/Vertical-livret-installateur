@@ -7,6 +7,7 @@ import '../../core/widgets/glass_app_bar.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/status_indicator.dart';
+import '../../core/widgets/user_avatar.dart';
 import '../../data/models/chantier.dart';
 import '../../data/models/user.dart';
 import '../../state/auth_state.dart';
@@ -81,6 +82,7 @@ class _CaHomeScreenState extends State<CaHomeScreen> {
   Widget build(BuildContext context) {
     final chantierState = context.watch<ChantierState>();
     final comptesState = context.watch<ComptesState>();
+    final user = context.watch<AuthState>().currentUser;
     final pendingCount = comptesState.installateurs.where((u) => !u.isActive).length;
     final relances = _livretsNonOuverts(chantierState.chantiers);
 
@@ -98,6 +100,13 @@ class _CaHomeScreenState extends State<CaHomeScreen> {
           IconButton(
             onPressed: () => context.read<AuthState>().logout(),
             icon: const Icon(Icons.logout),
+          ),
+          GestureDetector(
+            onTap: () => context.push('/profil'),
+            child: Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: UserAvatar(user: user, radius: 15),
+            ),
           ),
         ],
       ),

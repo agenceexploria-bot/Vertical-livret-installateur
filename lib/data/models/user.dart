@@ -45,6 +45,7 @@ class User {
   final UserRole role;
   final UserStatus? status;
   final String? societe;
+  final String? avatarUrl;
   final List<Habilitation> habilitations;
   final bool isActive;
   final bool suspendu;
@@ -58,6 +59,7 @@ class User {
     required this.role,
     this.status,
     this.societe,
+    this.avatarUrl,
     this.habilitations = const [],
     this.isActive = true,
     this.suspendu = false,
@@ -74,6 +76,7 @@ class User {
         role: userRoleFromJson(json['role'] as String),
         status: userStatusFromJson(json['status'] as String?),
         societe: json['societe'] as String?,
+        avatarUrl: json['avatarUrl'] as String?,
         habilitations: ((json['habilitations'] as List?) ?? [])
             .map((h) => Habilitation.fromJson(h as Map<String, dynamic>))
             .toList(),
@@ -91,6 +94,7 @@ class User {
         'role': role.name,
         'status': status?.name,
         'societe': societe,
+        'avatarUrl': avatarUrl,
         'habilitations': habilitations.map((h) => h.toJson()).toList(),
         'isActive': isActive,
         'suspendu': suspendu,

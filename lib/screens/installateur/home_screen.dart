@@ -8,6 +8,7 @@ import '../../core/widgets/glass_app_bar.dart';
 import '../../core/widgets/status_indicator.dart';
 import '../../core/widgets/sync_banner.dart';
 import '../../core/widgets/responsive_layout.dart';
+import '../../core/widgets/user_avatar.dart';
 import '../../state/auth_state.dart';
 import '../../state/network_state.dart';
 import '../../state/chantier_state.dart';
@@ -47,10 +48,13 @@ class _InstallateurHomeScreenState extends State<InstallateurHomeScreen> {
         foregroundColor: Colors.white,
         actions: [
           Icon(networkState.isOnline ? Icons.wifi : Icons.wifi_off, color: Colors.white),
-          const SizedBox(width: 8),
-          IconButton(
-            icon: const Icon(Icons.person_outline),
-            onPressed: () => context.push('/profil'),
+          const SizedBox(width: 12),
+          GestureDetector(
+            onTap: () => context.push('/profil'),
+            child: Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: UserAvatar(user: user, radius: 15),
+            ),
           ),
         ],
       ),
