@@ -24,9 +24,8 @@ Production : https://vertical-livret-installateur.vercel.app/
 3. [Installation & configuration locale](#4-installation--configuration-locale)
 4. [Déploiement (production)](#5-déploiement-production)
 5. [Guide d'installation mobile (PWA)](#6-guide-dinstallation-mobile-pwa)
-6. [Comptes de démonstration](#7-comptes-de-démonstration)
-7. [Rôles et permissions](#8-rôles-et-permissions)
-8. [Structure du dépôt](#structure-du-dépôt)
+6. [Rôles et permissions](#8-rôles-et-permissions)
+7. [Structure du dépôt](#structure-du-dépôt)
 
 ## 2. Stack technique
 
@@ -95,7 +94,6 @@ de chaque variable et où l'obtenir) :
 | `PORT` | Port du serveur local (défaut `3000`) |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | Envoi réel du code à 6 chiffres (2FA inscription) — **obligatoires**, le serveur refuse de démarrer si l'une manque |
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_PHONE_NUMBER` | SMS de relance installateur — optionnel, sans elles seule cette fonctionnalité échoue (502) |
-| `PUSHER_APP_ID` / `PUSHER_KEY` / `PUSHER_SECRET` / `PUSHER_CLUSTER` | Synchronisation temps réel (app créée sur dashboard.pusher.com) — optionnel, sans elles l'app fonctionne normalement mais sans mise à jour instantanée entre appareils. `PUSHER_KEY`/`PUSHER_CLUSTER` doivent aussi être recopiés dans `lib/core/realtime_config.dart` |
 
 Puis initialisez la base de données :
 
@@ -194,29 +192,8 @@ Une fois installée, l'app fonctionne hors-ligne (les données déjà
 synchronisées restent accessibles) et se met à jour automatiquement au
 prochain lancement avec réseau.
 
-## 7. Comptes de démonstration
 
-Chargés via `npm run prisma:seed` (voir section 4.3), mot de passe commun :
-**`demodemo`**.
-
-> ⚠️ La connexion se fait **uniquement par email** (le numéro de mobile n'est
-> plus un identifiant de connexion valide, il reste affiché à titre
-> d'information sur le compte).
-
-| Rôle | Nom | Email (identifiant de connexion) | Mobile (info) | Particularité |
-|---|---|---|---|---|
-| Installateur | Thomas Roux | `t.roux@elevpro.fr` | 06 52 41 78 90 | Sous-traitant (Elev'Pro), rattaché aux 2 chantiers de démo |
-| Installateur | Karim Diallo | `k.diallo@vertical.fr` | 06 70 11 22 33 | Salarié |
-| Installateur | Mario Costa | `m.costa@vertical.fr` | 06 81 22 33 44 | Salarié |
-| Installateur | Julie Petit | `j.petit@levtech.fr` | 06 92 33 44 55 | **Compte suspendu** (pour tester ce scénario) |
-| Chargé d'Affaires | Sandrine Martin | `s.martin@actiwork.fr` | 01 02 03 04 05 | Back-office |
-| Qualité | Quentin Dupuis | `q.dupuis@actiwork.fr` | 01 02 03 04 06 | Back-office (fusionné avec l'espace CA) |
-| Admin | Admin Lefebvre | `admin@actiwork.fr` | 01 02 03 04 07 | Accès complet |
-
-Deux chantiers de démonstration sont aussi créés : `LD64397` (Costockage,
-Meyzieu) et `LD91245` (Transgourmet Ouest, Saint-Herblain).
-
-## 8. Rôles et permissions
+## 7. Rôles et permissions
 
 | | Installateur | CA (+ Qualité) | Admin |
 |---|---|---|---|
