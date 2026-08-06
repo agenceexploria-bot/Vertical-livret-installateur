@@ -1,11 +1,11 @@
 {
-    "name": "Livret Installateur Vertical",
+    "name": "Vertical — Livret Installateur",
     "short_name": "Vertical",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#F7F8F9",
     "theme_color": "#17222E",
-    "description": "Livret Installateur Digital pour Vertical Monte-Charges.",
+    "description": "Application de gestion de chantiers et de procès-verbaux de réception pour les installateurs Vertical.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
