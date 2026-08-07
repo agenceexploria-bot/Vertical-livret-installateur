@@ -1,5 +1,5 @@
 {
-  "buildCommand": "cd backend && npm install && npx prisma generate",
+  "buildCommand": "cd backend && npm install && npx prisma generate && npx prisma migrate deploy",
   "outputDirectory": "build/web",
   "git": {
     "deploymentEnabled": false

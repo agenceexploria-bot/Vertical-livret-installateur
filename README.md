@@ -139,25 +139,22 @@ normalement rien à faire manuellement après un `git push` sur `main`.
    des visiteurs précédents), puis déploie avec `npx vercel --prod`
    (nécessite le secret de dépôt GitHub `VERCEL_TOKEN`).
 2. Côté Vercel, `vercel.json` définit `outputDirectory: "build/web"` (le
-   build Flutter déjà fait par l'Action) et un `buildCommand` qui se limite à
-   `cd backend && npm install && npx prisma generate` (génération du client
-   Prisma pour la fonction serverless `api/index.ts`).
+   build Flutter déjà fait par l'Action) et un `buildCommand` qui exécute
+   `cd backend && npm install && npx prisma generate && npx prisma migrate
+   deploy` (génération du client Prisma pour la fonction serverless
+   `api/index.ts`, puis application des migrations en attente sur la base de
+   production).
 3. `vercel.json` déclare `"git": { "deploymentEnabled": false }` :
    l'intégration Git native de Vercel (qui clonerait le dépôt et échouerait
    systématiquement, faute d'étape de build Flutter côté Vercel) est
    désactivée — **seule** l'Action GitHub ci-dessus déclenche un
    déploiement.
 
-**Point d'attention** : les migrations Prisma ne sont **pas** appliquées
-automatiquement au déploiement (le `buildCommand` ne fait que `prisma
-generate`, pas `migrate deploy`). Après un changement de schéma
-(`prisma/schema.prisma` + nouvelle migration dans `prisma/migrations/`),
-appliquez-la manuellement sur la base de production :
-
-```bash
-cd backend
-DATABASE_URL="<url de la base de prod>" npx prisma migrate deploy
-```
+**Point d'attention** : `npx prisma migrate deploy` n'applique que les
+migrations déjà présentes dans `prisma/migrations/` — pensez à générer et
+committer la migration (`npx prisma migrate dev` en local) **avant** de
+pousser un changement de `prisma/schema.prisma` sur `main`, sinon le schéma
+de prod ne bougera pas.
 
 Vérifier l'état d'un déploiement :
 
