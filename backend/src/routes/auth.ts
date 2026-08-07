@@ -244,7 +244,10 @@ authRouter.post('/request-password-reset', authRateLimit, async (req, res) => {
   const resetPasswordCode = await bcrypt.hash(code, 10);
   const resetPasswordExpires = new Date(Date.now() + CODE_TTL_MINUTES * 60 * 1000);
 
-  await prisma.user.update({ where: { id: user.id }, data: { resetPasswordCode, resetPasswordExpires } });
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { resetPasswordCode, resetPasswordExpires, resetPasswordAttempts: 0 },
+  });
   await sendPasswordResetCodeEmail(email, code);
 
   // Comme pour /request-email-code : le code n'est renvoyé en clair qu'en
@@ -273,13 +276,28 @@ authRouter.post('/reset-password', authRateLimit, async (req, res) => {
     return invalidCodeError();
   }
 
+  // Même défense qu'EmailVerificationCode.attempts (voir /verify-email-code
+  // ci-dessus) : un compteur persistant en base, pas seulement le rate-limit
+  // en mémoire (authRateLimit), peu fiable en environnement serverless (état
+  // non partagé entre invocations froides) — voir revue de sécurité.
+  if (user.resetPasswordAttempts >= MAX_CODE_ATTEMPTS) {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { resetPasswordCode: null, resetPasswordExpires: null, resetPasswordAttempts: 0 },
+    });
+    return res.status(429).json({ error: 'Trop de tentatives — veuillez redemander un code.' });
+  }
+
   const valid = await bcrypt.compare(code, user.resetPasswordCode);
-  if (!valid) return invalidCodeError();
+  if (!valid) {
+    await prisma.user.update({ where: { id: user.id }, data: { resetPasswordAttempts: { increment: 1 } } });
+    return invalidCodeError();
+  }
 
   const passwordHash = await bcrypt.hash(password, 10);
   await prisma.user.update({
     where: { id: user.id },
-    data: { passwordHash, resetPasswordCode: null, resetPasswordExpires: null },
+    data: { passwordHash, resetPasswordCode: null, resetPasswordExpires: null, resetPasswordAttempts: 0 },
   });
 
   res.status(204).send();

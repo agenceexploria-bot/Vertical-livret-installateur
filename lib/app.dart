@@ -7,6 +7,7 @@ import 'core/router.dart';
 import 'core/realtime_service.dart';
 import 'data/api_client.dart';
 import 'data/local/app_database.dart';
+import 'data/models/user.dart';
 import 'data/repositories/auth_repository.dart';
 import 'data/repositories/chantier_repository.dart';
 import 'data/sync/sync_engine.dart';
@@ -78,7 +79,7 @@ class _RouterHost extends StatefulWidget {
 
 class _RouterHostState extends State<_RouterHost> {
   late final GoRouter _router = AppRouter.build(context.read<AuthState>());
-  final RealtimeService _realtime = RealtimeService();
+  late final RealtimeService _realtime = RealtimeService(context.read<ApiClient>());
 
   @override
   void initState() {
@@ -86,7 +87,23 @@ class _RouterHostState extends State<_RouterHost> {
     _realtime.onChantierChanged = (reference) => context.read<ChantierState>().handleRealtimeChange(reference);
     _realtime.onChantierDeleted = (reference) => context.read<ChantierState>().handleRealtimeDelete(reference);
     _realtime.onNotificationCreated = (json) => context.read<NotificationsState>().handleRealtimeNotification(json);
-    _realtime.connect();
+    // Le canal notifications est réservé CA/Admin (voir RealtimeService) —
+    // le rôle courant n'est pas forcément connu dès ce premier appel
+    // (restauration de session asynchrone au démarrage, voir AuthState._init),
+    // d'où ce ré-appel à chaque changement plutôt qu'une lecture unique ici.
+    context.read<AuthState>().addListener(_syncRealtime);
+    _syncRealtime();
+  }
+
+  void _syncRealtime() {
+    final role = context.read<AuthState>().currentUser?.role;
+    _realtime.connect(isCaOuAdmin: role == UserRole.chargeAffaires || role == UserRole.admin);
+  }
+
+  @override
+  void dispose() {
+    context.read<AuthState>().removeListener(_syncRealtime);
+    super.dispose();
   }
 
   @override

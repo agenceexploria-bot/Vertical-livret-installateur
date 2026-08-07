@@ -317,4 +317,21 @@ describe('Mot de passe oublié', () => {
     });
     expect(res.status).toBe(400);
   });
+
+  it('bloque après 5 tentatives incorrectes', async () => {
+    await doSignup(app, {
+      nom: 'Roux', prenom: 'Thomas', mobile: '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo',
+    });
+    await request(app).post('/auth/request-password-reset').send({ email: 't.roux@elevpro.fr' });
+
+    for (let i = 0; i < 5; i++) {
+      await request(app).post('/auth/reset-password').send({
+        email: 't.roux@elevpro.fr', code: '000000', password: 'nouveaumdp',
+      });
+    }
+    const res = await request(app).post('/auth/reset-password').send({
+      email: 't.roux@elevpro.fr', code: '000000', password: 'nouveaumdp',
+    });
+    expect(res.status).toBe(429);
+  });
 });

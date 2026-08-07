@@ -5,6 +5,7 @@ import { comptesRouter } from './routes/comptes';
 import { chantiersRouter } from './routes/chantiers';
 import { adminRouter } from './routes/admin';
 import { notificationsRouter } from './routes/notifications';
+import { pusherRouter } from './routes/pusherAuth';
 
 // Frontend et backend sont servis sur la même origine en production (voir
 // vercel.json) : ce CORS ne sert qu'au dev local (Flutter Web sur un port
@@ -35,6 +36,7 @@ export function createApp() {
   app.use('/chantiers', chantiersRouter);
   app.use('/admin', adminRouter);
   app.use('/notifications', notificationsRouter);
+  app.use('/pusher', pusherRouter);
 
   return app;
 }

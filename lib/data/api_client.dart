@@ -272,6 +272,16 @@ class ApiClient {
     return _request('DELETE', '/comptes/moi/avatar');
   }
 
+  // ---- Temps réel (Pusher) ----
+
+  /// Autorisation d'abonnement à un canal privé Pusher — voir
+  /// RealtimeService._authorizer et backend/src/routes/pusherAuth.ts. Le JWT
+  /// courant est déjà joint via les headers de [_request], comme pour tout
+  /// autre appel authentifié de l'app.
+  Future<Map<String, dynamic>> pusherAuth({required String socketId, required String channelName}) {
+    return _request('POST', '/pusher/auth', body: {'socket_id': socketId, 'channel_name': channelName});
+  }
+
   // ---- Admin ----
 
   Future<List<dynamic>> getComptesInternes() async {

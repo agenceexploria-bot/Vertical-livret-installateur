@@ -38,8 +38,9 @@ model User {
   // Mot de passe oublié (self-service) : code à 6 chiffres haché, même
   // mécanisme que EmailVerificationCode mais stocké directement sur le
   // compte puisqu'une seule réinitialisation peut être en cours à la fois.
-  resetPasswordCode    String?
-  resetPasswordExpires DateTime?
+  resetPasswordCode     String?
+  resetPasswordExpires  DateTime?
+  resetPasswordAttempts Int       @default(0)
 
   habilitations       Habilitation[]
   chantiersRattaches  ChantierInstallateur[]

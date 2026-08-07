@@ -21,15 +21,22 @@ if (!pusher) {
   console.warn(`Pusher non configuré (variables manquantes : ${missingVars.join(', ')}) — diffusion temps réel désactivée.`);
 }
 
-// Un seul channel public pour toute l'app : plus simple qu'un channel par
-// chantier, et suffisant vu le volume (petite équipe, pas de contrainte de
-// confidentialité entre chantiers côté CA/Admin qui les voient tous).
-export const APP_CHANNEL = 'app-events';
+// Deux channels privés (voir routes/pusherAuth.ts pour l'autorisation) —
+// séparés selon qui a le droit de recevoir quoi, pas par commodité technique :
+// CHANTIER_CHANGES concerne tout utilisateur authentifié (un installateur doit
+// être notifié des changements sur SES chantiers), alors que NOTIFICATIONS
+// (alertes internes type "auto-contrôle à 80%") reste réservé à CA/Admin,
+// comme l'impose déjà GET /notifications côté REST — avant cette séparation,
+// tout transitait sur un unique channel public, ce qui exposait le contenu
+// des notifications internes à quiconque récupérait la clé Pusher publique
+// (embarquée côté client), sans même avoir de compte Vertical.
+export const CHANTIER_CHANGES_CHANNEL = 'private-app-events';
+export const NOTIFICATIONS_CHANNEL = 'private-notifications';
 
-async function trigger(event: string, data: unknown): Promise<void> {
+async function trigger(channel: string, event: string, data: unknown): Promise<void> {
   if (!pusher) return;
   try {
-    await pusher.trigger(APP_CHANNEL, event, data);
+    await pusher.trigger(channel, event, data);
   } catch (err) {
     // Une diffusion ratée ne doit jamais faire échouer la mutation elle-même.
     console.error('Échec de diffusion Pusher', err);
@@ -42,13 +49,23 @@ async function trigger(event: string, data: unknown): Promise<void> {
 // dépasser la limite de payload Pusher sur les chantiers avec beaucoup de
 // documents/points).
 export function triggerChantierChanged(reference: string): Promise<void> {
-  return trigger('chantier-changed', { reference });
+  return trigger(CHANTIER_CHANGES_CHANNEL, 'chantier-changed', { reference });
 }
 
 export function triggerChantierDeleted(reference: string): Promise<void> {
-  return trigger('chantier-deleted', { reference });
+  return trigger(CHANTIER_CHANGES_CHANNEL, 'chantier-deleted', { reference });
 }
 
 export function triggerNotificationCreated(notification: unknown): Promise<void> {
-  return trigger('notification-created', { notification });
+  return trigger(NOTIFICATIONS_CHANNEL, 'notification-created', { notification });
+}
+
+// Signature d'autorisation d'abonnement à un channel privé — voir
+// routes/pusherAuth.ts, qui décide QUELS channels un rôle donné peut demander
+// avant même d'appeler cette fonction (elle ne fait que signer, aucun
+// contrôle d'accès ici). `null` si Pusher n'est pas configuré (pas de secret
+// disponible pour signer).
+export function authorizeChannel(socketId: string, channel: string): Pusher.ChannelAuthResponse | null {
+  if (!pusher) return null;
+  return pusher.authorizeChannel(socketId, channel);
 }
