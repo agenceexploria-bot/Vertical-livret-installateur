@@ -134,11 +134,40 @@ class _BoComptesScreenState extends State<BoComptesScreen> {
   /// suspendre/réactiver un compte. Regroupés par rôle plutôt qu'un seul
   /// grand tableau, pour rester lisible à mesure que les comptes s'accumulent.
   Widget _buildGestionComptes(BuildContext context, AdminState adminState) {
-    final comptes = adminState.tousLesComptes;
+    final tousLesComptes = adminState.tousLesComptes;
+
+    final query = _search.trim().toLowerCase();
+    final comptes = query.isEmpty
+        ? tousLesComptes
+        : tousLesComptes
+            .where((u) =>
+                u.nom.toLowerCase().contains(query) ||
+                u.prenom.toLowerCase().contains(query) ||
+                (u.email?.toLowerCase().contains(query) ?? false))
+            .toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Gestion des comptes (${comptes.length})', style: Theme.of(context).textTheme.titleMedium),
+        Row(
+          children: [
+            Text('Gestion des comptes (${tousLesComptes.length})', style: Theme.of(context).textTheme.titleMedium),
+            const Spacer(),
+            SizedBox(
+              width: 220,
+              child: TextField(
+                controller: _searchController,
+                onChanged: (value) => setState(() => _search = value),
+                decoration: const InputDecoration(
+                  hintText: 'Nom, prénom ou email...',
+                  prefixIcon: Icon(Icons.search, size: 20),
+                  isDense: true,
+                  contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                ),
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 4),
         const Text(
           'Tous les comptes installateurs et chargés d\'affaires du système.',
@@ -146,10 +175,10 @@ class _BoComptesScreenState extends State<BoComptesScreen> {
         ),
         const SizedBox(height: 18),
         if (comptes.isEmpty)
-          const BoPanel(
+          BoPanel(
             child: EmptyState(
               icon: Icons.groups_outlined,
-              message: 'Aucun compte enregistré pour l\'instant.',
+              message: query.isEmpty ? 'Aucun compte enregistré pour l\'instant.' : 'Aucun compte trouvé pour « ${_search.trim()} ».',
             ),
           ),
         for (final role in _ordreGroupes) ...[
@@ -246,9 +275,18 @@ class _BoComptesScreenState extends State<BoComptesScreen> {
         children: [
           Expanded(
             flex: 3,
-            child: Text(
-              u.fullName,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, decoration: TextDecoration.underline),
+            child: Row(
+              children: [
+                UserAvatar(user: u, radius: 14),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    u.fullName,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, decoration: TextDecoration.underline),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ),
           ),
           Expanded(flex: 2, child: Text(_roleLabel(u.role), style: const TextStyle(fontSize: 12.5, color: AppColors.acier))),
