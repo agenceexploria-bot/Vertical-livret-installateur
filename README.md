@@ -24,7 +24,7 @@ Production : https://vertical-livret-installateur.vercel.app/
 3. [Installation & configuration locale](#4-installation--configuration-locale)
 4. [Déploiement (production)](#5-déploiement-production)
 5. [Guide d'installation mobile (PWA)](#6-guide-dinstallation-mobile-pwa)
-6. [Rôles et permissions](#8-rôles-et-permissions)
+6. [Rôles et permissions](#7-rôles-et-permissions)
 7. [Structure du dépôt](#structure-du-dépôt)
 
 ## 2. Stack technique
@@ -101,6 +101,20 @@ Puis initialisez la base de données :
 npx prisma migrate dev     # applique les migrations existantes (prisma/migrations)
 npm run prisma:generate    # régénère le client Prisma
 npm run prisma:seed        # (optionnel) charge les comptes et chantiers de démo — voir section 7
+```
+
+**Créer un compte Admin** : il n'existe aucune route API pour ça (`POST
+/auth/signup` crée toujours un installateur, `POST /auth/signup-interne`
+n'accepte que `chargeAffaires` — les rôles à privilèges ne sont
+volontairement pas self-service). Le seed ci-dessus en crée déjà un
+(`admin@actiwork.fr` / `demodemo`) ; pour un compte Admin isolé sans
+lancer tout le seed, utilisez `backend/prisma/createAdmin.ts` (upsert sur
+l'email, n'écrase jamais un compte existant — email/mot de passe passés en
+variables d'environnement, jamais codés en dur) :
+
+```bash
+cd backend
+ADMIN_EMAIL="admin@vertical.fr" ADMIN_PASSWORD="change-me" npx tsx prisma/createAdmin.ts
 ```
 
 ### 4.4. Démarrer les serveurs
@@ -221,7 +235,7 @@ lib/                      Application Flutter (Web + Mobile)
   state/                  State management (Provider)
 backend/
   src/
-    routes/               Routes Express (auth, chantiers, comptes, admin)
+    routes/               Routes Express (auth, chantiers, comptes, admin, notifications, pusherAuth)
     lib/                  Stockage fichiers (Vercel Blob), email 2FA, SMS
     prisma.ts             Client Prisma
     server.ts             Entrée serveur (dev local)
@@ -230,6 +244,7 @@ backend/
     schema.prisma         Schéma de données
     migrations/           Migrations SQL
     seed.ts                Comptes et chantiers de démonstration
+    createAdmin.ts        Crée (upsert) un compte Admin isolé — voir section 4
   .env.example            Modèle de configuration locale
 api/
   index.ts                Point d'entrée serverless Vercel (wrappe backend/src/app.ts)
