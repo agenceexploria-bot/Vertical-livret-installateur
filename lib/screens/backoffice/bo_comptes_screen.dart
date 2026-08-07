@@ -8,6 +8,7 @@ import '../../core/widgets/password_field.dart';
 import '../../core/widgets/status_badge.dart';
 import '../../core/widgets/status_indicator.dart';
 import '../../core/widgets/user_avatar.dart';
+import '../../data/api_client.dart';
 import '../../data/models/user.dart';
 import '../../state/admin_state.dart';
 import '../../state/auth_state.dart';
@@ -33,6 +34,22 @@ class _BoComptesScreenState extends State<BoComptesScreen> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  /// Exécute une action serveur (valider/suspendre/réactiver/supprimer un
+  /// compte) et affiche un message clair en cas d'échec — sans ça, un clic
+  /// qui échoue (droits insuffisants, réseau...) ne montrait strictement
+  /// rien à l'utilisateur (exception non attendue, silencieuse).
+  Future<void> _handleAction(BuildContext context, Future<void> Function() action) async {
+    try {
+      await action();
+    } on ApiException catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Une erreur est survenue. Réessayez.')));
+    }
   }
 
   @override
@@ -305,21 +322,21 @@ class _BoComptesScreenState extends State<BoComptesScreen> {
                 // jamais par cet état "en attente" (créés déjà actifs).
                 if (!u.isActive && !u.suspendu && (u.role == UserRole.chargeAffaires || u.role == UserRole.qualite))
                   ElevatedButton.icon(
-                    onPressed: () => adminState.validerCompteInterne(u),
+                    onPressed: () => _handleAction(context, () => adminState.validerCompteInterne(u)),
                     icon: const Icon(Icons.check, size: 16),
                     label: const Text('Valider'),
                     style: ElevatedButton.styleFrom(minimumSize: const Size(0, 36), padding: const EdgeInsets.symmetric(horizontal: 12)),
                   ),
                 if (!u.isActive && !u.suspendu && u.role == UserRole.installateur)
                   ElevatedButton.icon(
-                    onPressed: () => adminState.validerCompte(u),
+                    onPressed: () => _handleAction(context, () => adminState.validerCompte(u)),
                     icon: const Icon(Icons.check, size: 16),
                     label: const Text('Valider'),
                     style: ElevatedButton.styleFrom(minimumSize: const Size(0, 36), padding: const EdgeInsets.symmetric(horizontal: 12)),
                   ),
                 if (u.suspendu)
                   OutlinedButton.icon(
-                    onPressed: () => adminState.reactiverCompte(u),
+                    onPressed: () => _handleAction(context, () => adminState.reactiverCompte(u)),
                     icon: const Icon(Icons.refresh, size: 16),
                     label: const Text('Réactiver'),
                     style: OutlinedButton.styleFrom(minimumSize: const Size(0, 36), padding: const EdgeInsets.symmetric(horizontal: 12)),
@@ -344,7 +361,7 @@ class _BoComptesScreenState extends State<BoComptesScreen> {
   void _onComptesMenuAction(BuildContext context, AdminState adminState, User u, String value) {
     switch (value) {
       case 'suspendre':
-        adminState.suspendreCompte(u);
+        _handleAction(context, () => adminState.suspendreCompte(u));
         break;
       case 'reinit':
         _openAdminReinitDialog(context, adminState, u);
@@ -378,8 +395,20 @@ class _BoComptesScreenState extends State<BoComptesScreen> {
                   ? null
                   : () async {
                       setState(() => isSubmitting = true);
-                      await adminState.reinitialiserMotDePasse(u, controller.text.trim());
-                      if (dialogContext.mounted) Navigator.pop(dialogContext);
+                      try {
+                        await adminState.reinitialiserMotDePasse(u, controller.text.trim());
+                        if (dialogContext.mounted) Navigator.pop(dialogContext);
+                      } on ApiException catch (e) {
+                        if (!dialogContext.mounted) return;
+                        setState(() => isSubmitting = false);
+                        ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(content: Text(e.message)));
+                      } catch (_) {
+                        if (!dialogContext.mounted) return;
+                        setState(() => isSubmitting = false);
+                        ScaffoldMessenger.of(dialogContext).showSnackBar(
+                          const SnackBar(content: Text('Une erreur est survenue. Réessayez.')),
+                        );
+                      }
                     },
               child: isSubmitting
                   ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
@@ -403,7 +432,7 @@ class _BoComptesScreenState extends State<BoComptesScreen> {
             style: TextButton.styleFrom(foregroundColor: AppColors.rouge),
             onPressed: () {
               Navigator.pop(dialogContext);
-              adminState.supprimerCompte(u);
+              _handleAction(context, () => adminState.supprimerCompte(u));
             },
             child: const Text('Supprimer définitivement'),
           ),
@@ -415,7 +444,7 @@ class _BoComptesScreenState extends State<BoComptesScreen> {
   void _onMenuAction(BuildContext context, ComptesState comptesState, User u, String value) {
     switch (value) {
       case 'suspendre':
-        comptesState.suspendre(u);
+        _handleAction(context, () => comptesState.suspendre(u));
         break;
       case 'reinit':
         _openReinitDialog(context, comptesState, u);
@@ -446,8 +475,20 @@ class _BoComptesScreenState extends State<BoComptesScreen> {
                   ? null
                   : () async {
                       setState(() => isSubmitting = true);
-                      await comptesState.reinitialiserMotDePasse(u, controller.text.trim());
-                      if (dialogContext.mounted) Navigator.pop(dialogContext);
+                      try {
+                        await comptesState.reinitialiserMotDePasse(u, controller.text.trim());
+                        if (dialogContext.mounted) Navigator.pop(dialogContext);
+                      } on ApiException catch (e) {
+                        if (!dialogContext.mounted) return;
+                        setState(() => isSubmitting = false);
+                        ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(content: Text(e.message)));
+                      } catch (_) {
+                        if (!dialogContext.mounted) return;
+                        setState(() => isSubmitting = false);
+                        ScaffoldMessenger.of(dialogContext).showSnackBar(
+                          const SnackBar(content: Text('Une erreur est survenue. Réessayez.')),
+                        );
+                      }
                     },
               child: isSubmitting
                   ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
@@ -499,14 +540,14 @@ class _BoComptesScreenState extends State<BoComptesScreen> {
     Widget? primaryAction;
     if (!u.isActive) {
       primaryAction = ElevatedButton.icon(
-        onPressed: () => comptesState.valider(u),
+        onPressed: () => _handleAction(context, () => comptesState.valider(u)),
         icon: const Icon(Icons.check, size: 16),
         label: const Text('Valider'),
         style: ElevatedButton.styleFrom(minimumSize: const Size(0, 36), padding: const EdgeInsets.symmetric(horizontal: 12)),
       );
     } else if (u.suspendu) {
       primaryAction = OutlinedButton.icon(
-        onPressed: () => comptesState.reactiver(u),
+        onPressed: () => _handleAction(context, () => comptesState.reactiver(u)),
         icon: const Icon(Icons.refresh, size: 16),
         label: const Text('Réactiver'),
         style: OutlinedButton.styleFrom(minimumSize: const Size(0, 36), padding: const EdgeInsets.symmetric(horizontal: 12)),
