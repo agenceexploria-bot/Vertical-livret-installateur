@@ -63,24 +63,34 @@ class ApiClient {
     final encoded = body != null ? jsonEncode(body) : null;
 
     http.Response response;
-    switch (method) {
-      case 'GET':
-        response = await http.get(uri, headers: headers);
-        break;
-      case 'POST':
-        response = await http.post(uri, headers: headers, body: encoded);
-        break;
-      case 'PATCH':
-        response = await http.patch(uri, headers: headers, body: encoded);
-        break;
-      case 'PUT':
-        response = await http.put(uri, headers: headers, body: encoded);
-        break;
-      case 'DELETE':
-        response = await http.delete(uri, headers: headers, body: encoded);
-        break;
-      default:
-        throw UnsupportedError('Méthode HTTP non supportée : $method');
+    try {
+      switch (method) {
+        case 'GET':
+          response = await http.get(uri, headers: headers);
+          break;
+        case 'POST':
+          response = await http.post(uri, headers: headers, body: encoded);
+          break;
+        case 'PATCH':
+          response = await http.patch(uri, headers: headers, body: encoded);
+          break;
+        case 'PUT':
+          response = await http.put(uri, headers: headers, body: encoded);
+          break;
+        case 'DELETE':
+          response = await http.delete(uri, headers: headers, body: encoded);
+          break;
+        default:
+          throw UnsupportedError('Méthode HTTP non supportée : $method');
+      }
+    } on UnsupportedError {
+      rethrow;
+    } catch (_) {
+      // Aucune réponse HTTP reçue (pas de réseau, DNS, serveur injoignable,
+      // timeout...) — distinct d'une réponse d'erreur du serveur (voir
+      // _extractError ci-dessous), mais message identique côté utilisateur :
+      // dans les deux cas, il n'y a rien de plus précis à lui dire.
+      throw ApiException(0, 'Erreur réseau. Vérifiez votre connexion.');
     }
 
     if (response.statusCode == 401 && auth && allowRetry && _refreshToken != null) {
@@ -97,18 +107,25 @@ class ApiClient {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
-  /// Extrait un message lisible de `{ error: ... }` — `error` est soit une
-  /// chaîne simple (ex. "Identifiants incorrects"), soit l'objet renvoyé par
-  /// `zod`'s `.flatten()` côté backend sur une erreur 400 de validation
-  /// (`{ formErrors: [...], fieldErrors: { champ: [...] } }`, voir tous les
-  /// `parsed.error.flatten()` de backend/src/routes/*.ts). Sans ce second cas,
-  /// `decoded['error'].toString()` affichait la représentation Dart brute de
-  /// cet objet (ex. `{formErrors: [], fieldErrors: {mobile: [...]}}`) telle
-  /// quelle dans les SnackBar — jamais un message pensé pour l'utilisateur.
+  /// Extrait TOUJOURS un message lisible en français depuis le corps d'une
+  /// réponse d'erreur — jamais de JSON brut (accolades/crochets) affiché à
+  /// l'utilisateur, quelle que soit la forme de `{ error: ... }` :
+  /// - chaîne simple (ex. "Identifiants incorrects") : renvoyée telle quelle.
+  /// - objet `zod`'s `.flatten()` (`{ formErrors: [...], fieldErrors: {
+  ///   champ: [...] } }`, voir tous les `parsed.error.flatten()` de
+  ///   backend/src/routes/*.ts) : premier message de champ, sinon premier
+  ///   message global.
+  /// - objet d'erreur Prisma échappé sans passer par un message applicatif
+  ///   (ex. contrainte unique P2002 non interceptée en amont côté backend) :
+  ///   message générique, jamais le détail technique (nom de contrainte SQL,
+  ///   colonnes...).
+  /// - corps qui n'est pas du JSON valide (page d'erreur HTML de la
+  ///   plateforme, timeout de proxy...) : traité comme une erreur réseau, il
+  ///   n'y a rien de plus précis à dire à l'utilisateur dans ce cas.
   String _extractError(String body) {
     try {
       final decoded = jsonDecode(body);
-      if (decoded is! Map) return 'Une erreur est survenue';
+      if (decoded is! Map) return 'Une erreur est survenue. Réessayez.';
       final error = decoded['error'];
       if (error is String) return error;
       if (error is Map) {
@@ -120,9 +137,18 @@ class ApiClient {
         }
         final formErrors = error['formErrors'];
         if (formErrors is List && formErrors.isNotEmpty) return formErrors.first.toString();
+
+        // Forme d'une erreur Prisma (PrismaClientKnownRequestError.toJSON()
+        // ou équivalent) : { code: 'P2002', meta: {...}, message: '...' }.
+        final code = error['code'];
+        if (code is String && code.startsWith('P2')) {
+          return code == 'P2002' ? 'Cette valeur est déjà utilisée par un autre compte.' : 'Une erreur est survenue. Réessayez.';
+        }
       }
-    } catch (_) {}
-    return 'Une erreur est survenue';
+      return 'Une erreur est survenue. Réessayez.';
+    } catch (_) {
+      return 'Erreur réseau. Vérifiez votre connexion.';
+    }
   }
 
   Future<bool> _tryRefresh() async {
