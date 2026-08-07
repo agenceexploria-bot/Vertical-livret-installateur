@@ -10,6 +10,7 @@ import '../../core/widgets/ajouter_document_chantier_dialog.dart';
 import '../../core/widgets/renseigner_pv_dialog.dart';
 import '../../core/widgets/status_badge.dart';
 import '../../core/widgets/status_indicator.dart';
+import '../../data/api_client.dart';
 import '../../data/models/chantier.dart';
 import '../../data/models/document_chantier.dart';
 import '../../data/models/document_terrain.dart';
@@ -43,6 +44,21 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  /// Affiche un message clair en cas d'échec d'une action serveur — sans ça,
+  /// un clic qui échoue (droits insuffisants, réseau...) ne montrait
+  /// strictement rien à l'utilisateur (exception non attendue, silencieuse).
+  Future<void> _handleAction(BuildContext context, Future<void> Function() action) async {
+    try {
+      await action();
+    } on ApiException catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Une erreur est survenue. Réessayez.')));
+    }
   }
 
   @override
@@ -301,7 +317,7 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
             style: TextButton.styleFrom(foregroundColor: AppColors.rouge),
             onPressed: () {
               Navigator.pop(dialogContext);
-              context.read<ChantierState>().deleteRex(chantier.reference);
+              _handleAction(context, () => context.read<ChantierState>().deleteRex(chantier.reference));
             },
             child: const Text('Supprimer définitivement'),
           ),
@@ -324,7 +340,7 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
             style: TextButton.styleFrom(foregroundColor: AppColors.rouge),
             onPressed: () {
               Navigator.pop(dialogContext);
-              context.read<ChantierState>().deletePv(chantier.reference);
+              _handleAction(context, () => context.read<ChantierState>().deletePv(chantier.reference));
             },
             child: const Text('Supprimer définitivement'),
           ),
@@ -692,16 +708,24 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
   Future<void> _remplacerFichier(BuildContext context, Chantier chantier, DocumentChantier d) async {
     final picked = await DocumentCapture.pickFile();
     if (picked == null || !context.mounted) return;
-    await context.read<ChantierState>().replaceDocumentChantier(
-          chantier.reference,
-          d.id,
-          file: picked.dataUrl,
-          nomFichierOriginal: picked.fileName,
+    try {
+      await context.read<ChantierState>().replaceDocumentChantier(
+            chantier.reference,
+            d.id,
+            file: picked.dataUrl,
+            nomFichierOriginal: picked.fileName,
+          );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Fichier de « ${d.nom} » remplacé.')),
         );
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Fichier de « ${d.nom} » remplacé.')),
-      );
+      }
+    } on ApiException catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Une erreur est survenue. Réessayez.')));
     }
   }
 
@@ -717,7 +741,7 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
             style: TextButton.styleFrom(foregroundColor: AppColors.rouge),
             onPressed: () {
               Navigator.pop(dialogContext);
-              context.read<ChantierState>().deleteDocumentChantier(chantier.reference, d.id);
+              _handleAction(context, () => context.read<ChantierState>().deleteDocumentChantier(chantier.reference, d.id));
             },
             child: const Text('Supprimer définitivement'),
           ),
@@ -773,7 +797,7 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
           TextButton(
             onPressed: () {
               Navigator.pop(dialogContext);
-              context.read<ChantierState>().detacher(chantier.reference, u.id);
+              _handleAction(context, () => context.read<ChantierState>().detacher(chantier.reference, u.id));
             },
             child: const Text('Détacher'),
           ),
@@ -802,8 +826,8 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
                         title: Text(u.fullName),
                         subtitle: Text(u.societe ?? (u.status == UserStatus.sousTraitant ? 'Sous-traitant' : 'Salarié')),
                         onTap: () {
-                          context.read<ChantierState>().rattacher(chantier.reference, u.id);
                           Navigator.pop(dialogContext);
+                          _handleAction(context, () => context.read<ChantierState>().rattacher(chantier.reference, u.id));
                         },
                       )).toList(),
                 ),
@@ -836,8 +860,18 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
             style: TextButton.styleFrom(foregroundColor: AppColors.rouge),
             onPressed: () async {
               Navigator.pop(dialogContext);
-              await context.read<ChantierState>().deleteChantier(chantier.reference);
-              if (context.mounted) context.go('/backoffice/ca');
+              try {
+                await context.read<ChantierState>().deleteChantier(chantier.reference);
+                if (context.mounted) context.go('/backoffice/ca');
+              } on ApiException catch (e) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+              } catch (_) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Une erreur est survenue. Réessayez.')),
+                );
+              }
             },
             child: const Text('Supprimer définitivement'),
           ),
@@ -899,6 +933,12 @@ class _ModifierChantierDialogState extends State<_ModifierChantierDialog> {
         'referenceAffaire': _referenceAffaireController.text.trim(),
       });
       if (mounted) Navigator.of(context).pop();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Une erreur est survenue. Réessayez.')));
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }

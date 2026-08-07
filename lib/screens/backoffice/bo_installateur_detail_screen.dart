@@ -7,6 +7,7 @@ import '../../core/theme.dart';
 import '../../core/widgets/password_field.dart';
 import '../../core/widgets/status_badge.dart';
 import '../../core/widgets/status_indicator.dart';
+import '../../data/api_client.dart';
 import '../../data/models/user.dart';
 import '../../state/auth_state.dart';
 import '../../state/chantier_state.dart';
@@ -132,10 +133,10 @@ class BoInstallateurDetailScreen extends StatelessWidget {
         _openModifierProfilDialog(context, installateur);
         break;
       case 'suspendre':
-        context.read<ComptesState>().suspendre(installateur);
+        _handleAction(context, () => context.read<ComptesState>().suspendre(installateur));
         break;
       case 'reactiver':
-        context.read<ComptesState>().reactiver(installateur);
+        _handleAction(context, () => context.read<ComptesState>().reactiver(installateur));
         break;
       case 'reinit':
         _openReinitDialog(context, installateur);
@@ -143,6 +144,21 @@ class BoInstallateurDetailScreen extends StatelessWidget {
       case 'supprimer':
         _confirmerSuppression(context, installateur);
         break;
+    }
+  }
+
+  /// Affiche un message clair en cas d'échec d'une action serveur — sans ça,
+  /// un clic qui échoue (droits insuffisants, réseau...) ne montrait
+  /// strictement rien à l'utilisateur (exception non attendue, silencieuse).
+  Future<void> _handleAction(BuildContext context, Future<void> Function() action) async {
+    try {
+      await action();
+    } on ApiException catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Une erreur est survenue. Réessayez.')));
     }
   }
 
@@ -187,14 +203,26 @@ class BoInstallateurDetailScreen extends StatelessWidget {
                   ? null
                   : () async {
                       setState(() => isSubmitting = true);
-                      await context.read<ComptesState>().modifierProfil(
-                            u,
-                            nom: nomController.text.trim(),
-                            prenom: prenomController.text.trim(),
-                            email: emailController.text.trim(),
-                            mobile: mobileController.text.trim(),
-                          );
-                      if (dialogContext.mounted) Navigator.pop(dialogContext);
+                      try {
+                        await context.read<ComptesState>().modifierProfil(
+                              u,
+                              nom: nomController.text.trim(),
+                              prenom: prenomController.text.trim(),
+                              email: emailController.text.trim(),
+                              mobile: mobileController.text.trim(),
+                            );
+                        if (dialogContext.mounted) Navigator.pop(dialogContext);
+                      } on ApiException catch (e) {
+                        if (!dialogContext.mounted) return;
+                        setState(() => isSubmitting = false);
+                        ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(content: Text(e.message)));
+                      } catch (_) {
+                        if (!dialogContext.mounted) return;
+                        setState(() => isSubmitting = false);
+                        ScaffoldMessenger.of(dialogContext).showSnackBar(
+                          const SnackBar(content: Text('Une erreur est survenue. Réessayez.')),
+                        );
+                      }
                     },
               child: isSubmitting
                   ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
@@ -229,8 +257,20 @@ class BoInstallateurDetailScreen extends StatelessWidget {
                   ? null
                   : () async {
                       setState(() => isSubmitting = true);
-                      await context.read<ComptesState>().reinitialiserMotDePasse(u, controller.text.trim());
-                      if (dialogContext.mounted) Navigator.pop(dialogContext);
+                      try {
+                        await context.read<ComptesState>().reinitialiserMotDePasse(u, controller.text.trim());
+                        if (dialogContext.mounted) Navigator.pop(dialogContext);
+                      } on ApiException catch (e) {
+                        if (!dialogContext.mounted) return;
+                        setState(() => isSubmitting = false);
+                        ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(content: Text(e.message)));
+                      } catch (_) {
+                        if (!dialogContext.mounted) return;
+                        setState(() => isSubmitting = false);
+                        ScaffoldMessenger.of(dialogContext).showSnackBar(
+                          const SnackBar(content: Text('Une erreur est survenue. Réessayez.')),
+                        );
+                      }
                     },
               child: isSubmitting
                   ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
@@ -256,8 +296,18 @@ class BoInstallateurDetailScreen extends StatelessWidget {
             style: TextButton.styleFrom(foregroundColor: AppColors.rouge),
             onPressed: () async {
               Navigator.pop(dialogContext);
-              await context.read<ComptesState>().supprimer(installateur);
-              if (context.mounted) context.go('/backoffice/ca/comptes');
+              try {
+                await context.read<ComptesState>().supprimer(installateur);
+                if (context.mounted) context.go('/backoffice/ca/comptes');
+              } on ApiException catch (e) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+              } catch (_) {
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Une erreur est survenue. Réessayez.')),
+                );
+              }
             },
             child: const Text('Supprimer définitivement'),
           ),

@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/dashboard_stat_card.dart';
+import '../../data/api_client.dart';
 import '../../data/models/activity_feed.dart';
 import '../../data/models/user.dart';
 import '../../state/admin_state.dart';
@@ -28,6 +29,21 @@ class _BoAdminDashboardScreenState extends State<BoAdminDashboardScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) context.read<AdminState>().fetch();
     });
+  }
+
+  /// Affiche un message clair en cas d'échec d'une action serveur — sans ça,
+  /// un clic qui échoue (droits insuffisants, réseau...) ne montrait
+  /// strictement rien à l'utilisateur (exception non attendue, silencieuse).
+  Future<void> _handleAction(Future<void> Function() action) async {
+    try {
+      await action();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Une erreur est survenue. Réessayez.')));
+    }
   }
 
   @override
@@ -150,7 +166,7 @@ class _BoAdminDashboardScreenState extends State<BoAdminDashboardScreen> {
             ),
           ),
           ElevatedButton.icon(
-            onPressed: () => adminState.validerCompteInterne(u),
+            onPressed: () => _handleAction(() => adminState.validerCompteInterne(u)),
             icon: const Icon(Icons.check, size: 16),
             label: const Text('Valider'),
             style: ElevatedButton.styleFrom(minimumSize: const Size(0, 36), padding: const EdgeInsets.symmetric(horizontal: 12)),

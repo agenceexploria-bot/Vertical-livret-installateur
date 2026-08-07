@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../document_capture.dart';
 import '../theme.dart';
+import '../../data/api_client.dart';
 import '../../data/models/chantier.dart';
 import '../../state/chantier_state.dart';
 
@@ -39,6 +40,12 @@ class _RenseignerPvDialogState extends State<RenseignerPvDialog> {
     try {
       await context.read<ChantierState>().uploadPvDocument(widget.chantier.reference, _pdfDataUrl!);
       if (mounted) Navigator.of(context).pop();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Une erreur est survenue. Réessayez.')));
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
