@@ -97,10 +97,30 @@ class ApiClient {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
+  /// Extrait un message lisible de `{ error: ... }` — `error` est soit une
+  /// chaîne simple (ex. "Identifiants incorrects"), soit l'objet renvoyé par
+  /// `zod`'s `.flatten()` côté backend sur une erreur 400 de validation
+  /// (`{ formErrors: [...], fieldErrors: { champ: [...] } }`, voir tous les
+  /// `parsed.error.flatten()` de backend/src/routes/*.ts). Sans ce second cas,
+  /// `decoded['error'].toString()` affichait la représentation Dart brute de
+  /// cet objet (ex. `{formErrors: [], fieldErrors: {mobile: [...]}}`) telle
+  /// quelle dans les SnackBar — jamais un message pensé pour l'utilisateur.
   String _extractError(String body) {
     try {
       final decoded = jsonDecode(body);
-      if (decoded is Map && decoded['error'] != null) return decoded['error'].toString();
+      if (decoded is! Map) return 'Une erreur est survenue';
+      final error = decoded['error'];
+      if (error is String) return error;
+      if (error is Map) {
+        final fieldErrors = error['fieldErrors'];
+        if (fieldErrors is Map) {
+          for (final messages in fieldErrors.values) {
+            if (messages is List && messages.isNotEmpty) return messages.first.toString();
+          }
+        }
+        final formErrors = error['formErrors'];
+        if (formErrors is List && formErrors.isNotEmpty) return formErrors.first.toString();
+      }
     } catch (_) {}
     return 'Une erreur est survenue';
   }
