@@ -94,6 +94,7 @@ class _RouterHostState extends State<_RouterHost> {
     return MaterialApp.router(
       title: 'Vertical App',
       theme: AppTheme.lightTheme,
+      scrollBehavior: AppScrollBehavior(),
       debugShowCheckedModeBanner: false,
       routerConfig: _router,
       // Beaucoup de textes du back-office (tableaux denses) utilisent des

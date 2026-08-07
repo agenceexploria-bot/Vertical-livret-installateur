@@ -230,9 +230,16 @@ class _SignatureScreenState extends State<SignatureScreen> {
                 behavior: HitTestBehavior.opaque,
                 onPanUpdate: _handlePanUpdate,
                 onPanEnd: (_) => setState(() => _pointsDocument.add(null)),
-                child: ListenableBuilder(
-                  listenable: _pdfController,
-                  builder: (context, _) => CustomPaint(painter: _SignaturePainter(points: _pointsEnEcran(), strokeWidth: _epaisseurEcran())),
+                // Isole le calque de dessin dans sa propre couche de
+                // composition : sans ça, chaque repaint du tracé (à chaque
+                // mouvement du doigt) forcerait aussi le visualiseur PDF
+                // sous-jacent à se re-rasteriser, coûteux sur un PDF haute
+                // résolution.
+                child: RepaintBoundary(
+                  child: ListenableBuilder(
+                    listenable: _pdfController,
+                    builder: (context, _) => CustomPaint(painter: _SignaturePainter(points: _pointsEnEcran(), strokeWidth: _epaisseurEcran())),
+                  ),
                 ),
               ),
             ),

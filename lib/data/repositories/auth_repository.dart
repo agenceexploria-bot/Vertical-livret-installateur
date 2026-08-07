@@ -104,6 +104,13 @@ class AuthRepository {
     return user;
   }
 
+  Future<User> deleteAvatar() async {
+    final data = await _api.deleteAvatar();
+    final user = User.fromJson(data['user'] as Map<String, dynamic>);
+    await _persistUser(user);
+    return user;
+  }
+
   /// [file] : certificat réel (PDF ou image), en data URL base64. Mis en
   /// file d'attente hors-ligne comme les autres pièces jointes terrain si le
   /// réseau échoue — rejoué par le SyncEngine au retour du réseau.

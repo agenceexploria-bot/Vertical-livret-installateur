@@ -268,6 +268,10 @@ class ApiClient {
     return _request('POST', '/comptes/moi/avatar', body: {'file': file});
   }
 
+  Future<Map<String, dynamic>> deleteAvatar() {
+    return _request('DELETE', '/comptes/moi/avatar');
+  }
+
   // ---- Admin ----
 
   Future<List<dynamic>> getComptesInternes() async {

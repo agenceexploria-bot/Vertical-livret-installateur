@@ -269,6 +269,27 @@ class AuthState extends ChangeNotifier {
     }
   }
 
+  /// Supprime la photo de profil et revient aux initiales par défaut ([UserAvatar]).
+  Future<bool> removeAvatar() async {
+    _isLoading = true;
+    _lastError = null;
+    notifyListeners();
+    try {
+      _currentUser = await _repository.deleteAvatar();
+      return true;
+    } on ApiException catch (e) {
+      _lastError = e.message;
+      return false;
+    } catch (e, st) {
+      debugPrint('AuthState.removeAvatar: $e\n$st');
+      _lastError = 'Impossible de contacter le serveur';
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   /// Ajoute un certificat au profil connecté. Optimiste : la liste locale est
   /// mise à jour immédiatement (fonctionne hors-ligne), un rafraîchissement
   /// réseau est tenté en tâche de fond pour rester en phase avec le serveur.

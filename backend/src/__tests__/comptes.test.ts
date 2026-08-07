@@ -212,6 +212,30 @@ describe('POST /comptes/moi/avatar', () => {
   });
 });
 
+describe('DELETE /comptes/moi/avatar', () => {
+  it('supprime la photo de profil et repasse avatarUrl à null', async () => {
+    const token = await createInstallateur();
+    await request(app)
+      .post('/comptes/moi/avatar')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ file: `data:image/png;base64,${ONE_PX_PNG_BASE64}` });
+
+    const res = await request(app).delete('/comptes/moi/avatar').set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.user.avatarUrl).toBeNull();
+  });
+
+  it('est idempotente quand il n\'y a déjà pas de photo', async () => {
+    const token = await createInstallateur();
+
+    const res = await request(app).delete('/comptes/moi/avatar').set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.user.avatarUrl).toBeNull();
+  });
+});
+
 describe('PATCH /comptes/moi', () => {
   it('modifie le nom et le prénom du compte connecté', async () => {
     const token = await createInstallateur();

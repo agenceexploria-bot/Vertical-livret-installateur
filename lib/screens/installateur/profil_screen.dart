@@ -376,16 +376,19 @@ class _ProfileAvatarPickerState extends State<_ProfileAvatarPicker> {
   bool _isUploading = false;
 
   Future<void> _pickAndUpload() async {
-    final dataUrl = await AvatarCapture.pickViaBottomSheet(context);
-    if (dataUrl == null || !mounted) return;
+    final result = await AvatarCapture.pickViaBottomSheet(context, hasAvatar: widget.user?.avatarUrl != null);
+    if (result == null || !mounted) return;
 
     setState(() => _isUploading = true);
-    final ok = await context.read<AuthState>().uploadAvatar(dataUrl);
+    final authState = context.read<AuthState>();
+    final ok = result.remove ? await authState.removeAvatar() : await authState.uploadAvatar(result.dataUrl!);
     if (!mounted) return;
     setState(() => _isUploading = false);
     if (!ok) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(context.read<AuthState>().lastError ?? 'Impossible d\'envoyer la photo.')),
+        SnackBar(
+          content: Text(context.read<AuthState>().lastError ?? (result.remove ? 'Impossible de supprimer la photo.' : 'Impossible d\'envoyer la photo.')),
+        ),
       );
     }
   }

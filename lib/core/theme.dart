@@ -66,6 +66,17 @@ BoxDecoration appButtonDecoration(Set<WidgetState> states, {double radius = 16})
   );
 }
 
+/// Physique de défilement iOS (rebond) sur toutes les plateformes, y compris
+/// Android et le Web — plutôt que le comportement par défaut de Flutter (qui
+/// varie selon la plateforme détectée, peu fiable sur Flutter Web où l'app
+/// tourne en PWA dans Safari). Rend le défilement cohérent partout et
+/// garantit le rendu "natif" attendu sur iPhone/iPad quel que soit le moteur
+/// de détection de plateforme du navigateur.
+class AppScrollBehavior extends MaterialScrollBehavior {
+  @override
+  ScrollPhysics getScrollPhysics(BuildContext context) => const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics());
+}
+
 class AppTheme {
   // Tailles nettement augmentées par rapport à la base précédente (17/15/13/13/11)
   // pour rester lisible de loin, notamment dans les tableaux et menus du

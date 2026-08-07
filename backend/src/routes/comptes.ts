@@ -212,6 +212,23 @@ comptesRouter.post('/moi/avatar', requireAuth, async (req: AuthedRequest, res) =
   res.json({ user: serializeUser(user) });
 });
 
+// Suppression de la photo de profil — retour aux initiales par défaut côté
+// front (voir UserAvatar). Idempotent : pas d'erreur si l'utilisateur n'a
+// déjà pas de photo.
+comptesRouter.delete('/moi/avatar', requireAuth, async (req: AuthedRequest, res) => {
+  const existing = await prisma.user.findUnique({ where: { id: req.auth!.userId } });
+  if (!existing) return res.status(404).json({ error: 'Compte introuvable' });
+
+  if (existing.avatarUrl) await deleteBlobFile(existing.avatarUrl);
+
+  const user = await prisma.user.update({
+    where: { id: req.auth!.userId },
+    data: { avatarUrl: null },
+    include: { habilitations: true },
+  });
+  res.json({ user: serializeUser(user) });
+});
+
 const habilitationSchema = z.object({
   titre: z.string().min(1),
   dateExpiration: z.string(), // ISO date
