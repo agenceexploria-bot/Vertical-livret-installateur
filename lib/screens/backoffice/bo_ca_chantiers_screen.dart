@@ -23,12 +23,31 @@ import 'widgets/pv_signature_panel.dart';
 /// signés pour facturation), validation des installateurs, et — depuis la
 /// fusion du rôle Qualité dans cet espace — auto-contrôles, REX à qualifier,
 /// anomalies et habilitations.
-class BoCaChantiersScreen extends StatelessWidget {
+class BoCaChantiersScreen extends StatefulWidget {
   const BoCaChantiersScreen({super.key});
+
+  @override
+  State<BoCaChantiersScreen> createState() => _BoCaChantiersScreenState();
+}
+
+class _BoCaChantiersScreenState extends State<BoCaChantiersScreen> {
+  final _searchController = TextEditingController();
+  String _search = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final chantiers = context.watch<ChantierState>().chantiers;
+
+    final query = _search.trim().toLowerCase();
+    final filteredChantiers = query.isEmpty
+        ? chantiers
+        : chantiers.where((c) => c.reference.toLowerCase().contains(query) || c.client.toLowerCase().contains(query)).toList();
 
     return BoShell(
       activeNav: 'chantiers',
@@ -40,7 +59,7 @@ class BoCaChantiersScreen extends StatelessWidget {
           LayoutBuilder(
             builder: (context, constraints) {
               final isWide = constraints.maxWidth > 800;
-              final table = _buildTable(context);
+              final table = _buildTable(context, filteredChantiers, query.isNotEmpty);
               final sidePanel = _buildSidePanel(context);
 
               if (!isWide) {
@@ -128,9 +147,7 @@ class BoCaChantiersScreen extends StatelessWidget {
     return ('—', StatusType.factuel);
   }
 
-  Widget _buildTable(BuildContext context) {
-    final chantiers = context.watch<ChantierState>().chantiers;
-
+  Widget _buildTable(BuildContext context, List<Chantier> chantiers, bool isSearching) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -138,6 +155,20 @@ class BoCaChantiersScreen extends StatelessWidget {
           children: [
             Text('Chantiers en cours', style: Theme.of(context).textTheme.titleMedium),
             const Spacer(),
+            SizedBox(
+              width: 220,
+              child: TextField(
+                controller: _searchController,
+                onChanged: (value) => setState(() => _search = value),
+                decoration: const InputDecoration(
+                  hintText: 'Réf. ERP ou client...',
+                  prefixIcon: Icon(Icons.search, size: 20),
+                  isDense: true,
+                  contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
             ElevatedButton.icon(
               onPressed: () => context.push('/backoffice/ca/chantiers/nouveau'),
               icon: const Icon(Icons.add, size: 20),
@@ -151,9 +182,9 @@ class BoCaChantiersScreen extends StatelessWidget {
           BoPanel(
             child: EmptyState(
               icon: Icons.construction_outlined,
-              message: 'Aucun chantier en cours pour l\'instant.',
-              actionLabel: 'Créer un nouveau chantier',
-              onAction: () => context.push('/backoffice/ca/chantiers/nouveau'),
+              message: isSearching ? 'Aucun résultat pour « ${_search.trim()} ».' : 'Aucun chantier en cours pour l\'instant.',
+              actionLabel: isSearching ? null : 'Créer un nouveau chantier',
+              onAction: isSearching ? null : () => context.push('/backoffice/ca/chantiers/nouveau'),
             ),
           )
         else

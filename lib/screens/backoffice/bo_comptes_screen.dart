@@ -7,6 +7,7 @@ import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/password_field.dart';
 import '../../core/widgets/status_badge.dart';
 import '../../core/widgets/status_indicator.dart';
+import '../../core/widgets/user_avatar.dart';
 import '../../data/models/user.dart';
 import '../../state/admin_state.dart';
 import '../../state/auth_state.dart';
@@ -17,8 +18,22 @@ import 'widgets/bo_responsive_table.dart';
 import 'widgets/bo_shell.dart';
 import 'widgets/bo_table_row.dart';
 
-class BoComptesScreen extends StatelessWidget {
+class BoComptesScreen extends StatefulWidget {
   const BoComptesScreen({super.key});
+
+  @override
+  State<BoComptesScreen> createState() => _BoComptesScreenState();
+}
+
+class _BoComptesScreenState extends State<BoComptesScreen> {
+  final _searchController = TextEditingController();
+  String _search = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -44,6 +59,13 @@ class BoComptesScreen extends StatelessWidget {
     final comptesState = context.watch<ComptesState>();
     final chantiers = context.watch<ChantierState>().chantiers;
 
+    final query = _search.trim().toLowerCase();
+    final installateurs = query.isEmpty
+        ? comptesState.installateurs
+        : comptesState.installateurs
+            .where((u) => u.nom.toLowerCase().contains(query) || u.prenom.toLowerCase().contains(query))
+            .toList();
+
     return BoShell(
       activeNav: 'comptes',
       child: Column(
@@ -56,6 +78,8 @@ class BoComptesScreen extends StatelessWidget {
               SizedBox(
                 width: 220,
                 child: TextField(
+                  controller: _searchController,
+                  onChanged: (value) => setState(() => _search = value),
                   decoration: const InputDecoration(
                     hintText: 'Rechercher...',
                     prefixIcon: Icon(Icons.search, size: 20),
@@ -67,11 +91,11 @@ class BoComptesScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 18),
-          if (comptesState.installateurs.isEmpty)
+          if (installateurs.isEmpty)
             BoPanel(
               child: EmptyState(
                 icon: Icons.groups_outlined,
-                message: 'Aucun compte installateur pour l\'instant.',
+                message: query.isEmpty ? 'Aucun compte installateur pour l\'instant.' : 'Aucun résultat pour « ${_search.trim()} ».',
               ),
             )
           else
@@ -89,7 +113,7 @@ class BoComptesScreen extends StatelessWidget {
                 child: Column(
                   children: [
                     _headerRow(),
-                    for (final (i, u) in comptesState.installateurs.indexed) _dataRow(context, u, chantiers, comptesState, i),
+                    for (final (i, u) in installateurs.indexed) _dataRow(context, u, chantiers, comptesState, i),
                   ],
                 ),
               ),
@@ -474,9 +498,18 @@ class BoComptesScreen extends StatelessWidget {
         children: [
           Expanded(
             flex: 3,
-            child: Text(
-              u.fullName,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, decoration: TextDecoration.underline),
+            child: Row(
+              children: [
+                UserAvatar(user: u, radius: 14),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    u.fullName,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, decoration: TextDecoration.underline),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ),
           ),
           Expanded(flex: 3, child: Text(statutLabel, style: const TextStyle(fontSize: 12.5, color: AppColors.acier))),
