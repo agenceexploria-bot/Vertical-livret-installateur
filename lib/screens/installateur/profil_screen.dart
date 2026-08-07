@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -163,13 +164,18 @@ class ProfilScreen extends StatelessWidget {
           children: [
             const Text('Session et sécurité', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.encre)),
             const Divider(height: 24, color: AppColors.lignes),
-            _infoRow(
-              Icons.schedule_outlined,
-              'Session',
-              offlineExpiry != null ? 'Valable hors-ligne jusqu\'au ${DateFormat('dd/MM/yyyy').format(offlineExpiry)}' : '—',
-              isLast: true,
-            ),
-            const SizedBox(height: 20),
+            // Le mode hors-ligne (cache Drift) n'existe que sur l'app mobile
+            // installateur — sur le Web, cette mention n'a pas de sens et ne
+            // doit jamais s'afficher, quelle que soit la valeur d'offlineExpiry.
+            if (!kIsWeb) ...[
+              _infoRow(
+                Icons.schedule_outlined,
+                'Session',
+                offlineExpiry != null ? 'Valable hors-ligne jusqu\'au ${DateFormat('dd/MM/yyyy').format(offlineExpiry)}' : '—',
+                isLast: true,
+              ),
+              const SizedBox(height: 20),
+            ],
             ElevatedButton.icon(
               onPressed: () => context.read<AuthState>().logout(),
               icon: const Icon(Icons.logout, size: 20),
