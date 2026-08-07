@@ -46,16 +46,21 @@ class ProfilScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildInfoCard(context, user, offlineExpiry),
-            const SizedBox(height: 32),
-            Text('Habilitations', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 12),
-            if (user != null) ...user.habilitations.map((h) => _buildHabilitationItem(h)),
-            const SizedBox(height: 24),
-            OutlinedButton.icon(
-              onPressed: () => _openAddCertificatDialog(context),
-              icon: const Icon(Icons.add),
-              label: const Text('Ajouter un certificat'),
-            ),
+            // Les certificats (habilitations électriques, CACES...) ne
+            // concernent que les installateurs sur le terrain — inutile pour
+            // les autres rôles, qui n'en ont jamais.
+            if (user?.role == UserRole.installateur) ...[
+              const SizedBox(height: 32),
+              Text('Habilitations', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 12),
+              ...user!.habilitations.map((h) => _buildHabilitationItem(h)),
+              const SizedBox(height: 24),
+              OutlinedButton.icon(
+                onPressed: () => _openAddCertificatDialog(context),
+                icon: const Icon(Icons.add),
+                label: const Text('Ajouter un certificat'),
+              ),
+            ],
             const SizedBox(height: 48),
             Center(
               child: TextButton(
@@ -100,8 +105,13 @@ class ProfilScreen extends StatelessWidget {
                 _buildInfosCardDesktop(context, user),
                 const SizedBox(height: 20),
                 _buildSecuriteCardDesktop(context, offlineExpiry),
-                const SizedBox(height: 20),
-                _buildHabilitationsCardDesktop(context, user),
+                // Les certificats (habilitations électriques, CACES...) ne
+                // concernent que les installateurs sur le terrain — ne monte
+                // pas cette carte du tout pour les autres rôles.
+                if (user?.role == UserRole.installateur) ...[
+                  const SizedBox(height: 20),
+                  _buildHabilitationsCardDesktop(context, user),
+                ],
                 const SizedBox(height: 32),
                 const Center(
                   child: Text(
