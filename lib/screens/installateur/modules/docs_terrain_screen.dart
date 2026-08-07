@@ -8,6 +8,7 @@ import '../../../core/theme.dart';
 import '../../../core/widgets/glass_app_bar.dart';
 import '../../../core/widgets/responsive_layout.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../data/api_client.dart';
 import '../../../state/auth_state.dart';
 import '../../../state/chantier_state.dart';
 import '../../../state/network_state.dart';
@@ -228,12 +229,27 @@ class _DocsTerrainScreenState extends State<DocsTerrainScreen> {
             style: TextButton.styleFrom(foregroundColor: AppColors.rouge),
             onPressed: () {
               Navigator.pop(dialogContext);
-              chantierState.deleteDocument(reference, d.id!);
+              _handleAction(context, () => chantierState.deleteDocument(reference, d.id!));
             },
             child: const Text('Supprimer définitivement'),
           ),
         ],
       ),
     );
+  }
+
+  /// Affiche un message clair en cas d'échec d'une action serveur — sans ça,
+  /// un clic qui échoue (droits insuffisants, réseau...) ne montrait
+  /// strictement rien à l'utilisateur (exception non attendue, silencieuse).
+  Future<void> _handleAction(BuildContext context, Future<void> Function() action) async {
+    try {
+      await action();
+    } on ApiException catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Une erreur est survenue. Réessayez.')));
+    }
   }
 }

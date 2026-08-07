@@ -10,6 +10,7 @@ import '../../core/widgets/glass_app_bar.dart';
 import '../../core/widgets/renseigner_pv_dialog.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../core/widgets/status_indicator.dart';
+import '../../data/api_client.dart';
 import '../../data/models/chantier.dart';
 import '../../data/models/document_chantier.dart';
 import '../../data/models/user.dart';
@@ -214,7 +215,7 @@ class CaChantierDetailScreen extends StatelessWidget {
             style: TextButton.styleFrom(foregroundColor: AppColors.rouge),
             onPressed: () {
               Navigator.pop(dialogContext);
-              context.read<ChantierState>().deleteDocumentChantier(chantier.reference, d.id);
+              _handleAction(context, () => context.read<ChantierState>().deleteDocumentChantier(chantier.reference, d.id));
             },
             child: const Text('Supprimer définitivement'),
           ),
@@ -277,6 +278,21 @@ class CaChantierDetailScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// Affiche un message clair en cas d'échec d'une action serveur — sans ça,
+  /// un clic qui échoue (droits insuffisants, réseau...) ne montrait
+  /// strictement rien à l'utilisateur (exception non attendue, silencieuse).
+  Future<void> _handleAction(BuildContext context, Future<void> Function() action) async {
+    try {
+      await action();
+    } on ApiException catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Une erreur est survenue. Réessayez.')));
+    }
   }
 
   Future<void> _appeler(BuildContext context, User u) async {
