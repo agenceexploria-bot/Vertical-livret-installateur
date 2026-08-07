@@ -118,12 +118,6 @@ class ProfilScreen extends StatelessWidget {
   }
 
   Widget _buildInfosCardDesktop(BuildContext context, User? user) {
-    final statutLabel = user == null
-        ? '—'
-        : user.status == UserStatus.sousTraitant
-            ? 'Sous-traitant${user.societe != null ? ' · ${user.societe}' : ''}'
-            : 'Salarié Vertical';
-
     return Card(
       elevation: 2,
       color: AppColors.blanc,
@@ -147,7 +141,8 @@ class ProfilScreen extends StatelessWidget {
             ),
             const Divider(height: 24, color: AppColors.lignes),
             _infoRow(Icons.person_outline, 'Nom', user?.fullName ?? '—'),
-            _infoRow(Icons.badge_outlined, 'Statut', statutLabel),
+            _infoRow(Icons.badge_outlined, 'Rôle', user != null ? _roleLabel(user.role) : '—'),
+            if (user?.status != null) _infoRow(Icons.work_outline, 'Type', _statutLabel(user!)),
             _infoRow(Icons.phone_outlined, 'Mobile', user?.mobile ?? '—'),
             _infoRow(Icons.email_outlined, 'Email', user?.email ?? '—', isLast: true),
           ],
@@ -221,6 +216,33 @@ class ProfilScreen extends StatelessWidget {
     );
   }
 
+  /// Rôle réel de l'utilisateur connecté (`user.role`) — jamais déduit ni
+  /// approximé à partir d'autres champs, contrairement à l'ancien texte
+  /// "Salarié Vertical" affiché pour tout le monde peu importe le rôle.
+  String _roleLabel(UserRole role) {
+    switch (role) {
+      case UserRole.installateur:
+        return 'Installateur';
+      case UserRole.chargeAffaires:
+        return 'Chargé d\'Affaires';
+      case UserRole.qualite:
+        return 'Qualité';
+      case UserRole.direction:
+        return 'Direction';
+      case UserRole.admin:
+        return 'Administrateur';
+    }
+  }
+
+  /// Salarié/Sous-traitant (`user.status`) — distinct du rôle : un CA ou un
+  /// Admin n'a pas ce champ renseigné (nullable), seuls les appelants
+  /// vérifient `user.status != null` avant d'appeler cette méthode.
+  String _statutLabel(User user) {
+    return user.status == UserStatus.sousTraitant
+        ? 'Sous-traitant${user.societe != null ? ' · ${user.societe}' : ''}'
+        : 'Salarié';
+  }
+
   /// Ligne icône + libellé + valeur des cartes desktop — [isLast] omet le
   /// séparateur bas (dernière ligne d'une carte).
   Widget _infoRow(IconData icon, String label, String value, {bool isLast = false}) {
@@ -272,10 +294,11 @@ class ProfilScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 4),
-          Text(user?.societe ?? 'Salarié Vertical', style: const TextStyle(color: AppColors.acierClair)),
+          Text(user != null ? _roleLabel(user.role) : '-', style: const TextStyle(color: AppColors.acierClair)),
           const SizedBox(height: 16),
           const Divider(color: Colors.white24),
           const SizedBox(height: 16),
+          if (user?.status != null) _buildRow('Type', _statutLabel(user!), true),
           _buildRow('Mobile', user?.mobile ?? '-', true),
           _buildRow('Email', user?.email ?? '-', true),
           _buildRow(
