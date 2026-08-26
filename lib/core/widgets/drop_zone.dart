@@ -5,13 +5,15 @@ import 'package:flutter/material.dart';
 import '../theme.dart';
 
 /// Zone de dépôt de fichiers réutilisable, posée autour d'un bouton/zone
-/// d'import existant — sur Flutter Web, glisser un ou plusieurs fichiers
-/// dessus déclenche [onFilesDropped] (même logique que le sélecteur natif,
-/// juste une autre façon de fournir les fichiers) et met la zone en
-/// surbrillance pendant le survol. Sur mobile (natif), le glisser-déposer
-/// n'a pas de sens — il n'y a pas de fichiers "OS" à faire glisser dans une
-/// app — [child] est alors rendu tel quel, sans aucun comportement ajouté :
-/// seul le bouton caméra/galerie habituel reste disponible.
+/// d'import existant — sur Flutter Web, un contour discret reste visible en
+/// permanence pour signaler que la zone accepte le glisser-déposer, et
+/// glisser un ou plusieurs fichiers dessus déclenche [onFilesDropped] (même
+/// logique que le sélecteur natif, juste une autre façon de fournir les
+/// fichiers) tout en accentuant la surbrillance pendant le survol. Sur
+/// mobile (natif), le glisser-déposer n'a pas de sens — il n'y a pas de
+/// fichiers "OS" à faire glisser dans une app — [child] est alors rendu tel
+/// quel, sans aucun comportement ajouté : seul le bouton caméra/galerie
+/// habituel reste disponible.
 class DropZone extends StatefulWidget {
   final Widget child;
   final ValueChanged<List<XFile>> onFilesDropped;
@@ -44,9 +46,14 @@ class _DropZoneState extends State<DropZone> {
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.all(3),
         decoration: BoxDecoration(
           borderRadius: widget.borderRadius,
-          border: Border.all(color: _isDragging ? AppColors.encre : Colors.transparent, width: 1.5),
+          border: Border.all(
+            color: _isDragging ? AppColors.encre : AppColors.acierClair,
+            width: _isDragging ? 1.5 : 1,
+            style: BorderStyle.solid,
+          ),
           color: _isDragging ? AppColors.encre.withValues(alpha: 0.05) : null,
         ),
         child: widget.child,
