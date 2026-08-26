@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../core/collage_parser.dart';
 import '../../core/theme.dart';
 import '../../data/api_client.dart';
 import '../../data/models/user.dart';
@@ -119,93 +120,18 @@ class _BoNewChantierScreenState extends State<BoNewChantierScreen> {
     );
   }
 
-  // Regex indépendantes par champ plutôt qu'un découpage positionnel par
-  // séparateur : l'ancienne version supposait un format rigide "Client —
-  // Adresse, Ville — Contact Tel" et, dès que l'ERP collé n'utilisait pas
-  // exactement ce séparateur, `split` ne trouvait rien et TOUT le texte
-  // brut finissait dans le champ Client, les autres restant vides. Chaque
-  // champ est maintenant repéré par son propre motif, peu importe l'ordre
-  // ou la ponctuation du texte source.
-  static final _emailRegex = RegExp(r'[\w.+-]+@[\w-]+\.[A-Za-z]{2,}');
-  static final _telephoneRegex = RegExp(r'(?:\+33[\s.-]?|0)[1-9](?:[\s.-]?\d{2}){4}');
-  static final _villeRegex = RegExp(
-    r"\d{5}\s+[A-Za-zÀ-ÖØ-öø-ÿ][\wÀ-ÖØ-öø-ÿ'-]*(?:\s[A-Za-zÀ-ÖØ-öø-ÿ][\wÀ-ÖØ-öø-ÿ'-]*)*",
-  );
-  static final _contactLabelRegex = RegExp(r'(?:contact|resp\.?(?:\s*site)?)\s*:?\s*', caseSensitive: false);
-  static final _civiliteRegex = RegExp(r"(?:M\.|Mme|Mlle)\s+[A-ZÀ-Ö][\wÀ-ÖØ-öø-ÿ'-]*");
-  static final _clientLabelRegex = RegExp(r'client\s*:?\s*', caseSensitive: false);
-  static final _separatorSplitRegex = RegExp(r'[\n,;]|[\s]?[-–—][\s]?');
-  static final _edgeSeparatorsRegex = RegExp(r'^[\s,;\-–—:]+|[\s,;\-–—:]+$');
-
   void _parseCollage() {
-    final cleaned = _collageController.text.replaceAll('«', '').replaceAll('»', '').trim();
-    if (cleaned.isEmpty) return;
+    if (_collageController.text.trim().isEmpty) return;
+    final parsed = CollageParser.parse(_collageController.text);
 
-    final email = _emailRegex.firstMatch(cleaned)?.group(0);
-    final telephone = _telephoneRegex.firstMatch(cleaned)?.group(0)?.trim();
-    final ville = _villeRegex.firstMatch(cleaned)?.group(0);
-    final client = _extractClient(cleaned);
-    final contact = _extractContact(cleaned, telephone: telephone);
-    final adresse = _extractAdresse(cleaned, client: client, ville: ville);
-
-    if (client != null && client.isNotEmpty) _clientController.text = client;
-    if (adresse != null && adresse.isNotEmpty) _adresseController.text = adresse;
-    if (ville != null) _villeController.text = ville;
-    if (contact != null && contact.isNotEmpty) _contactNomController.text = contact;
-    if (telephone != null) _contactTelController.text = telephone;
-    if (email != null) _contactEmailController.text = email;
+    if (parsed.client != null && parsed.client!.isNotEmpty) _clientController.text = parsed.client!;
+    if (parsed.adresse != null && parsed.adresse!.isNotEmpty) _adresseController.text = parsed.adresse!;
+    if (parsed.ville != null) _villeController.text = parsed.ville!;
+    if (parsed.contact != null && parsed.contact!.isNotEmpty) _contactNomController.text = parsed.contact!;
+    if (parsed.telephone != null) _contactTelController.text = parsed.telephone!;
+    if (parsed.email != null) _contactEmailController.text = parsed.email!;
 
     setState(() => _collageValide = true);
-  }
-
-  /// Société/client — après "Client :" si présent, sinon la première ligne
-  /// (jusqu'au premier séparateur).
-  String? _extractClient(String text) {
-    final labelMatch = _clientLabelRegex.firstMatch(text);
-    final source = labelMatch != null ? text.substring(labelMatch.end) : text;
-    final firstSegment = source.split(_separatorSplitRegex).first.trim();
-    return firstSegment.isEmpty ? null : firstSegment;
-  }
-
-  /// Nom du contact — après un mot-clé ("Contact :", "Resp. site :"...) si
-  /// présent, sinon une civilité isolée ("M.", "Mme", "Mlle") suivie d'un nom.
-  /// Le résultat s'arrête au numéro de téléphone repéré séparément, s'il y en a un.
-  String? _extractContact(String text, {String? telephone}) {
-    String segment;
-    final labelMatch = _contactLabelRegex.firstMatch(text);
-    if (labelMatch != null) {
-      segment = text.substring(labelMatch.end);
-    } else {
-      final civiliteMatch = _civiliteRegex.firstMatch(text);
-      if (civiliteMatch == null) return null;
-      segment = text.substring(civiliteMatch.start);
-    }
-    if (telephone != null) {
-      final telIndex = segment.indexOf(telephone);
-      if (telIndex != -1) segment = segment.substring(0, telIndex);
-    }
-    final firstLine = segment.split(RegExp(r'[\n]|[\s]?[-–—][\s]?')).first;
-    return firstLine.trim().isEmpty ? null : firstLine.trim();
-  }
-
-  /// Adresse — ce qui reste entre la fin du nom client et le début de la
-  /// ville repérée (code postal + nom), une fois les séparateurs de bordure
-  /// retirés. Approche "par soustraction" plutôt que positionnelle : peu
-  /// importe le séparateur utilisé entre les segments.
-  String? _extractAdresse(String text, {String? client, String? ville}) {
-    var start = 0;
-    if (client != null) {
-      final clientIndex = text.indexOf(client);
-      if (clientIndex != -1) start = clientIndex + client.length;
-    }
-    var end = text.length;
-    if (ville != null) {
-      final villeIndex = text.indexOf(ville, start);
-      if (villeIndex != -1) end = villeIndex;
-    }
-    if (start >= end) return null;
-    final segment = text.substring(start, end).replaceAll(_edgeSeparatorsRegex, '');
-    return segment.isEmpty ? null : segment;
   }
 
   Future<void> _creerChantier(BuildContext context) async {
