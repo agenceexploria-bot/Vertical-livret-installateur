@@ -32,7 +32,13 @@ checklistTemplatesRouter.post('/', requireAuth, requireRole('admin'), async (req
     orderBy: { ordre: 'desc' },
   });
   const item = await prisma.checklistTemplateItem.create({
-    data: { ...parsed.data, ordre: (last?.ordre ?? -1) + 1 },
+    data: {
+      type: parsed.data.type,
+      categorie: parsed.data.categorie,
+      libelle: parsed.data.libelle,
+      critique: parsed.data.critique,
+      ordre: (last?.ordre ?? -1) + 1,
+    },
   });
   res.status(201).json({ item });
 });
