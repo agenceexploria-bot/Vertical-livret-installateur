@@ -32,6 +32,7 @@ class _BoNewChantierScreenState extends State<BoNewChantierScreen> {
   final _villeController = TextEditingController();
   final _contactNomController = TextEditingController();
   final _contactTelController = TextEditingController();
+  final _contactEmailController = TextEditingController();
   String? _coordinateurTravauxId;
 
   @override
@@ -59,6 +60,7 @@ class _BoNewChantierScreenState extends State<BoNewChantierScreen> {
     _villeController.dispose();
     _contactNomController.dispose();
     _contactTelController.dispose();
+    _contactEmailController.dispose();
     super.dispose();
   }
 
@@ -117,44 +119,93 @@ class _BoNewChantierScreenState extends State<BoNewChantierScreen> {
     );
   }
 
+  // Regex indépendantes par champ plutôt qu'un découpage positionnel par
+  // séparateur : l'ancienne version supposait un format rigide "Client —
+  // Adresse, Ville — Contact Tel" et, dès que l'ERP collé n'utilisait pas
+  // exactement ce séparateur, `split` ne trouvait rien et TOUT le texte
+  // brut finissait dans le champ Client, les autres restant vides. Chaque
+  // champ est maintenant repéré par son propre motif, peu importe l'ordre
+  // ou la ponctuation du texte source.
+  static final _emailRegex = RegExp(r'[\w.+-]+@[\w-]+\.[A-Za-z]{2,}');
+  static final _telephoneRegex = RegExp(r'(?:\+33[\s.-]?|0)[1-9](?:[\s.-]?\d{2}){4}');
+  static final _villeRegex = RegExp(
+    r"\d{5}\s+[A-Za-zÀ-ÖØ-öø-ÿ][\wÀ-ÖØ-öø-ÿ'-]*(?:\s[A-Za-zÀ-ÖØ-öø-ÿ][\wÀ-ÖØ-öø-ÿ'-]*)*",
+  );
+  static final _contactLabelRegex = RegExp(r'(?:contact|resp\.?(?:\s*site)?)\s*:?\s*', caseSensitive: false);
+  static final _civiliteRegex = RegExp(r"(?:M\.|Mme|Mlle)\s+[A-ZÀ-Ö][\wÀ-ÖØ-öø-ÿ'-]*");
+  static final _clientLabelRegex = RegExp(r'client\s*:?\s*', caseSensitive: false);
+  static final _separatorSplitRegex = RegExp(r'[\n,;]|[\s]?[-–—][\s]?');
+  static final _edgeSeparatorsRegex = RegExp(r'^[\s,;\-–—:]+|[\s,;\-–—:]+$');
+
   void _parseCollage() {
     final cleaned = _collageController.text.replaceAll('«', '').replaceAll('»', '').trim();
     if (cleaned.isEmpty) return;
 
-    // Certains ERP exportent avec un tiret simple (" - ") plutôt que le
-    // tiret cadratin (" — ") de l'exemple ci-dessus — sans cette variante, le
-    // découpage échouait silencieusement et tout le texte collé finissait
-    // dans le champ Client.
-    final parts = cleaned.split(RegExp(r'\s[-–—]\s')).map((p) => p.trim()).where((p) => p.isNotEmpty).toList();
+    final email = _emailRegex.firstMatch(cleaned)?.group(0);
+    final telephone = _telephoneRegex.firstMatch(cleaned)?.group(0)?.trim();
+    final ville = _villeRegex.firstMatch(cleaned)?.group(0);
+    final client = _extractClient(cleaned);
+    final contact = _extractContact(cleaned, telephone: telephone);
+    final adresse = _extractAdresse(cleaned, client: client, ville: ville);
 
-    if (parts.isNotEmpty) _clientController.text = parts[0];
-
-    if (parts.length > 1) {
-      final addressPart = parts[1];
-      final lastComma = addressPart.lastIndexOf(',');
-      if (lastComma != -1) {
-        _adresseController.text = addressPart.substring(0, lastComma).trim();
-        _villeController.text = addressPart.substring(lastComma + 1).trim();
-      } else {
-        _adresseController.text = addressPart;
-      }
-    }
-
-    if (parts.length > 2) {
-      final contactPart = parts[2];
-      final phoneMatch = RegExp(r'0\d[\s.-]?\d{2}[\s.-]?\d{2}[\s.-]?\d{2}[\s.-]?\d{2}').firstMatch(contactPart);
-      if (phoneMatch != null) {
-        _contactTelController.text = phoneMatch.group(0)!.trim();
-        _contactNomController.text = contactPart
-            .replaceFirst(phoneMatch.group(0)!, '')
-            .replaceFirst(RegExp(r'^resp\.?\s*site\s*:?\s*', caseSensitive: false), '')
-            .trim();
-      } else {
-        _contactNomController.text = contactPart;
-      }
-    }
+    if (client != null && client.isNotEmpty) _clientController.text = client;
+    if (adresse != null && adresse.isNotEmpty) _adresseController.text = adresse;
+    if (ville != null) _villeController.text = ville;
+    if (contact != null && contact.isNotEmpty) _contactNomController.text = contact;
+    if (telephone != null) _contactTelController.text = telephone;
+    if (email != null) _contactEmailController.text = email;
 
     setState(() => _collageValide = true);
+  }
+
+  /// Société/client — après "Client :" si présent, sinon la première ligne
+  /// (jusqu'au premier séparateur).
+  String? _extractClient(String text) {
+    final labelMatch = _clientLabelRegex.firstMatch(text);
+    final source = labelMatch != null ? text.substring(labelMatch.end) : text;
+    final firstSegment = source.split(_separatorSplitRegex).first.trim();
+    return firstSegment.isEmpty ? null : firstSegment;
+  }
+
+  /// Nom du contact — après un mot-clé ("Contact :", "Resp. site :"...) si
+  /// présent, sinon une civilité isolée ("M.", "Mme", "Mlle") suivie d'un nom.
+  /// Le résultat s'arrête au numéro de téléphone repéré séparément, s'il y en a un.
+  String? _extractContact(String text, {String? telephone}) {
+    String segment;
+    final labelMatch = _contactLabelRegex.firstMatch(text);
+    if (labelMatch != null) {
+      segment = text.substring(labelMatch.end);
+    } else {
+      final civiliteMatch = _civiliteRegex.firstMatch(text);
+      if (civiliteMatch == null) return null;
+      segment = text.substring(civiliteMatch.start);
+    }
+    if (telephone != null) {
+      final telIndex = segment.indexOf(telephone);
+      if (telIndex != -1) segment = segment.substring(0, telIndex);
+    }
+    final firstLine = segment.split(RegExp(r'[\n]|[\s]?[-–—][\s]?')).first;
+    return firstLine.trim().isEmpty ? null : firstLine.trim();
+  }
+
+  /// Adresse — ce qui reste entre la fin du nom client et le début de la
+  /// ville repérée (code postal + nom), une fois les séparateurs de bordure
+  /// retirés. Approche "par soustraction" plutôt que positionnelle : peu
+  /// importe le séparateur utilisé entre les segments.
+  String? _extractAdresse(String text, {String? client, String? ville}) {
+    var start = 0;
+    if (client != null) {
+      final clientIndex = text.indexOf(client);
+      if (clientIndex != -1) start = clientIndex + client.length;
+    }
+    var end = text.length;
+    if (ville != null) {
+      final villeIndex = text.indexOf(ville, start);
+      if (villeIndex != -1) end = villeIndex;
+    }
+    if (start >= end) return null;
+    final segment = text.substring(start, end).replaceAll(_edgeSeparatorsRegex, '');
+    return segment.isEmpty ? null : segment;
   }
 
   Future<void> _creerChantier(BuildContext context) async {
@@ -199,6 +250,7 @@ class _BoNewChantierScreenState extends State<BoNewChantierScreen> {
       'niveaux': 2,
       'referenceAffaire': reference,
       'coordinateurTravauxId': ?_coordinateurTravauxId,
+      'contactEmail': ?(_contactEmailController.text.trim().isEmpty ? null : _contactEmailController.text.trim()),
     };
 
     final router = GoRouter.of(context);
@@ -316,6 +368,7 @@ class _BoNewChantierScreenState extends State<BoNewChantierScreen> {
           _editableKv('Ville', _villeController),
           _editableKv('Contact', _contactNomController),
           _editableKv('Téléphone', _contactTelController),
+          _editableKv('Email', _contactEmailController),
           const SizedBox(height: 8),
           Row(
             children: [

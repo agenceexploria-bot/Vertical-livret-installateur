@@ -1,7 +1,9 @@
+import 'package:cross_file/cross_file.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../document_capture.dart';
 import '../theme.dart';
+import 'drop_zone.dart';
 import '../../data/api_client.dart';
 import '../../data/models/chantier.dart';
 import '../../state/chantier_state.dart';
@@ -27,6 +29,27 @@ class _RenseignerPvDialogState extends State<RenseignerPvDialog> {
 
   Future<void> _importerPdf() async {
     final picked = await DocumentCapture.pickFile(allowedExtensions: ['pdf']);
+    if (picked == null) return;
+    setState(() {
+      _pdfDataUrl = picked.dataUrl;
+      _pdfName = picked.fileName;
+    });
+  }
+
+  /// Glisser-déposer (Web) — même logique que [_importerPdf] ; seul un PDF
+  /// est accepté ici (gabarit PV), le premier fichier déposé qui en est un.
+  Future<void> _deposerPdf(List<XFile> files) async {
+    final pdf = files.firstWhere(
+      (f) => f.name.toLowerCase().endsWith('.pdf'),
+      orElse: () => files.first,
+    );
+    if (!pdf.name.toLowerCase().endsWith('.pdf')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Seul un fichier PDF est accepté pour le PV.')),
+      );
+      return;
+    }
+    final picked = (await DocumentCapture.fromDroppedFiles([pdf])).firstOrNull;
     if (picked == null) return;
     setState(() {
       _pdfDataUrl = picked.dataUrl;
@@ -68,21 +91,24 @@ class _RenseignerPvDialogState extends State<RenseignerPvDialog> {
               style: const TextStyle(fontSize: 11.5, color: AppColors.acier),
             ),
             const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _pdfName ?? 'Aucun PDF importé.',
-                    style: const TextStyle(fontSize: 11.5, color: AppColors.acier),
-                    overflow: TextOverflow.ellipsis,
+            DropZone(
+              onFilesDropped: _deposerPdf,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _pdfName ?? 'Aucun PDF importé.',
+                      style: const TextStyle(fontSize: 11.5, color: AppColors.acier),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                ),
-                TextButton.icon(
-                  onPressed: _importerPdf,
-                  icon: const Icon(Icons.upload_file_outlined, size: 18),
-                  label: const Text('Importer un PDF'),
-                ),
-              ],
+                  TextButton.icon(
+                    onPressed: _importerPdf,
+                    icon: const Icon(Icons.upload_file_outlined, size: 18),
+                    label: const Text('Importer un PDF'),
+                  ),
+                ],
+              ),
             ),
           ],
         ),

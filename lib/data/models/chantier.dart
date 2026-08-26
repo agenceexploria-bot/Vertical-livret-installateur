@@ -39,6 +39,7 @@ class Chantier {
   final DateTime dateFin;
   final String contactNom;
   final String contactTel;
+  final String? contactEmail;
   final String horaires;
   final List<String> consignes;
   final String typeMonteCharge;
@@ -83,6 +84,7 @@ class Chantier {
     required this.dateFin,
     required this.contactNom,
     required this.contactTel,
+    this.contactEmail,
     required this.horaires,
     required this.consignes,
     required this.typeMonteCharge,
@@ -137,6 +139,7 @@ class Chantier {
         dateFin: DateTime.parse(json['dateFin'] as String),
         contactNom: json['contactNom'] as String,
         contactTel: json['contactTel'] as String,
+        contactEmail: json['contactEmail'] as String?,
         horaires: json['horaires'] as String,
         consignes: List<String>.from(json['consignes'] as List? ?? []),
         typeMonteCharge: json['typeMonteCharge'] as String,
@@ -182,6 +185,7 @@ class Chantier {
         'dateFin': dateFin.toIso8601String(),
         'contactNom': contactNom,
         'contactTel': contactTel,
+        'contactEmail': contactEmail,
         'horaires': horaires,
         'consignes': consignes,
         'typeMonteCharge': typeMonteCharge,

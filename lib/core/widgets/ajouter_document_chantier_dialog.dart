@@ -1,10 +1,9 @@
-import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'dart:convert';
 import '../document_capture.dart';
 import '../theme.dart';
+import 'drop_zone.dart';
 import '../../data/api_client.dart';
 import '../../data/models/document_chantier.dart';
 import '../../state/chantier_state.dart';
@@ -28,7 +27,6 @@ class _AjouterDocumentChantierDialogState extends State<AjouterDocumentChantierD
   TypeDocumentChantier _type = TypeDocumentChantier.ficheChantier;
   final List<PickedDocument> _picked = [];
   bool _isSubmitting = false;
-  bool _isDragging = false;
 
   @override
   void dispose() {
@@ -42,42 +40,6 @@ class _AjouterDocumentChantierDialogState extends State<AjouterDocumentChantierD
     final picked = await DocumentCapture.pickMultipleFiles();
     if (picked.isEmpty) return;
     setState(() => _picked.addAll(picked));
-  }
-
-  /// Glisser-déposer (Web uniquement, voir [DropTarget]) — [details.files]
-  /// fournit directement les octets, contrairement au sélecteur natif.
-  Future<void> _onFilesDropped(DropDoneDetails details) async {
-    final dropped = <PickedDocument>[];
-    for (final file in details.files) {
-      final bytes = await file.readAsBytes();
-      final mime = _guessMimeType(file.name);
-      if (mime == null) continue;
-      dropped.add(PickedDocument(dataUrl: 'data:$mime;base64,${base64Encode(bytes)}', fileName: file.name));
-    }
-    if (dropped.isEmpty) return;
-    setState(() {
-      _isDragging = false;
-      _picked.addAll(dropped);
-    });
-  }
-
-  String? _guessMimeType(String fileName) {
-    final ext = fileName.split('.').last.toLowerCase();
-    switch (ext) {
-      case 'pdf':
-        return 'application/pdf';
-      case 'jpg':
-      case 'jpeg':
-        return 'image/jpeg';
-      case 'png':
-        return 'image/png';
-      case 'mp4':
-        return 'video/mp4';
-      case 'webm':
-        return 'video/webm';
-      default:
-        return null;
-    }
   }
 
   Future<void> _envoyer() async {
@@ -162,33 +124,24 @@ class _AjouterDocumentChantierDialogState extends State<AjouterDocumentChantierD
   }
 
   /// Le glisser-déposer n'a de sens que sur le back-office Web — sur mobile,
-  /// seul le bouton de sélection est proposé (voir [kIsWeb]).
+  /// seul le bouton de sélection est proposé (voir [DropZone]/[kIsWeb]).
   Widget _buildDropZone() {
-    final content = OutlinedButton.icon(
-      onPressed: _choisirFichiers,
-      icon: const Icon(Icons.attach_file),
-      label: Text(kIsWeb ? 'Choisir des fichiers ou les glisser ici' : 'Choisir un ou plusieurs fichiers'),
-    );
-    if (!kIsWeb) return content;
-
-    return DropTarget(
-      onDragEntered: (_) => setState(() => _isDragging = true),
-      onDragExited: (_) => setState(() => _isDragging = false),
-      onDragDone: _onFilesDropped,
-      child: Container(
+    return DropZone(
+      onFilesDropped: (files) async {
+        final dropped = await DocumentCapture.fromDroppedFiles(files);
+        if (dropped.isEmpty) return;
+        setState(() => _picked.addAll(dropped));
+      },
+      child: SizedBox(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: _isDragging ? AppColors.encre : Colors.transparent,
-            width: 1.5,
-            style: _isDragging ? BorderStyle.solid : BorderStyle.none,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: OutlinedButton.icon(
+            onPressed: _choisirFichiers,
+            icon: const Icon(Icons.attach_file),
+            label: Text(kIsWeb ? 'Choisir des fichiers ou les glisser ici' : 'Choisir un ou plusieurs fichiers'),
           ),
-          color: _isDragging ? AppColors.encre.withValues(alpha: 0.05) : null,
         ),
-        alignment: Alignment.center,
-        child: content,
       ),
     );
   }

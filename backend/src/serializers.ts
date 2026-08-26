@@ -93,6 +93,7 @@ export function serializeChantier(
     dateFin: c.dateFin,
     contactNom: c.contactNom,
     contactTel: c.contactTel,
+    contactEmail: c.contactEmail,
     horaires: c.horaires,
     consignes: JSON.parse(c.consignes) as string[],
     typeMonteCharge: c.typeMonteCharge,

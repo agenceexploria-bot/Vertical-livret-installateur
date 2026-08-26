@@ -90,6 +90,7 @@ model Chantier {
   dateFin           DateTime
   contactNom        String
   contactTel        String
+  contactEmail      String?
   horaires          String
   consignes         String   // JSON-encoded string list
   typeMonteCharge   String

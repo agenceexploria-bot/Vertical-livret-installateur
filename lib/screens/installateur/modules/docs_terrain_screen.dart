@@ -1,3 +1,4 @@
+import 'package:cross_file/cross_file.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +9,7 @@ import '../../../core/theme.dart';
 import '../../../core/widgets/glass_app_bar.dart';
 import '../../../core/widgets/responsive_layout.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/drop_zone.dart';
 import '../../../data/api_client.dart';
 import '../../../state/auth_state.dart';
 import '../../../state/chantier_state.dart';
@@ -56,10 +58,13 @@ class _DocsTerrainScreenState extends State<DocsTerrainScreen> {
           const SizedBox(height: 24),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: ElevatedButton.icon(
-              onPressed: _selectedCategory == null || _isCapturing ? null : () => _addDocument(context),
-              icon: const Icon(Icons.add),
-              label: const Text('Ajouter un document (photo ou PDF)'),
+            child: DropZone(
+              onFilesDropped: (files) => _handleDroppedFiles(context, files),
+              child: ElevatedButton.icon(
+                onPressed: _selectedCategory == null || _isCapturing ? null : () => _addDocument(context),
+                icon: const Icon(Icons.add),
+                label: const Text('Ajouter un document (photo ou PDF)'),
+              ),
             ),
           ),
           if (_isCapturing) ...[
@@ -158,6 +163,59 @@ class _DocsTerrainScreenState extends State<DocsTerrainScreen> {
       file: picked.dataUrl,
       auteurName: auteur,
     );
+
+    if (!context.mounted) return;
+    if (!isOnline) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Hors-ligne : le document sera envoyé au retour du réseau.')),
+      );
+    }
+    setState(() {
+      _selectedCategory = null;
+      _isCapturing = false;
+    });
+  }
+
+  /// Glisser-déposer (Web) — même logique que [_addDocument], juste une autre
+  /// façon de fournir le(s) fichier(s) ; nécessite qu'une catégorie soit déjà
+  /// choisie, comme pour le bouton.
+  Future<void> _handleDroppedFiles(BuildContext context, List<XFile> files) async {
+    final categorie = _selectedCategory;
+    if (categorie == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Choisissez une catégorie avant de déposer un document.')),
+      );
+      return;
+    }
+    if (categorie == CategorieDocument.habilitation) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Les habilitations se déposent sur votre profil, une seule fois.')),
+      );
+      return;
+    }
+
+    setState(() => _isCapturing = true);
+    final picked = await DocumentCapture.fromDroppedFiles(files);
+    if (!context.mounted) return;
+    if (picked.isEmpty) {
+      setState(() => _isCapturing = false);
+      return;
+    }
+
+    final isOnline = context.read<NetworkState>().isOnline;
+    final chantierState = context.read<ChantierState>();
+    final reference = chantierState.currentChantier!.reference;
+    final auteur = context.read<AuthState>().currentUser?.fullName;
+
+    for (final doc in picked) {
+      await chantierState.addDocument(
+        reference,
+        titre: doc.fileName,
+        categorie: categorie.name,
+        file: doc.dataUrl,
+        auteurName: auteur,
+      );
+    }
 
     if (!context.mounted) return;
     if (!isOnline) {

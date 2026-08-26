@@ -1,3 +1,4 @@
+import 'package:cross_file/cross_file.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -6,6 +7,7 @@ import '../../../core/photo_capture.dart';
 import '../../../core/widgets/glass_app_bar.dart';
 import '../../../core/widgets/responsive_layout.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/drop_zone.dart';
 import '../../../state/auth_state.dart';
 import '../../../state/chantier_state.dart';
 import '../../../data/models/point_controle.dart';
@@ -105,44 +107,47 @@ class _PointCardState extends State<_PointCard> {
               ),
             ),
           const SizedBox(height: 12),
-          GestureDetector(
-            onTap: _isCapturing ? null : () => _prendrePhoto(context),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-              decoration: BoxDecoration(
-                color: point.photoPath != null ? AppColors.vert.withValues(alpha: 0.1) : AppColors.orange.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(9),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.camera_alt,
-                    size: 16,
-                    color: point.photoPath != null
-                        ? AppColors.vert
-                        : point.status == PointStatus.nonConforme
-                            ? AppColors.rouge
-                            : AppColors.orange),
-                  const SizedBox(width: 8),
-                  Text(
-                    _isCapturing
-                        ? 'Capture en cours...'
-                        : point.photoPath != null
-                            ? 'Photo jointe — reprendre'
-                            : point.status == PointStatus.nonConforme
-                                ? 'Photo obligatoire (anomalie)'
-                                : 'Photo (facultative) — appuyer',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
+          DropZone(
+            onFilesDropped: (files) => _deposerPhoto(context, files),
+            child: GestureDetector(
+              onTap: _isCapturing ? null : () => _prendrePhoto(context),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                decoration: BoxDecoration(
+                  color: point.photoPath != null ? AppColors.vert.withValues(alpha: 0.1) : AppColors.orange.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.camera_alt,
+                      size: 16,
                       color: point.photoPath != null
                           ? AppColors.vert
                           : point.status == PointStatus.nonConforme
                               ? AppColors.rouge
-                              : AppColors.orange,
+                              : AppColors.orange),
+                    const SizedBox(width: 8),
+                    Text(
+                      _isCapturing
+                          ? 'Capture en cours...'
+                          : point.photoPath != null
+                              ? 'Photo jointe — reprendre'
+                              : point.status == PointStatus.nonConforme
+                                  ? 'Photo obligatoire (anomalie)'
+                                  : 'Photo (facultative) — appuyer',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: point.photoPath != null
+                            ? AppColors.vert
+                            : point.status == PointStatus.nonConforme
+                                ? AppColors.rouge
+                                : AppColors.orange,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -188,6 +193,21 @@ class _PointCardState extends State<_PointCard> {
     setState(() => _isCapturing = true);
     try {
       final photo = await PhotoCapture.captureCompressed(context);
+      if (photo == null || !context.mounted) return;
+      await context.read<ChantierState>().updatePoint(widget.reference, widget.point.id, photo: photo);
+    } finally {
+      if (mounted) setState(() => _isCapturing = false);
+    }
+  }
+
+  /// Glisser-déposer (Web) — même logique que [_prendrePhoto], juste une
+  /// autre façon de fournir le fichier ; un point ne prend qu'une seule
+  /// photo, donc seul le premier fichier déposé est retenu.
+  Future<void> _deposerPhoto(BuildContext context, List<XFile> files) async {
+    setState(() => _isCapturing = true);
+    try {
+      final bytes = await files.first.readAsBytes();
+      final photo = PhotoCapture.fromDroppedBytes(bytes);
       if (photo == null || !context.mounted) return;
       await context.read<ChantierState>().updatePoint(widget.reference, widget.point.id, photo: photo);
     } finally {

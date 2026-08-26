@@ -26,6 +26,7 @@ class _CtEditChantierScreenState extends State<CtEditChantierScreen> {
   final _villeController = TextEditingController();
   final _contactNomController = TextEditingController();
   final _contactTelController = TextEditingController();
+  final _contactEmailController = TextEditingController();
   final _horairesController = TextEditingController();
   final _typeMonteChargeController = TextEditingController();
   final _capaciteController = TextEditingController();
@@ -43,6 +44,7 @@ class _CtEditChantierScreenState extends State<CtEditChantierScreen> {
       _villeController.text = chantier.ville;
       _contactNomController.text = chantier.contactNom;
       _contactTelController.text = chantier.contactTel;
+      _contactEmailController.text = chantier.contactEmail ?? '';
       _horairesController.text = chantier.horaires;
       _typeMonteChargeController.text = chantier.typeMonteCharge;
       _capaciteController.text = chantier.capacite;
@@ -57,6 +59,7 @@ class _CtEditChantierScreenState extends State<CtEditChantierScreen> {
     _villeController.dispose();
     _contactNomController.dispose();
     _contactTelController.dispose();
+    _contactEmailController.dispose();
     _horairesController.dispose();
     _typeMonteChargeController.dispose();
     _capaciteController.dispose();
@@ -73,6 +76,7 @@ class _CtEditChantierScreenState extends State<CtEditChantierScreen> {
         'ville': _villeController.text.trim(),
         'contactNom': _contactNomController.text.trim(),
         'contactTel': _contactTelController.text.trim(),
+        if (_contactEmailController.text.trim().isNotEmpty) 'contactEmail': _contactEmailController.text.trim(),
         'horaires': _horairesController.text.trim(),
         'typeMonteCharge': _typeMonteChargeController.text.trim(),
         'capacite': _capaciteController.text.trim(),
@@ -116,6 +120,8 @@ class _CtEditChantierScreenState extends State<CtEditChantierScreen> {
           TextField(controller: _contactNomController, decoration: const InputDecoration(labelText: 'Contact — nom')),
           const SizedBox(height: 12),
           TextField(controller: _contactTelController, decoration: const InputDecoration(labelText: 'Contact — téléphone')),
+          const SizedBox(height: 12),
+          TextField(controller: _contactEmailController, decoration: const InputDecoration(labelText: 'Contact — email')),
           const SizedBox(height: 12),
           TextField(controller: _horairesController, decoration: const InputDecoration(labelText: 'Horaires')),
           const SizedBox(height: 12),

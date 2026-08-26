@@ -69,7 +69,12 @@ class CtChantierDetailScreen extends StatelessWidget {
                 const Divider(),
                 const SizedBox(height: 12),
                 _kv('Pose', '${DateFormat('dd/MM').format(chantier.dateDebut)} au ${DateFormat('dd/MM').format(chantier.dateFin)} · ${chantier.horaires}'),
-                _kv('Contact', '${chantier.contactNom} · ${chantier.contactTel}'),
+                _kv(
+                  'Contact',
+                  chantier.contactEmail != null
+                      ? '${chantier.contactNom} · ${chantier.contactTel} · ${chantier.contactEmail}'
+                      : '${chantier.contactNom} · ${chantier.contactTel}',
+                ),
                 _kv('Matériel', '${chantier.typeMonteCharge} · ${chantier.capacite} · ${chantier.niveaux} niveau(x)'),
                 _kv('Réf. affaire ERP', chantier.referenceAffaire),
               ],

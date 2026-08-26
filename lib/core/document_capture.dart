@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
@@ -29,24 +30,46 @@ class DocumentCapture {
   static const int _maxWidth = 1280;
   static const int _jpegQuality = 70;
 
-  static PickedDocument? _toPickedDocument(PlatformFile picked) {
-    final bytes = picked.bytes;
-    if (bytes == null) return null;
-    final extension = (picked.extension ?? '').toLowerCase();
+  /// Cœur commun à toutes les sources de fichiers (sélecteur natif, caméra,
+  /// glisser-déposer) : à partir d'un nom et d'octets bruts, produit le
+  /// [PickedDocument] correspondant — images recompressées, PDF/vidéo
+  /// envoyés tels quels. `null` si le type de fichier n'est pas reconnu.
+  static PickedDocument? _fromBytes(String fileName, Uint8List bytes) {
+    final extension = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
 
     if (extension == 'pdf') {
-      return PickedDocument(dataUrl: 'data:application/pdf;base64,${base64Encode(bytes)}', fileName: picked.name);
+      return PickedDocument(dataUrl: 'data:application/pdf;base64,${base64Encode(bytes)}', fileName: fileName);
     }
     final videoMime = _videoExtensionMimes[extension];
     if (videoMime != null) {
-      return PickedDocument(dataUrl: 'data:$videoMime;base64,${base64Encode(bytes)}', fileName: picked.name);
+      return PickedDocument(dataUrl: 'data:$videoMime;base64,${base64Encode(bytes)}', fileName: fileName);
     }
 
     final decoded = img.decodeImage(bytes);
     if (decoded == null) return null;
     final resized = decoded.width > _maxWidth ? img.copyResize(decoded, width: _maxWidth) : decoded;
     final jpeg = img.encodeJpg(resized, quality: _jpegQuality);
-    return PickedDocument(dataUrl: 'data:image/jpeg;base64,${base64Encode(jpeg)}', fileName: picked.name);
+    return PickedDocument(dataUrl: 'data:image/jpeg;base64,${base64Encode(jpeg)}', fileName: fileName);
+  }
+
+  static PickedDocument? _toPickedDocument(PlatformFile picked) {
+    final bytes = picked.bytes;
+    if (bytes == null) return null;
+    return _fromBytes(picked.name, bytes);
+  }
+
+  /// Convertit les fichiers obtenus par glisser-déposer (voir [DropZone])
+  /// en [PickedDocument] — même traitement qu'un import classique
+  /// (recompression des images, PDF/vidéo envoyés tels quels). Les fichiers
+  /// de type non reconnu sont silencieusement ignorés.
+  static Future<List<PickedDocument>> fromDroppedFiles(List<XFile> files) async {
+    final result = <PickedDocument>[];
+    for (final file in files) {
+      final bytes = await file.readAsBytes();
+      final picked = _fromBytes(file.name, bytes);
+      if (picked != null) result.add(picked);
+    }
+    return result;
   }
 
   static Future<PickedDocument?> pickFile({List<String> allowedExtensions = documentPickerExtensions}) async {

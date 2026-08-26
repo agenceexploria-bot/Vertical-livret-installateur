@@ -84,6 +84,7 @@ class FicheChantierScreen extends StatelessWidget {
             _buildSection(context, 'Contact sur place', [
               _buildRow('Nom', chantier.contactNom),
               _buildRow('Téléphone', chantier.contactTel),
+              if (chantier.contactEmail != null) _buildRow('Email', chantier.contactEmail!),
               const SizedBox(height: 12),
               Row(
                 children: [

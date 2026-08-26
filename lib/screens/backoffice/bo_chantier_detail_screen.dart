@@ -916,6 +916,7 @@ class _ModifierChantierDialogState extends State<_ModifierChantierDialog> {
   late final _villeController = TextEditingController(text: widget.chantier.ville);
   late final _contactNomController = TextEditingController(text: widget.chantier.contactNom);
   late final _contactTelController = TextEditingController(text: widget.chantier.contactTel);
+  late final _contactEmailController = TextEditingController(text: widget.chantier.contactEmail);
   late final _horairesController = TextEditingController(text: widget.chantier.horaires);
   late final _typeMonteChargeController = TextEditingController(text: widget.chantier.typeMonteCharge);
   late final _capaciteController = TextEditingController(text: widget.chantier.capacite);
@@ -929,6 +930,7 @@ class _ModifierChantierDialogState extends State<_ModifierChantierDialog> {
     _villeController.dispose();
     _contactNomController.dispose();
     _contactTelController.dispose();
+    _contactEmailController.dispose();
     _horairesController.dispose();
     _typeMonteChargeController.dispose();
     _capaciteController.dispose();
@@ -945,6 +947,7 @@ class _ModifierChantierDialogState extends State<_ModifierChantierDialog> {
         'ville': _villeController.text.trim(),
         'contactNom': _contactNomController.text.trim(),
         'contactTel': _contactTelController.text.trim(),
+        if (_contactEmailController.text.trim().isNotEmpty) 'contactEmail': _contactEmailController.text.trim(),
         'horaires': _horairesController.text.trim(),
         'typeMonteCharge': _typeMonteChargeController.text.trim(),
         'capacite': _capaciteController.text.trim(),
@@ -981,6 +984,8 @@ class _ModifierChantierDialogState extends State<_ModifierChantierDialog> {
               TextField(controller: _contactNomController, decoration: const InputDecoration(labelText: 'Contact — nom')),
               const SizedBox(height: 10),
               TextField(controller: _contactTelController, decoration: const InputDecoration(labelText: 'Contact — téléphone')),
+              const SizedBox(height: 10),
+              TextField(controller: _contactEmailController, decoration: const InputDecoration(labelText: 'Contact — email')),
               const SizedBox(height: 10),
               TextField(controller: _horairesController, decoration: const InputDecoration(labelText: 'Horaires')),
               const SizedBox(height: 10),

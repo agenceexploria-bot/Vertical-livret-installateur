@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
@@ -46,6 +47,18 @@ class PhotoCapture {
     if (picked == null) return null;
 
     final bytes = await picked.readAsBytes();
+    final decoded = img.decodeImage(bytes);
+    if (decoded == null) return null;
+
+    final resized = decoded.width > _maxWidth ? img.copyResize(decoded, width: _maxWidth) : decoded;
+    final jpeg = img.encodeJpg(resized, quality: _jpegQuality);
+    return 'data:image/jpeg;base64,${base64Encode(jpeg)}';
+  }
+
+  /// Convertit une image obtenue par glisser-déposer (voir [DropZone]) en
+  /// data URL base64 — même compression que [captureCompressed]. `null` si
+  /// le fichier déposé n'est pas une image reconnue.
+  static String? fromDroppedBytes(Uint8List bytes) {
     final decoded = img.decodeImage(bytes);
     if (decoded == null) return null;
 
