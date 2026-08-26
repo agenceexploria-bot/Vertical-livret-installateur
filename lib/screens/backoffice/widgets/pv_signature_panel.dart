@@ -5,7 +5,7 @@ import '../../../core/document_download.dart';
 import '../../../core/theme.dart';
 
 /// Affichage du PV signé (signataire, horodatage, image de signature
-/// cliquable) — partagé entre CA, Qualité et Admin, qui ont tous besoin de
+/// cliquable) — partagé entre CT, Qualité et Admin, qui ont tous besoin de
 /// voir la même preuve de validation avant facturation ou audit.
 class PvSignaturePanel extends StatelessWidget {
   final String? signataire;

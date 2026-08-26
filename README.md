@@ -105,7 +105,7 @@ npm run prisma:seed        # (optionnel) charge les comptes et chantiers de dém
 
 **Créer un compte Admin** : il n'existe aucune route API pour ça (`POST
 /auth/signup` crée toujours un installateur, `POST /auth/signup-interne`
-n'accepte que `chargeAffaires` — les rôles à privilèges ne sont
+n'accepte que `coordinateurTravaux` — les rôles à privilèges ne sont
 volontairement pas self-service). Le seed ci-dessus en crée déjà un
 (`admin@actiwork.fr` / `demodemo`) ; pour un compte Admin isolé sans
 lancer tout le seed, utilisez `backend/prisma/createAdmin.ts` (upsert sur

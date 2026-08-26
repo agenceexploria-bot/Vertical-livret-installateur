@@ -8,7 +8,7 @@ import { deleteBlobFile } from '../lib/imageStorage';
 
 export const adminRouter = Router();
 
-const INTERNAL_VALIDATION_ROLES = ['chargeAffaires', 'qualite'] as const;
+const INTERNAL_VALIDATION_ROLES = ['coordinateurTravaux', 'qualite'] as const;
 
 adminRouter.get('/comptes-internes', requireAuth, requireRole('admin'), async (_req, res) => {
   const users = await prisma.user.findMany({
@@ -35,7 +35,7 @@ adminRouter.post('/comptes-internes/:id/valider', requireAuth, requireRole('admi
 });
 
 // Gestion globale des comptes : contrairement à /comptes (comptes.ts), réservé
-// au CA/Direction/Admin et limité aux installateurs, l'Admin a ici le contrôle
+// au CT/Direction/Admin et limité aux installateurs, l'Admin a ici le contrôle
 // total sur TOUS les comptes du système à l'exception des autres comptes
 // Admin — jamais touchable, ni même consultable via ces routes.
 async function findManageableAccountOrNull(id: string) {
@@ -90,7 +90,7 @@ adminRouter.post('/comptes/:id/reactiver', requireAuth, requireRole('admin'), as
 const adminResetPasswordSchema = z.object({ password: z.string().min(6) });
 
 // Réinitialisation par l'Admin — même logique que /comptes/:id/reinitialiser-
-// mot-de-passe (comptes.ts) mais ouverte à tout compte non-admin (CA compris).
+// mot-de-passe (comptes.ts) mais ouverte à tout compte non-admin (CT compris).
 adminRouter.post(
   '/comptes/:id/reinitialiser-mot-de-passe',
   requireAuth,
@@ -151,9 +151,9 @@ adminRouter.get('/activity', requireAuth, requireRole('admin'), async (_req, res
       orderBy: { pvSigneAt: 'desc' },
       take: 20,
     }),
-    prisma.chantier.findMany({
-      where: { rexValide: true },
-      orderBy: { rexSoumisAt: 'desc' },
+    prisma.rex.findMany({
+      include: { chantier: true },
+      orderBy: { soumisAt: 'desc' },
       take: 20,
     }),
   ]);
@@ -179,11 +179,12 @@ adminRouter.get('/activity', requireAuth, requireRole('admin'), async (_req, res
       pvSigneAt: c.pvSigneAt,
       pvSignatureImagePath: c.pvSignatureImagePath,
     })),
-    rexEnAttente: rexEnAttente.map((c) => ({
-      chantierReference: c.reference,
-      client: c.client,
-      rexTranscription: c.rexTranscription,
-      rexSoumisAt: c.rexSoumisAt,
+    rexEnAttente: rexEnAttente.map((r) => ({
+      rexId: r.id,
+      chantierReference: r.chantier.reference,
+      client: r.chantier.client,
+      rexTranscription: r.transcription,
+      rexSoumisAt: r.soumisAt,
     })),
   });
 });
@@ -206,7 +207,7 @@ adminRouter.get('/stats', requireAuth, requireRole('admin'), async (_req, res) =
 
   const [pvSignes, rexSoumis, anomalies] = await Promise.all([
     prisma.chantier.findMany({ where: { pvSigne: true, pvSigneAt: { gte: rangeStart } }, select: { pvSigneAt: true } }),
-    prisma.chantier.findMany({ where: { rexValide: true, rexSoumisAt: { gte: rangeStart } }, select: { rexSoumisAt: true } }),
+    prisma.rex.findMany({ where: { soumisAt: { gte: rangeStart } }, select: { soumisAt: true } }),
     prisma.pointControle.findMany({
       where: { status: 'nonConforme', valideAt: { gte: rangeStart } },
       select: { valideAt: true },
@@ -220,7 +221,7 @@ adminRouter.get('/stats', requireAuth, requireRole('admin'), async (_req, res) =
     return {
       weekStart: weekStart.toISOString().slice(0, 10),
       pvSignes: pvSignes.filter((c) => inWeek(c.pvSigneAt)).length,
-      rexSoumis: rexSoumis.filter((c) => inWeek(c.rexSoumisAt)).length,
+      rexSoumis: rexSoumis.filter((r) => inWeek(r.soumisAt)).length,
       anomalies: anomalies.filter((p) => inWeek(p.valideAt)).length,
     };
   });

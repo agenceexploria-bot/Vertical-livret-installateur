@@ -48,7 +48,7 @@ class BoInstallateurDetailScreen extends StatelessWidget {
             ? ('En attente', StatusType.enCours)
             : ('Actif', StatusType.conforme);
     // Suppression définitive réservée à l'Admin (voir la refonte des rôles
-    // back-office) — le CA n'a pas ce droit.
+    // back-office) — le CT n'a pas ce droit.
     final isAdmin = context.watch<AuthState>().currentUser?.role == UserRole.admin;
 
     return BoShell(
@@ -298,7 +298,7 @@ class BoInstallateurDetailScreen extends StatelessWidget {
               Navigator.pop(dialogContext);
               try {
                 await context.read<ComptesState>().supprimer(installateur);
-                if (context.mounted) context.go('/backoffice/ca/comptes');
+                if (context.mounted) context.go('/backoffice/ct/comptes');
               } on ApiException catch (e) {
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));

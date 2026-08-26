@@ -4,7 +4,7 @@ import { requireAuth, requireRole } from '../middleware/auth';
 
 export const notificationsRouter = Router();
 
-notificationsRouter.get('/', requireAuth, requireRole('chargeAffaires', 'admin'), async (_req, res) => {
+notificationsRouter.get('/', requireAuth, requireRole('coordinateurTravaux', 'admin'), async (_req, res) => {
   const notifications = await prisma.notification.findMany({
     include: { chantier: true },
     orderBy: { createdAt: 'desc' },
@@ -21,7 +21,7 @@ notificationsRouter.get('/', requireAuth, requireRole('chargeAffaires', 'admin')
   });
 });
 
-notificationsRouter.patch('/:id/lue', requireAuth, requireRole('chargeAffaires', 'admin'), async (req, res) => {
+notificationsRouter.patch('/:id/lue', requireAuth, requireRole('coordinateurTravaux', 'admin'), async (req, res) => {
   const existing = await prisma.notification.findUnique({ where: { id: req.params.id } });
   if (!existing) return res.status(404).json({ error: 'Notification introuvable' });
 

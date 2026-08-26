@@ -4,9 +4,8 @@ import { z } from 'zod';
 import { prisma } from '../prisma';
 import { serializeChantier } from '../serializers';
 import { requireAuth, requireRole, AuthedRequest } from '../middleware/auth';
-import { saveBase64File, saveBuffer, deleteBlobFile, isAllowedFileDataUrl } from '../lib/imageStorage';
+import { saveBuffer, deleteBlobFile, isOwnBlobUrl } from '../lib/imageStorage';
 import { fetchBlobFile, fusionnerSignatureDansPdf } from '../lib/pvMerge';
-import { RECEPTION_POINTS, AUTO_CONTROLE_POINTS } from '../lib/checklistDefaults';
 import { isPointComplete } from '../lib/pointControleStatus';
 import { triggerChantierChanged, triggerChantierDeleted, triggerNotificationCreated } from '../lib/pusher';
 
@@ -17,7 +16,8 @@ const CHANTIER_INCLUDE = {
   installateurs: { include: { user: true } },
   documentsTerrain: { include: { auteur: true } },
   documentsChantier: { orderBy: { createdAt: 'asc' as const } },
-  chargeAffaires: true,
+  coordinateurTravaux: true,
+  rex: { orderBy: { soumisAt: 'desc' as const } },
 };
 
 interface ChantierScopedRequest extends AuthedRequest {
@@ -28,7 +28,7 @@ interface ChantierScopedRequest extends AuthedRequest {
 /// (table ChantierInstallateur) — sans ce garde, n'importe quel installateur
 /// authentifié pouvait modifier les points, signer le PV ou déposer un
 /// document sur n'importe quel chantier en connaissant sa seule référence.
-/// Les rôles internes (CA, Qualité, Direction, Admin) ne sont pas concernés
+/// Les rôles internes (CT, Qualité, Direction, Admin) ne sont pas concernés
 /// par la notion de rattachement.
 async function requireRattachement(req: ChantierScopedRequest, res: Response, next: NextFunction) {
   const chantier = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
@@ -71,10 +71,10 @@ const createSchema = z.object({
   capacite: z.string().min(1),
   niveaux: z.number().int().positive(),
   referenceAffaire: z.string().min(1),
-  chargeAffairesId: z.string().optional(),
+  coordinateurTravauxId: z.string().optional(),
 });
 
-chantiersRouter.post('/', requireAuth, requireRole('chargeAffaires', 'direction', 'admin'), async (req, res) => {
+chantiersRouter.post('/', requireAuth, requireRole('coordinateurTravaux', 'direction', 'admin'), async (req, res) => {
   const parsed = createSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
   const d = parsed.data;
@@ -82,15 +82,20 @@ chantiersRouter.post('/', requireAuth, requireRole('chargeAffaires', 'direction'
   const existing = await prisma.chantier.findUnique({ where: { reference: d.reference } });
   if (existing) return res.status(409).json({ error: 'Cette référence existe déjà' });
 
-  // Rattachement direct à un CA — réservé à l'Admin côté formulaire (voir
+  // Rattachement direct à un CT — réservé à l'Admin côté formulaire (voir
   // BoNewChantierScreen), mais vérifié ici indépendamment de qui appelle la
-  // route : la valeur fournie doit correspondre à un compte CA existant.
-  if (d.chargeAffairesId) {
-    const ca = await prisma.user.findUnique({ where: { id: d.chargeAffairesId } });
-    if (!ca || ca.role !== 'chargeAffaires') {
-      return res.status(400).json({ error: 'CA sélectionné invalide' });
+  // route : la valeur fournie doit correspondre à un compte CT existant.
+  if (d.coordinateurTravauxId) {
+    const ct = await prisma.user.findUnique({ where: { id: d.coordinateurTravauxId } });
+    if (!ct || ct.role !== 'coordinateurTravaux') {
+      return res.status(400).json({ error: 'CT sélectionné invalide' });
     }
   }
+
+  // Listes de réception/contrôle éditables par l'Admin (voir
+  // routes/checklistTemplates.ts) — appliquées telles quelles à ce nouveau
+  // chantier ; les modifier ensuite n'affecte jamais les chantiers déjà créés.
+  const templates = await prisma.checklistTemplateItem.findMany({ orderBy: { ordre: 'asc' } });
 
   const chantier = await prisma.chantier.create({
     data: {
@@ -108,9 +113,9 @@ chantiersRouter.post('/', requireAuth, requireRole('chargeAffaires', 'direction'
       capacite: d.capacite,
       niveaux: d.niveaux,
       referenceAffaire: d.referenceAffaire,
-      chargeAffairesId: d.chargeAffairesId,
+      coordinateurTravauxId: d.coordinateurTravauxId,
       pointsControle: {
-        create: [...RECEPTION_POINTS, ...AUTO_CONTROLE_POINTS],
+        create: templates.map(({ type, categorie, libelle, critique, ordre }) => ({ type, categorie, libelle, critique, ordre })),
       },
     },
     include: CHANTIER_INCLUDE,
@@ -129,7 +134,7 @@ chantiersRouter.get('/:reference', requireAuth, requireRattachement, async (req:
   res.json({ chantier: serializeChantier(chantier) });
 });
 
-chantiersRouter.post('/:reference/rattacher', requireAuth, requireRole('chargeAffaires', 'direction', 'admin'), async (req, res) => {
+chantiersRouter.post('/:reference/rattacher', requireAuth, requireRole('coordinateurTravaux', 'direction', 'admin'), async (req, res) => {
   const { userId } = req.body ?? {};
   if (!userId) return res.status(400).json({ error: 'userId requis' });
 
@@ -147,11 +152,11 @@ chantiersRouter.post('/:reference/rattacher', requireAuth, requireRole('chargeAf
   res.json({ chantier: serializeChantier(updated!) });
 });
 
-// Détache un installateur d'un chantier (retire le rattachement) — CA/Direction/Admin.
+// Détache un installateur d'un chantier (retire le rattachement) — CT/Direction/Admin.
 chantiersRouter.delete(
   '/:reference/rattacher/:userId',
   requireAuth,
-  requireRole('chargeAffaires', 'direction', 'admin'),
+  requireRole('coordinateurTravaux', 'direction', 'admin'),
   async (req, res) => {
     const chantier = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
     if (!chantier) return res.status(404).json({ error: 'Chantier introuvable' });
@@ -182,10 +187,10 @@ const updateChantierSchema = z.object({
   referenceAffaire: z.string().min(1).optional(),
 });
 
-// Modification des informations d'un chantier — CA/Direction/Admin. La
+// Modification des informations d'un chantier — CT/Direction/Admin. La
 // suppression, elle, reste réservée à l'Admin (capacité destructive
 // supplémentaire, voir la route DELETE ci-dessous).
-chantiersRouter.patch('/:reference', requireAuth, requireRole('chargeAffaires', 'direction', 'admin'), async (req, res) => {
+chantiersRouter.patch('/:reference', requireAuth, requireRole('coordinateurTravaux', 'direction', 'admin'), async (req, res) => {
   const parsed = updateChantierSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
   const d = parsed.data;
@@ -225,12 +230,12 @@ chantiersRouter.patch('/:reference', requireAuth, requireRole('chargeAffaires', 
 chantiersRouter.delete('/:reference', requireAuth, requireRole('admin'), async (req, res) => {
   const existing = await prisma.chantier.findUnique({
     where: { reference: req.params.reference },
-    include: { pointsControle: true, documentsTerrain: true, documentsChantier: true },
+    include: { pointsControle: true, documentsTerrain: true, documentsChantier: true, rex: true },
   });
   if (!existing) return res.status(404).json({ error: 'Chantier introuvable' });
 
   const filePaths = [
-    existing.rexAudioPath,
+    ...existing.rex.map((r) => r.audioPath),
     existing.pvSignatureImagePath,
     ...existing.pointsControle.map((p) => p.photoPath),
     ...existing.documentsTerrain.map((d) => d.filePath),
@@ -260,7 +265,7 @@ chantiersRouter.post('/:reference/livret-ouvert', requireAuth, requireRattacheme
 const pointUpdateSchema = z.object({
   status: z.enum(['vide', 'conforme', 'nonConforme']).optional(),
   photoPath: z.string().nullable().optional(),
-  photo: z.string().optional(),
+  photoUrl: z.string().optional(),
   clientValidatedAt: z.string().optional(),
 });
 
@@ -276,12 +281,12 @@ chantiersRouter.patch('/:reference/points/:pointId', requireAuth, requireRattach
     return res.status(404).json({ error: 'Point de contrôle introuvable' });
   }
 
-  if (parsed.data.photo && !isAllowedFileDataUrl(parsed.data.photo)) {
-    return res.status(400).json({ error: 'Type de fichier non autorisé' });
+  if (parsed.data.photoUrl && !isOwnBlobUrl(parsed.data.photoUrl)) {
+    return res.status(400).json({ error: 'URL de fichier invalide' });
   }
 
-  const photoPath = parsed.data.photo
-    ? await saveBase64File(parsed.data.photo, `point-${point.id}`)
+  const photoPath = parsed.data.photoUrl
+    ? parsed.data.photoUrl
     : parsed.data.photoPath === undefined
       ? undefined
       : parsed.data.photoPath;
@@ -313,7 +318,7 @@ chantiersRouter.patch('/:reference/points/:pointId', requireAuth, requireRattach
     },
   });
 
-  // Prévention : le back-office (CA/Admin) doit être alerté dès que
+  // Prévention : le back-office (CT/Admin) doit être alerté dès que
   // l'auto-contrôle d'un chantier atteint 80%, pour pouvoir intervenir avant
   // la fin du chantier plutôt que de découvrir les anomalies au moment du PV.
   // Une seule notification par chantier (pas de spam à chaque point coché
@@ -371,89 +376,80 @@ chantiersRouter.patch('/:reference/points/:pointId', requireAuth, requireRattach
 const rexSchema = z
   .object({
     transcription: z.string().min(1).optional(),
-    audio: z.string().optional(),
+    audioUrl: z.string().optional(),
   })
-  .refine((d) => d.transcription || d.audio, { message: 'Une transcription ou une note vocale est requise' });
+  .refine((d) => d.transcription || d.audioUrl, { message: 'Une transcription ou une note vocale est requise' });
 
+// Plusieurs REX possibles par chantier : chaque soumission crée une nouvelle
+// entrée (table Rex) au lieu de bloquer tant que le CT/Admin n'a pas supprimé
+// la précédente — un installateur peut ainsi compléter son retour s'il a
+// oublié quelque chose. La note vocale est déposée directement par l'app sur
+// Vercel Blob (voir routes/uploads.ts, kind "rexAudio").
 chantiersRouter.post('/:reference/rex', requireAuth, requireRattachement, async (req: ChantierScopedRequest, res) => {
   const parsed = rexSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-  // Un seul REX actif par chantier : une fois soumis, l'installateur ne peut
-  // pas en renvoyer un autre tant que le CA/Admin n'a pas supprimé l'ancien
-  // (voir DELETE /:reference/rex ci-dessous).
-  if (req.chantier!.rexValide) {
-    return res.status(409).json({ error: 'Un REX a déjà été soumis pour ce chantier' });
+  if (parsed.data.audioUrl && !isOwnBlobUrl(parsed.data.audioUrl)) {
+    return res.status(400).json({ error: 'URL de fichier invalide' });
   }
 
-  if (parsed.data.audio && !isAllowedFileDataUrl(parsed.data.audio)) {
-    return res.status(400).json({ error: 'Type de fichier non autorisé' });
-  }
-
-  let rexAudioPath: string | undefined;
-  if (parsed.data.audio) {
-    rexAudioPath = await saveBase64File(parsed.data.audio, `rex-${req.params.reference}`);
-  }
-
-  const chantier = await prisma.chantier.update({
-    where: { reference: req.params.reference },
+  await prisma.rex.create({
     data: {
-      rexValide: true,
-      rexTranscription: parsed.data.transcription,
-      rexAudioPath,
-      rexSoumisAt: new Date(),
+      chantierId: req.chantier!.id,
+      transcription: parsed.data.transcription,
+      audioPath: parsed.data.audioUrl,
     },
-    include: CHANTIER_INCLUDE,
   });
-  await triggerChantierChanged(chantier.reference);
-  res.json({ chantier: serializeChantier(chantier) });
-});
 
-// Supprime le REX d'un chantier — réservé au CA/Admin. C'est la SEULE façon
-// de débloquer l'installateur pour qu'il puisse en soumettre un nouveau (voir
-// le contrôle rexValide ci-dessus). Suppression immédiate et définitive, y
-// compris de la note vocale sur Vercel Blob si elle existe.
-chantiersRouter.delete('/:reference/rex', requireAuth, requireRole('chargeAffaires', 'admin'), async (req, res) => {
-  const existing = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
-  if (!existing) return res.status(404).json({ error: 'Chantier introuvable' });
-  if (!existing.rexValide) return res.status(404).json({ error: 'Aucun REX à supprimer pour ce chantier' });
-
-  if (existing.rexAudioPath) await deleteBlobFile(existing.rexAudioPath);
-
-  const chantier = await prisma.chantier.update({
+  const chantier = await prisma.chantier.findUnique({
     where: { reference: req.params.reference },
-    data: { rexValide: false, rexTranscription: null, rexAudioPath: null, rexSoumisAt: null },
     include: CHANTIER_INCLUDE,
   });
-  await triggerChantierChanged(chantier.reference);
-  res.json({ chantier: serializeChantier(chantier) });
+  await triggerChantierChanged(chantier!.reference);
+  res.json({ chantier: serializeChantier(chantier!) });
 });
 
-function isPdfDataUrl(dataUrl: string): boolean {
-  return dataUrl.startsWith('data:application/pdf;base64,');
-}
+// Supprime une entrée REX précise — réservé au CT/Admin. Suppression
+// immédiate et définitive, y compris de la note vocale sur Vercel Blob si
+// elle existe. Les autres entrées REX du chantier ne sont pas affectées.
+chantiersRouter.delete('/:reference/rex/:rexId', requireAuth, requireRole('coordinateurTravaux', 'admin'), async (req, res) => {
+  const chantier = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
+  if (!chantier) return res.status(404).json({ error: 'Chantier introuvable' });
 
-const pvDocumentSchema = z.object({ file: z.string().min(1, 'Un fichier PDF est requis') });
+  const rex = await prisma.rex.findUnique({ where: { id: req.params.rexId } });
+  if (!rex || rex.chantierId !== chantier.id) return res.status(404).json({ error: 'REX introuvable' });
+
+  if (rex.audioPath) await deleteBlobFile(rex.audioPath);
+  await prisma.rex.delete({ where: { id: rex.id } });
+
+  const updated = await prisma.chantier.findUnique({ where: { id: chantier.id }, include: CHANTIER_INCLUDE });
+  await triggerChantierChanged(updated!.reference);
+  res.json({ chantier: serializeChantier(updated!) });
+});
+
+const pvDocumentSchema = z.object({ fileUrl: z.string().min(1, 'Un fichier PDF est requis') });
 
 // Dépôt (ou remplacement) du gabarit PV par le back-office — ne valide RIEN :
 // le PV reste "en attente de signature" tant que l'installateur n'a pas fait
 // signer le client (voir POST .../pv/signature ci-dessous). Remplacer le
-// gabarit invalide une signature déjà apposée sur l'ancienne version.
+// gabarit invalide une signature déjà apposée sur l'ancienne version. Le
+// fichier est déposé directement par le back-office sur Vercel Blob (voir
+// routes/uploads.ts, kind "pvDocument", qui restreint déjà le type au PDF).
 chantiersRouter.post(
   '/:reference/pv/document',
   requireAuth,
-  requireRole('chargeAffaires', 'direction', 'admin'),
+  requireRole('coordinateurTravaux', 'direction', 'admin'),
   async (req, res) => {
     const parsed = pvDocumentSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
-    if (!isPdfDataUrl(parsed.data.file)) return res.status(400).json({ error: 'Le fichier doit être un PDF' });
+    if (!isOwnBlobUrl(parsed.data.fileUrl)) return res.status(400).json({ error: 'URL de fichier invalide' });
 
     const existing = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
     if (!existing) return res.status(404).json({ error: 'Chantier introuvable' });
 
     if (existing.pvPdfPath) await deleteBlobFile(existing.pvPdfPath);
     if (existing.pvSignatureImagePath) await deleteBlobFile(existing.pvSignatureImagePath);
-    const pvPdfPath = await saveBase64File(parsed.data.file, `pv-${existing.id}`);
+    const pvPdfPath = parsed.data.fileUrl;
 
     const chantier = await prisma.chantier.update({
       where: { reference: req.params.reference },
@@ -500,7 +496,7 @@ function isPngDataUrl(dataUrl: string): boolean {
 //
 // Un PV déjà signé ne peut plus être re-signé : c'est un verrou volontaire
 // (voir lib/screens/client/signature_screen.dart côté app), la seule façon
-// de recommencer est que le CA/Admin supprime le PV (DELETE .../pv
+// de recommencer est que le CT/Admin supprime le PV (DELETE .../pv
 // ci-dessous, qui repasse pvSigne à false).
 chantiersRouter.post(
   '/:reference/pv/signature',
@@ -520,7 +516,7 @@ chantiersRouter.post(
       return res.status(400).json({ error: 'Aucun PV à signer pour ce chantier — en attente du back-office' });
     }
     if (existing.pvSigne) {
-      return res.status(400).json({ error: 'Ce PV est déjà signé — seul le CA/Admin peut le réinitialiser en le supprimant' });
+      return res.status(400).json({ error: 'Ce PV est déjà signé — seul le CT/Admin peut le réinitialiser en le supprimant' });
     }
 
     let pdfSigneBytes: Buffer;
@@ -559,10 +555,10 @@ chantiersRouter.post(
 );
 
 // Supprime définitivement le PV d'un chantier (gabarit ET signature
-// éventuelle) — réservé au CA/Admin, comme pour le REX. Contrairement à un
+// éventuelle) — réservé au CT/Admin, comme pour le REX. Contrairement à un
 // remplacement du gabarit (POST .../pv/document, qui invalide juste la
 // signature), la suppression efface tout, y compris les fichiers sur Vercel Blob.
-chantiersRouter.delete('/:reference/pv', requireAuth, requireRole('chargeAffaires', 'admin'), async (req, res) => {
+chantiersRouter.delete('/:reference/pv', requireAuth, requireRole('coordinateurTravaux', 'admin'), async (req, res) => {
   const existing = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
   if (!existing) return res.status(404).json({ error: 'Chantier introuvable' });
   if (!existing.pvPdfPath && !existing.pvSigne) {
@@ -592,19 +588,21 @@ const documentCategories = ['bonLivraison', 'documentClient', 'habilitation', 'c
 const documentSchema = z.object({
   titre: z.string().min(1),
   categorie: z.enum(documentCategories),
-  file: z.string().min(1, 'Un fichier (photo ou PDF) est requis'),
+  fileUrl: z.string().min(1, 'Un fichier (photo, vidéo ou PDF) est requis'),
 });
 
+// Le fichier (photo, vidéo ou PDF) est déposé directement par l'app sur
+// Vercel Blob (voir routes/uploads.ts, kind "documentTerrain").
 chantiersRouter.post('/:reference/documents', requireAuth, requireRattachement, async (req: ChantierScopedRequest, res) => {
   const parsed = documentSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-  if (!isAllowedFileDataUrl(parsed.data.file)) {
-    return res.status(400).json({ error: 'Type de fichier non autorisé' });
+  if (!isOwnBlobUrl(parsed.data.fileUrl)) {
+    return res.status(400).json({ error: 'URL de fichier invalide' });
   }
 
   const chantier = req.chantier!;
-  const filePath = await saveBase64File(parsed.data.file, `doc-${chantier.id}`);
+  const filePath = parsed.data.fileUrl;
 
   const doc = await prisma.documentTerrain.create({
     data: {
@@ -621,7 +619,7 @@ chantiersRouter.post('/:reference/documents', requireAuth, requireRattachement, 
 });
 
 // Suppression d'un document terrain (Module 8) — réservée à son auteur
-// (l'installateur qui l'a déposé) ou à un CA/Admin, jamais à un autre
+// (l'installateur qui l'a déposé) ou à un CT/Admin, jamais à un autre
 // installateur même rattaché au même chantier. Suppression immédiate et
 // définitive, y compris le fichier stocké sur Vercel Blob.
 chantiersRouter.delete('/:reference/documents/:docId', requireAuth, requireRattachement, async (req: ChantierScopedRequest, res) => {
@@ -631,9 +629,9 @@ chantiersRouter.delete('/:reference/documents/:docId', requireAuth, requireRatta
   }
 
   const estAuteur = doc.auteurId === req.auth!.userId;
-  const estCaOuAdmin = req.auth!.role === 'chargeAffaires' || req.auth!.role === 'admin';
-  if (!estAuteur && !estCaOuAdmin) {
-    return res.status(403).json({ error: 'Seul l\'auteur du document ou un CA/Admin peut le supprimer' });
+  const estCtOuAdmin = req.auth!.role === 'coordinateurTravaux' || req.auth!.role === 'admin';
+  if (!estAuteur && !estCtOuAdmin) {
+    return res.status(403).json({ error: 'Seul l\'auteur du document ou un CT/Admin peut le supprimer' });
   }
 
   if (doc.filePath) await deleteBlobFile(doc.filePath);
@@ -646,38 +644,41 @@ chantiersRouter.delete('/:reference/documents/:docId', requireAuth, requireRatta
 
 const documentChantierSchema = z.object({
   type: z.enum(['ficheChantier', 'securite', 'technique']),
-  nom: z.string().min(1),
+  // Optionnel : nommer le document lors de l'import ralentissait l'ajout de
+  // plusieurs fichiers sans réel bénéfice — à défaut, le nom du fichier
+  // d'origine (nomFichierOriginal) fait l'affaire.
+  nom: z.string().min(1).optional(),
   nomFichierOriginal: z.string().min(1).optional(),
-  file: z.string().min(1, 'Un fichier (photo ou PDF) est requis'),
+  fileUrl: z.string().min(1, 'Un fichier (photo, vidéo ou PDF) est requis'),
 });
 
-// Documents de référence (PPSPS, plans, notices...) déposés par le CA depuis
+// Documents de référence (PPSPS, plans, notices...) déposés par le CT depuis
 // le back-office — consultés en lecture seule par l'installateur sur mobile
-// (Modules 1-3), via le même mécanisme de cache hors-ligne que le reste du chantier.
+// (Modules 1-3), via le même mécanisme de cache hors-ligne que le reste du
+// chantier. Le fichier est déposé directement par le back-office sur Vercel
+// Blob (voir routes/uploads.ts, kind "documentChantier").
 chantiersRouter.post(
   '/:reference/documents-chantier',
   requireAuth,
-  requireRole('chargeAffaires', 'direction', 'admin'),
+  requireRole('coordinateurTravaux', 'direction', 'admin'),
   async (req, res) => {
     const parsed = documentChantierSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-    if (!isAllowedFileDataUrl(parsed.data.file)) {
-      return res.status(400).json({ error: 'Type de fichier non autorisé' });
+    if (!isOwnBlobUrl(parsed.data.fileUrl)) {
+      return res.status(400).json({ error: 'URL de fichier invalide' });
     }
 
     const chantier = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
     if (!chantier) return res.status(404).json({ error: 'Chantier introuvable' });
 
-    const filePath = await saveBase64File(parsed.data.file, `doc-chantier-${chantier.id}`);
-
     await prisma.documentChantier.create({
       data: {
         chantierId: chantier.id,
         type: parsed.data.type,
-        nom: parsed.data.nom,
+        nom: parsed.data.nom || parsed.data.nomFichierOriginal || 'Document',
         nomFichierOriginal: parsed.data.nomFichierOriginal,
-        filePath,
+        filePath: parsed.data.fileUrl,
       },
     });
 
@@ -692,7 +693,7 @@ chantiersRouter.post(
 chantiersRouter.delete(
   '/:reference/documents-chantier/:docId',
   requireAuth,
-  requireRole('chargeAffaires', 'direction', 'admin'),
+  requireRole('coordinateurTravaux', 'direction', 'admin'),
   async (req, res) => {
     const chantier = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
     if (!chantier) return res.status(404).json({ error: 'Chantier introuvable' });
@@ -710,7 +711,7 @@ chantiersRouter.delete(
 );
 
 const replaceDocumentChantierSchema = z.object({
-  file: z.string().min(1, 'Un fichier (photo ou PDF) est requis'),
+  fileUrl: z.string().min(1, 'Un fichier (photo, vidéo ou PDF) est requis'),
   nomFichierOriginal: z.string().min(1).optional(),
 });
 
@@ -720,13 +721,13 @@ const replaceDocumentChantierSchema = z.object({
 chantiersRouter.put(
   '/:reference/documents-chantier/:docId',
   requireAuth,
-  requireRole('chargeAffaires', 'direction', 'admin'),
+  requireRole('coordinateurTravaux', 'direction', 'admin'),
   async (req, res) => {
     const parsed = replaceDocumentChantierSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-    if (!isAllowedFileDataUrl(parsed.data.file)) {
-      return res.status(400).json({ error: 'Type de fichier non autorisé' });
+    if (!isOwnBlobUrl(parsed.data.fileUrl)) {
+      return res.status(400).json({ error: 'URL de fichier invalide' });
     }
 
     const chantier = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
@@ -735,7 +736,7 @@ chantiersRouter.put(
     const doc = await prisma.documentChantier.findUnique({ where: { id: req.params.docId } });
     if (!doc || doc.chantierId !== chantier.id) return res.status(404).json({ error: 'Document introuvable' });
 
-    const newFilePath = await saveBase64File(parsed.data.file, `doc-chantier-${chantier.id}`);
+    const newFilePath = parsed.data.fileUrl;
     await deleteBlobFile(doc.filePath);
 
     await prisma.documentChantier.update({

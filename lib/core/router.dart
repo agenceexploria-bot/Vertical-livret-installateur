@@ -22,15 +22,15 @@ import '../screens/installateur/modules/rex_screen.dart';
 import '../screens/installateur/modules/docs_terrain_screen.dart';
 import '../screens/client/signature_screen.dart';
 import '../screens/client/confirmation_screen.dart';
-import '../screens/charge_affaires/ca_home_screen.dart';
-import '../screens/charge_affaires/ca_validation_screen.dart';
-import '../screens/charge_affaires/ca_chantier_detail_screen.dart';
-import '../screens/charge_affaires/ca_edit_chantier_screen.dart';
-import '../screens/charge_affaires/ca_new_chantier_screen.dart';
+import '../screens/coordinateur_travaux/ct_home_screen.dart';
+import '../screens/coordinateur_travaux/ct_validation_screen.dart';
+import '../screens/coordinateur_travaux/ct_chantier_detail_screen.dart';
+import '../screens/coordinateur_travaux/ct_edit_chantier_screen.dart';
+import '../screens/coordinateur_travaux/ct_new_chantier_screen.dart';
 import '../screens/backoffice/bo_login_screen.dart';
 import '../screens/backoffice/bo_access_request_screen.dart';
 import '../screens/backoffice/bo_access_confirmation_screen.dart';
-import '../screens/backoffice/bo_ca_chantiers_screen.dart';
+import '../screens/backoffice/bo_ct_chantiers_screen.dart';
 import '../screens/backoffice/bo_auto_controle_detail_screen.dart';
 import '../screens/backoffice/bo_new_chantier_screen.dart';
 import '../screens/backoffice/bo_chantier_detail_screen.dart';
@@ -38,23 +38,24 @@ import '../screens/backoffice/bo_comptes_screen.dart';
 import '../screens/backoffice/bo_installateur_detail_screen.dart';
 import '../screens/backoffice/bo_admin_compte_detail_screen.dart';
 import '../screens/backoffice/bo_admin_dashboard_screen.dart';
+import '../screens/backoffice/bo_admin_checklists_screen.dart';
 
 /// Préfixes de back-office accessibles à chaque rôle interne — utilisé par le
 /// garde de redirection ci-dessous. Le premier élément est la destination par
 /// défaut (atterrissage). Liste vide = pas d'espace back-office (installateur).
 ///
-/// Il n'y a plus que deux espaces (CA et Admin) depuis la fusion du rôle
-/// Qualité dans l'espace CA — un compte encore marqué `qualite` en base est
-/// donc simplement redirigé vers `/backoffice/ca` comme un CA. L'Admin est
-/// "super-CA" : il a accès à son propre tableau de bord ET à tout l'espace CA.
+/// Il n'y a plus que deux espaces (CT et Admin) depuis la fusion du rôle
+/// Qualité dans l'espace CT — un compte encore marqué `qualite` en base est
+/// donc simplement redirigé vers `/backoffice/ct` comme un CT. L'Admin est
+/// "super-CT" : il a accès à son propre tableau de bord ET à tout l'espace CT.
 List<String> _boAllowedPrefixesFor(UserRole role) {
   switch (role) {
     case UserRole.admin:
-      return ['/backoffice/admin', '/backoffice/ca'];
-    case UserRole.chargeAffaires:
+      return ['/backoffice/admin', '/backoffice/ct'];
+    case UserRole.coordinateurTravaux:
     case UserRole.direction:
     case UserRole.qualite:
-      return ['/backoffice/ca'];
+      return ['/backoffice/ct'];
     case UserRole.installateur:
       return [];
   }
@@ -83,8 +84,8 @@ class AppRouter {
         if (state.matchedLocation == '/splash') return null;
 
         // Le back-office Web (BoShell, tableaux denses, plusieurs colonnes)
-        // n'est pas conçu pour un écran de téléphone — le CA y a sa propre
-        // interface mobile dédiée (CaHomeScreen/CaValidationScreen, atteinte
+        // n'est pas conçu pour un écran de téléphone — le CT y a sa propre
+        // interface mobile dédiée (CtHomeScreen/CtValidationScreen, atteinte
         // via /login comme n'importe quel autre rôle), avec un jeu de
         // fonctionnalités volontairement réduit (suivi chantiers, relance des
         // livrets non ouverts, validation des inscriptions) plutôt qu'une
@@ -107,10 +108,10 @@ class AppRouter {
           if (authState.isLoading) return null;
           if (!authState.isAuthenticated) return '/backoffice/login';
 
-          // Cloisonnement : un CA qui tape /backoffice/admin est renvoyé vers
+          // Cloisonnement : un CT qui tape /backoffice/admin est renvoyé vers
           // son propre espace. L'Admin, lui, est autorisé sur les deux
-          // préfixes (son tableau de bord + tout l'espace CA, voir
-          // _boAllowedPrefixesFor) — il n'est donc jamais rejeté hors de /ca.
+          // préfixes (son tableau de bord + tout l'espace CT, voir
+          // _boAllowedPrefixesFor) — il n'est donc jamais rejeté hors de /ct.
           final allowed = _boAllowedPrefixesFor(authState.currentUser!.role);
           if (allowed.isEmpty) return '/backoffice/login';
           final isAllowed = allowed.any((prefix) => state.matchedLocation.startsWith(prefix));
@@ -144,24 +145,24 @@ class AppRouter {
             return '/';
           }
 
-          // Sur Web, le CA est dirigé vers le back-office (interface riche) —
+          // Sur Web, le CT est dirigé vers le back-office (interface riche) —
           // sur mobile, il reste sur '/' où le builder ci-dessous affiche sa
-          // propre interface dédiée (CaHomeScreen).
+          // propre interface dédiée (CtHomeScreen).
           final role = authState.currentUser!.role;
-          final isCaRole = role == UserRole.chargeAffaires || role == UserRole.direction;
-          if (!isMobilePlatform && isCaRole && authState.currentUser!.isActive && state.matchedLocation == '/') {
-            return '/backoffice/ca';
+          final isCtRole = role == UserRole.coordinateurTravaux || role == UserRole.direction;
+          if (!isMobilePlatform && isCtRole && authState.currentUser!.isActive && state.matchedLocation == '/') {
+            return '/backoffice/ct';
           }
 
-          // /ca/validation et /ca/chantier sont réservés au CA/Direction — un
+          // /ct/validation et /ct/chantier sont réservés au CT/Direction — un
           // autre rôle qui tape l'URL à la main est renvoyé sur son propre
           // accueil. Le backend impose déjà ce rôle sur les endpoints
           // concernés (voir comptes.ts / chantiers.ts), ces gardes ne sont
           // qu'une défense en profondeur.
-          if (state.matchedLocation.startsWith('/ca/validation') && !isCaRole) {
+          if (state.matchedLocation.startsWith('/ct/validation') && !isCtRole) {
             return '/';
           }
-          if (state.matchedLocation.startsWith('/ca/chantier') && !isCaRole) {
+          if (state.matchedLocation.startsWith('/ct/chantier') && !isCtRole) {
             return '/';
           }
         }
@@ -190,35 +191,35 @@ class AppRouter {
             if (authState.isLoading || authState.currentUser == null) {
               return const Scaffold(body: Center(child: CircularProgressIndicator()));
             }
-            // Sur Web, un CA/Direction ne construit jamais cet écran : le
-            // garde de redirection ci-dessus l'envoie vers /backoffice/ca
+            // Sur Web, un CT/Direction ne construit jamais cet écran : le
+            // garde de redirection ci-dessus l'envoie vers /backoffice/ct
             // avant même que ce builder ne s'exécute. Sur mobile, il reste
-            // ici et voit sa propre interface (CaHomeScreen).
+            // ici et voit sa propre interface (CtHomeScreen).
             final role = authState.currentUser!.role;
-            if (role == UserRole.chargeAffaires || role == UserRole.direction) {
-              return const CaHomeScreen();
+            if (role == UserRole.coordinateurTravaux || role == UserRole.direction) {
+              return const CtHomeScreen();
             }
             return const InstallateurHomeScreen();
           },
         ),
         GoRoute(
-          path: '/ca/validation',
-          builder: (context, state) => const CaValidationScreen(),
+          path: '/ct/validation',
+          builder: (context, state) => const CtValidationScreen(),
         ),
-        // Mobile CA — consultation, création et modification de chantier
+        // Mobile CT — consultation, création et modification de chantier
         // (interface volontairement réduite par rapport au back-office Web,
-        // voir CaHomeScreen). '/ca/chantier/nouveau' est un chemin littéral :
+        // voir CtHomeScreen). '/ct/chantier/nouveau' est un chemin littéral :
         // il prend priorité sur le paramètre ':ref' ci-dessous, comme
-        // '/backoffice/ca/chantiers/nouveau' le fait déjà côté Web.
+        // '/backoffice/ct/chantiers/nouveau' le fait déjà côté Web.
         GoRoute(
-          path: '/ca/chantier/nouveau',
-          builder: (context, state) => const CaNewChantierScreen(),
+          path: '/ct/chantier/nouveau',
+          builder: (context, state) => const CtNewChantierScreen(),
         ),
         GoRoute(
-          path: '/ca/chantier/:ref',
-          builder: (context, state) => const CaChantierDetailScreen(),
+          path: '/ct/chantier/:ref',
+          builder: (context, state) => const CtChantierDetailScreen(),
           routes: [
-            GoRoute(path: 'modifier', builder: (context, state) => const CaEditChantierScreen()),
+            GoRoute(path: 'modifier', builder: (context, state) => const CtEditChantierScreen()),
           ],
         ),
         GoRoute(
@@ -238,29 +239,32 @@ class AppRouter {
         GoRoute(path: '/confirmation', builder: (context, state) => const ConfirmationScreen()),
         GoRoute(path: '/profil', builder: (context, state) => const ProfilScreen()),
 
-        // Back-office web — 2 espaces (CA et Admin, ce dernier ayant aussi
-        // accès à l'espace CA), voir le garde de redirection ci-dessus.
+        // Back-office web — 2 espaces (CT et Admin, ce dernier ayant aussi
+        // accès à l'espace CT), voir le garde de redirection ci-dessus.
         GoRoute(path: '/backoffice/login', builder: (context, state) => const BoLoginScreen()),
         GoRoute(path: '/backoffice/acces', builder: (context, state) => const BoAccessRequestScreen()),
         GoRoute(path: '/backoffice/acces/confirmation', builder: (context, state) => const BoAccessConfirmationScreen()),
 
-        // Espace Chargé d'Affaires : chantiers (création, suivi, PV), auto-
+        // Espace Coordinateur travaux : chantiers (création, suivi, PV), auto-
         // contrôles/REX/anomalies/habilitations (ex-espace Qualité, fusionné
         // ici) + validation des installateurs. Accessible aussi à l'Admin.
-        GoRoute(path: '/backoffice/ca', builder: (context, state) => const BoCaChantiersScreen()),
-        GoRoute(path: '/backoffice/ca/auto-controle', builder: (context, state) => const BoAutoControleDetailScreen()),
-        GoRoute(path: '/backoffice/ca/chantiers/nouveau', builder: (context, state) => const BoNewChantierScreen()),
-        GoRoute(path: '/backoffice/ca/chantiers/:ref', builder: (context, state) => const BoChantierDetailScreen()),
-        GoRoute(path: '/backoffice/ca/comptes', builder: (context, state) => const BoComptesScreen()),
-        GoRoute(path: '/backoffice/ca/comptes/:id', builder: (context, state) => const BoInstallateurDetailScreen()),
+        GoRoute(path: '/backoffice/ct', builder: (context, state) => const BoCtChantiersScreen()),
+        GoRoute(path: '/backoffice/ct/auto-controle', builder: (context, state) => const BoAutoControleDetailScreen()),
+        GoRoute(path: '/backoffice/ct/chantiers/nouveau', builder: (context, state) => const BoNewChantierScreen()),
+        GoRoute(path: '/backoffice/ct/chantiers/:ref', builder: (context, state) => const BoChantierDetailScreen()),
+        GoRoute(path: '/backoffice/ct/comptes', builder: (context, state) => const BoComptesScreen()),
+        GoRoute(path: '/backoffice/ct/comptes/:id', builder: (context, state) => const BoInstallateurDetailScreen()),
 
         // Espace Administration : flux d'activité + validation des comptes
-        // internes — en plus de l'espace CA ci-dessus, auquel l'Admin a aussi accès.
+        // internes — en plus de l'espace CT ci-dessus, auquel l'Admin a aussi accès.
         GoRoute(path: '/backoffice/admin', builder: (context, state) => const BoAdminDashboardScreen()),
         // Fiche détaillée d'un compte, tous rôles confondus (sauf Admin) — voir
-        // BoAdminCompteDetailScreen, distincte de /backoffice/ca/comptes/:id
+        // BoAdminCompteDetailScreen, distincte de /backoffice/ct/comptes/:id
         // (BoInstallateurDetailScreen) qui ne couvre que les installateurs.
         GoRoute(path: '/backoffice/admin/comptes/:id', builder: (context, state) => const BoAdminCompteDetailScreen()),
+        // Listes de réception/contrôle appliquées aux nouveaux chantiers —
+        // voir BoAdminChecklistsScreen / checklistTemplates.ts.
+        GoRoute(path: '/backoffice/admin/checklists', builder: (context, state) => const BoAdminChecklistsScreen()),
       ],
     );
   }

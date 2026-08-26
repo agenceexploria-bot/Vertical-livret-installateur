@@ -15,15 +15,15 @@ const authSchema = z.object({
 // de souscription, jamais par Pusher lui-même. `private-app-events`
 // (changements de chantier) est ouvert à tout utilisateur authentifié :
 // même un installateur doit être notifié des changements sur SES chantiers.
-// `private-notifications` (alertes internes) reste réservé à CA/Admin, pour
+// `private-notifications` (alertes internes) reste réservé à CT/Admin, pour
 // rester cohérent avec la restriction déjà en place sur GET /notifications.
 pusherRouter.post('/auth', requireAuth, (req: AuthedRequest, res) => {
   const parsed = authSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
   const { socket_id, channel_name } = parsed.data;
 
-  const isCA = req.auth!.role === 'chargeAffaires' || req.auth!.role === 'admin';
-  const allowedChannels = isCA ? [CHANTIER_CHANGES_CHANNEL, NOTIFICATIONS_CHANNEL] : [CHANTIER_CHANGES_CHANNEL];
+  const isCT = req.auth!.role === 'coordinateurTravaux' || req.auth!.role === 'admin';
+  const allowedChannels = isCT ? [CHANTIER_CHANGES_CHANNEL, NOTIFICATIONS_CHANNEL] : [CHANTIER_CHANGES_CHANNEL];
   if (!allowedChannels.includes(channel_name)) {
     return res.status(403).json({ error: 'Accès refusé à ce canal' });
   }

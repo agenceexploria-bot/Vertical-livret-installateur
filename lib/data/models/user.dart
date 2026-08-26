@@ -1,4 +1,4 @@
-enum UserRole { installateur, chargeAffaires, qualite, direction, admin }
+enum UserRole { installateur, coordinateurTravaux, qualite, direction, admin }
 enum UserStatus { salarie, sousTraitant }
 
 UserRole userRoleFromJson(String value) => UserRole.values.firstWhere((r) => r.name == value);

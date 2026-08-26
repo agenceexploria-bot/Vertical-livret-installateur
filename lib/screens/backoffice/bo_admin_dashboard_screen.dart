@@ -50,7 +50,7 @@ class _BoAdminDashboardScreenState extends State<BoAdminDashboardScreen> {
   Widget build(BuildContext context) {
     final authState = context.watch<AuthState>();
 
-    // Écran réservé au rôle admin — un CA/Qualité qui naviguerait ici
+    // Écran réservé au rôle admin — un CT/Qualité qui naviguerait ici
     // directement (URL tapée à la main) est renvoyé au tableau de bord.
     if (!authState.isLoading && authState.currentUser?.role != UserRole.admin) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -150,7 +150,7 @@ class _BoAdminDashboardScreenState extends State<BoAdminDashboardScreen> {
   }
 
   Widget _compteRow(AdminState adminState, User u) {
-    final roleLabel = u.role == UserRole.chargeAffaires ? 'Chargé d\'affaires' : 'Qualité';
+    final roleLabel = u.role == UserRole.coordinateurTravaux ? 'Coordinateur travaux' : 'Qualité';
     return BoTableRow(
       padding: const EdgeInsets.symmetric(vertical: 10),
       border: const Border(bottom: BorderSide(color: Color(0xFFEEF1F3))),

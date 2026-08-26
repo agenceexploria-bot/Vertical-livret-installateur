@@ -7,18 +7,18 @@ import '../../core/widgets/responsive_layout.dart';
 import '../../data/api_client.dart';
 import '../../state/chantier_state.dart';
 
-/// Création de chantier depuis le mobile CA — version simplifiée du
+/// Création de chantier depuis le mobile CT — version simplifiée du
 /// formulaire Web (BoNewChantierScreen), sans le collage intelligent ni le
 /// choix de modèle : les champs essentiels suffisent pour une saisie rapide
 /// en déplacement.
-class CaNewChantierScreen extends StatefulWidget {
-  const CaNewChantierScreen({super.key});
+class CtNewChantierScreen extends StatefulWidget {
+  const CtNewChantierScreen({super.key});
 
   @override
-  State<CaNewChantierScreen> createState() => _CaNewChantierScreenState();
+  State<CtNewChantierScreen> createState() => _CtNewChantierScreenState();
 }
 
-class _CaNewChantierScreenState extends State<CaNewChantierScreen> {
+class _CtNewChantierScreenState extends State<CtNewChantierScreen> {
   bool _isSubmitting = false;
   final _referenceController = TextEditingController();
   final _clientController = TextEditingController();
@@ -84,7 +84,7 @@ class _CaNewChantierScreenState extends State<CaNewChantierScreen> {
     final router = GoRouter.of(context);
     try {
       await context.read<ChantierState>().createChantier(body);
-      router.go('/ca/chantier/$reference');
+      router.go('/ct/chantier/$reference');
     } on ApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));

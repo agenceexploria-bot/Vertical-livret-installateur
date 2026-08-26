@@ -23,7 +23,7 @@ Map<String, dynamic> _baseJson({
     'niveaux': 2,
     'referenceAffaire': 'AF-2026-001',
     'syncStatus': 'charge',
-    'rexValide': false,
+    'rex': [],
     'pvSigne': pvSigne,
     'livretsOuverts': [],
     'receptionMarchandises': reception,
@@ -97,8 +97,7 @@ void main() {
       original.receptionMarchandises.first.status = PointStatus.conforme;
       original.receptionMarchandises.first.photoPath = 'data:image/jpeg;base64,abc';
       original.receptionMarchandises.first.validePar = 'Thomas Roux';
-      original.rexValide = true;
-      original.rexTranscription = 'RAS';
+      original.rex.add(Rex(id: 'r1', transcription: 'RAS', soumisAt: DateTime.parse('2026-07-22T10:00:00.000Z')));
       original.pvSigne = true;
       original.pvSigneur = 'M. Weber';
 
@@ -107,8 +106,8 @@ void main() {
       expect(roundTripped.receptionMarchandises.first.status, PointStatus.conforme);
       expect(roundTripped.receptionMarchandises.first.photoPath, 'data:image/jpeg;base64,abc');
       expect(roundTripped.receptionMarchandises.first.validePar, 'Thomas Roux');
-      expect(roundTripped.rexValide, isTrue);
-      expect(roundTripped.rexTranscription, 'RAS');
+      expect(roundTripped.rex, hasLength(1));
+      expect(roundTripped.rex.first.transcription, 'RAS');
       expect(roundTripped.pvSigne, isTrue);
       expect(roundTripped.pvSigneur, 'M. Weber');
     });

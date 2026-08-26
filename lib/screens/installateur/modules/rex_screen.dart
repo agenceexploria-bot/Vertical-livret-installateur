@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'dart:async';
@@ -161,7 +162,7 @@ class _RexScreenState extends State<RexScreen> with SingleTickerProviderStateMix
   @override
   Widget build(BuildContext context) {
     final chantier = context.watch<ChantierState>().currentChantier;
-    final dejaEnvoye = chantier?.rexValide ?? false;
+    final envoyes = chantier?.rex ?? const <Rex>[];
 
     return ResponsiveLayout(
       appBar: GlassAppBar(
@@ -171,34 +172,50 @@ class _RexScreenState extends State<RexScreen> with SingleTickerProviderStateMix
       ),
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
-        child: dejaEnvoye ? _buildDejaEnvoye(chantier!) : _buildFormulaire(context),
+        child: Column(
+          children: [
+            if (envoyes.isNotEmpty) ...[
+              _buildHistorique(envoyes),
+              const SizedBox(height: 32),
+            ],
+            _buildFormulaire(context),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildDejaEnvoye(Chantier chantier) {
+  /// Retours déjà envoyés pour ce chantier — informatif, n'empêche jamais
+  /// d'en soumettre un nouveau (contrairement à l'ancien comportement qui
+  /// bloquait après un seul REX).
+  Widget _buildHistorique(List<Rex> envoyes) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Icon(Icons.check_circle_outline, size: 48, color: AppColors.orange),
-        const SizedBox(height: 16),
-        const Text(
-          'Un REX a déjà été soumis pour ce chantier.',
-          textAlign: TextAlign.center,
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-        ),
+        Text('Déjà envoyé (${envoyes.length})', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
         const SizedBox(height: 8),
-        const Text(
-          'Vous ne pouvez pas en envoyer un nouveau. Seul le CA ou l\'Admin peut supprimer l\'ancien REX depuis le back-office pour vous permettre d\'en soumettre un autre.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: AppColors.acier, height: 1.4),
-        ),
-        if (chantier.rexTranscription != null) ...[
-          const SizedBox(height: 16),
+        for (final rex in envoyes) ...[
           Container(
             width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 8),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(color: AppColors.fond, borderRadius: BorderRadius.circular(9)),
-            child: Text('« ${chantier.rexTranscription} »', style: const TextStyle(fontSize: 13, color: AppColors.encre, height: 1.4)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  DateFormat('dd/MM/yyyy HH:mm').format(rex.soumisAt),
+                  style: const TextStyle(fontSize: 11, color: AppColors.acierClair),
+                ),
+                if (rex.transcription != null) ...[
+                  const SizedBox(height: 4),
+                  Text('« ${rex.transcription} »', style: const TextStyle(fontSize: 13, color: AppColors.encre, height: 1.4)),
+                ] else if (rex.audioPath != null) ...[
+                  const SizedBox(height: 4),
+                  const Text('(note vocale sans transcription)', style: TextStyle(fontSize: 12, color: AppColors.acier, fontStyle: FontStyle.italic)),
+                ],
+              ],
+            ),
           ),
         ],
       ],

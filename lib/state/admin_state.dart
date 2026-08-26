@@ -17,7 +17,7 @@ class AdminState extends ChangeNotifier {
 
   /// Gestion globale des comptes (section "Gestion des comptes" du dashboard
   /// Admin) — tous les rôles sauf Admin, distinct de [comptesInternes] qui ne
-  /// liste que les comptes CA/Qualité en attente de validation.
+  /// liste que les comptes CT/Qualité en attente de validation.
   List<User> get tousLesComptes => _tousLesComptes;
   ActivityFeed? get activityFeed => _activityFeed;
   List<WeeklyStat> get weeklyStats => _weeklyStats;
@@ -66,13 +66,13 @@ class AdminState extends ChangeNotifier {
       _comptesInternes = [..._comptesInternes];
       _comptesInternes[index] = updated;
     }
-    await fetch();
+    _replaceCompte(updated);
   }
 
   /// Validation d'un installateur en attente — distincte de
-  /// [validerCompteInterne] (CA/Qualité uniquement) : POST /comptes/:id/valider
+  /// [validerCompteInterne] (CT/Qualité uniquement) : POST /comptes/:id/valider
   /// (comptes.ts) est réservé aux comptes installateur, mais déjà accessible
-  /// à l'Admin (comme au CA/Direction) côté backend.
+  /// à l'Admin (comme au CT/Direction) côté backend.
   Future<void> validerCompte(User user) async {
     final data = await _api.validerCompte(user.id);
     _replaceCompte(User.fromJson(data['user'] as Map<String, dynamic>));

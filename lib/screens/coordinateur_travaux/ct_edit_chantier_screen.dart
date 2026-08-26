@@ -8,17 +8,17 @@ import '../../data/api_client.dart';
 import '../../data/models/chantier.dart';
 import '../../state/chantier_state.dart';
 
-/// Modification d'un chantier depuis le mobile CA — mêmes champs que
+/// Modification d'un chantier depuis le mobile CT — mêmes champs que
 /// _ModifierChantierDialog (Web), en écran plein pour le mobile plutôt qu'une
 /// boîte de dialogue.
-class CaEditChantierScreen extends StatefulWidget {
-  const CaEditChantierScreen({super.key});
+class CtEditChantierScreen extends StatefulWidget {
+  const CtEditChantierScreen({super.key});
 
   @override
-  State<CaEditChantierScreen> createState() => _CaEditChantierScreenState();
+  State<CtEditChantierScreen> createState() => _CtEditChantierScreenState();
 }
 
-class _CaEditChantierScreenState extends State<CaEditChantierScreen> {
+class _CtEditChantierScreenState extends State<CtEditChantierScreen> {
   Chantier? _chantier;
   bool _isSubmitting = false;
   final _clientController = TextEditingController();

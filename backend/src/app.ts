@@ -6,6 +6,8 @@ import { chantiersRouter } from './routes/chantiers';
 import { adminRouter } from './routes/admin';
 import { notificationsRouter } from './routes/notifications';
 import { pusherRouter } from './routes/pusherAuth';
+import { uploadsRouter } from './routes/uploads';
+import { checklistTemplatesRouter } from './routes/checklistTemplates';
 
 // Frontend et backend sont servis sur la même origine en production (voir
 // vercel.json) : ce CORS ne sert qu'au dev local (Flutter Web sur un port
@@ -23,11 +25,15 @@ export function createApp() {
   app.set('trust proxy', 1);
 
   app.use(cors({ origin: (origin, callback) => callback(null, isAllowedOrigin(origin)) }));
-  // Les documents/photos/notes vocales voyagent en base64 dans le corps JSON
-  // (voir imageStorage.ts) — la limite par défaut d'Express (100kb) est bien
-  // en-deçà d'une simple photo compressée, ce qui faisait échouer l'upload en
-  // 413 silencieusement (promesse jamais résolue côté front, spinner infini).
-  app.use(express.json({ limit: '15mb' }));
+  // Les fichiers (documents, photos, notes vocales, vidéos) ne transitent
+  // plus par cette fonction serverless — voir routes/uploads.ts, qui délivre
+  // un jeton pour un dépôt direct de l'app vers Vercel Blob, contournant la
+  // limite de 4,5 Mo (non configurable) que Vercel impose au corps des
+  // requêtes des fonctions serverless. Seule l'image de la signature du PV
+  // (voir POST .../pv/signature) reste en base64 dans le JSON : elle doit
+  // être traitée immédiatement côté serveur pour la fusion avec le PDF
+  // gabarit, et reste de toute façon minuscule (tracé vectoriel simple).
+  app.use(express.json({ limit: '5mb' }));
 
   app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
@@ -37,6 +43,8 @@ export function createApp() {
   app.use('/admin', adminRouter);
   app.use('/notifications', notificationsRouter);
   app.use('/pusher', pusherRouter);
+  app.use('/uploads', uploadsRouter);
+  app.use('/checklist-templates', checklistTemplatesRouter);
 
   return app;
 }

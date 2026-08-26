@@ -2,6 +2,33 @@ import type { Express } from 'express';
 import request from 'supertest';
 import { prisma } from '../prisma';
 
+// Mêmes listes par défaut que la migration checklist_template_items — `db
+// push` (utilisé par les tests, voir vitest.setup.ts) ne rejoue jamais le SQL
+// des migrations, seulement le schéma : sans ce ré-ensemencement, la table
+// resterait vide en test et POST /chantiers créerait des chantiers sans
+// aucun point de contrôle.
+const RECEPTION_POINTS_DEFAULTS = Array.from({ length: 5 }, (_, i) => ({
+  type: 'reception' as const,
+  categorie: 'Réception',
+  libelle: `Réception point ${i + 1}`,
+  critique: false,
+  ordre: i,
+}));
+
+const AUTO_CONTROLE_POINTS_DEFAULTS = [
+  { categorie: 'Mécanique', libelle: 'Fixation du treuil et des poulies', critique: false },
+  { categorie: 'Mécanique', libelle: 'Alignement des rails de guidage', critique: false },
+  { categorie: 'Mécanique', libelle: 'Serrage des attaches de câbles', critique: false },
+  { categorie: 'Mécanique', libelle: 'Niveau et aplomb de la structure', critique: false },
+  { categorie: 'Portes palières', libelle: 'Verrouillage des portes palières', critique: true },
+  { categorie: 'Portes palières', libelle: 'Serrures de gâches', critique: true },
+  { categorie: 'Portes palières', libelle: 'Asservissement porte/cabine', critique: true },
+  { categorie: 'Portes palières', libelle: 'Étanchéité des seuils de porte', critique: false },
+  { categorie: 'Essais', libelle: 'Essai de charge nominale', critique: false },
+  { categorie: 'Essais', libelle: 'Essai des fins de course', critique: false },
+  { categorie: 'Essais', libelle: "Essai du dispositif d'arrêt d'urgence", critique: true },
+].map((p, i) => ({ type: 'autoControle' as const, ordre: i, ...p }));
+
 export async function resetDb() {
   await prisma.documentTerrain.deleteMany();
   await prisma.documentChantier.deleteMany();
@@ -12,6 +39,8 @@ export async function resetDb() {
   await prisma.habilitation.deleteMany();
   await prisma.emailVerificationCode.deleteMany();
   await prisma.user.deleteMany();
+  await prisma.checklistTemplateItem.deleteMany();
+  await prisma.checklistTemplateItem.createMany({ data: [...RECEPTION_POINTS_DEFAULTS, ...AUTO_CONTROLE_POINTS_DEFAULTS] });
 }
 
 /// Enchaîne le parcours complet d'inscription (demande de code → vérification

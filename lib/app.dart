@@ -17,6 +17,7 @@ import 'state/chantier_state.dart';
 import 'state/comptes_state.dart';
 import 'state/admin_state.dart';
 import 'state/notifications_state.dart';
+import 'state/checklist_templates_state.dart';
 
 class VerticalApp extends StatelessWidget {
   const VerticalApp({super.key});
@@ -61,6 +62,9 @@ class VerticalApp extends StatelessWidget {
         ChangeNotifierProvider(
           create: (context) => NotificationsState(context.read<ApiClient>()),
         ),
+        ChangeNotifierProvider(
+          create: (context) => ChecklistTemplatesState(context.read<ApiClient>()),
+        ),
       ],
       child: const _RouterHost(),
     );
@@ -87,7 +91,7 @@ class _RouterHostState extends State<_RouterHost> {
     _realtime.onChantierChanged = (reference) => context.read<ChantierState>().handleRealtimeChange(reference);
     _realtime.onChantierDeleted = (reference) => context.read<ChantierState>().handleRealtimeDelete(reference);
     _realtime.onNotificationCreated = (json) => context.read<NotificationsState>().handleRealtimeNotification(json);
-    // Le canal notifications est réservé CA/Admin (voir RealtimeService) —
+    // Le canal notifications est réservé CT/Admin (voir RealtimeService) —
     // le rôle courant n'est pas forcément connu dès ce premier appel
     // (restauration de session asynchrone au démarrage, voir AuthState._init),
     // d'où ce ré-appel à chaque changement plutôt qu'une lecture unique ici.
@@ -97,7 +101,7 @@ class _RouterHostState extends State<_RouterHost> {
 
   void _syncRealtime() {
     final role = context.read<AuthState>().currentUser?.role;
-    _realtime.connect(isCaOuAdmin: role == UserRole.chargeAffaires || role == UserRole.admin);
+    _realtime.connect(isCtOuAdmin: role == UserRole.coordinateurTravaux || role == UserRole.admin);
   }
 
   @override

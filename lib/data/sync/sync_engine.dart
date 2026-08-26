@@ -63,34 +63,40 @@ class SyncEngine {
           await _api.markLivretOuvert(op.chantierReference);
           break;
         case 'updatePoint':
+          final photo = payload['photo'] as String?;
+          final photoUrl = photo != null ? await _api.uploadFile(kind: 'pointPhoto', dataUrl: photo) : null;
           await _api.updatePoint(
             op.chantierReference,
             payload['pointId'] as String,
             status: payload['status'] as String?,
-            photo: payload['photo'] as String?,
+            photoUrl: photoUrl,
             clientValidatedAt: payload['clientValidatedAt'] as String?,
           );
           break;
         case 'submitRex':
+          final audio = payload['audio'] as String?;
+          final audioUrl = audio != null ? await _api.uploadFile(kind: 'rexAudio', dataUrl: audio) : null;
           await _api.postRex(
             op.chantierReference,
             transcription: payload['transcription'] as String?,
-            audio: payload['audio'] as String?,
+            audioUrl: audioUrl,
           );
           break;
         case 'addDocument':
+          final fileUrl = await _api.uploadFile(kind: 'documentTerrain', dataUrl: payload['file'] as String);
           await _api.addDocument(
             op.chantierReference,
             titre: payload['titre'] as String,
             categorie: payload['categorie'] as String,
-            file: payload['file'] as String,
+            fileUrl: fileUrl,
           );
           break;
         case 'addHabilitation':
+          final habilitationFileUrl = await _api.uploadFile(kind: 'habilitation', dataUrl: payload['file'] as String);
           await _api.addHabilitation(
             titre: payload['titre'] as String,
             dateExpiration: payload['dateExpiration'] as String,
-            file: payload['file'] as String,
+            fileUrl: habilitationFileUrl,
           );
           break;
         default:

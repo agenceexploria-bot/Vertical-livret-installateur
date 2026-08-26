@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import request from 'supertest';
 import bcrypt from 'bcryptjs';
 import { PDFDocument } from 'pdf-lib';
+import { put } from '@vercel/blob';
 import { createApp } from '../app';
 import { prisma } from '../prisma';
 import { resetDb, signup as doSignup } from './helpers';
@@ -11,16 +12,27 @@ const ONE_PX_PNG_BASE64 =
 
 const app = createApp();
 
-async function createCa() {
+// Les endpoints n'acceptent plus le fichier en base64 : l'app le dépose
+// d'abord directement sur Vercel Blob (voir routes/uploads.ts), puis
+// transmet l'URL obtenue. En test, `put` est mocké (voir vitest.setup.ts) —
+// l'appeler ici simule ce dépôt direct et alimente le même faux stockage que
+// celui que relit `fetchBlobFile` (ex. pour la fusion du PV).
+async function fakeUpload(filename: string, base64: string, contentType: string): Promise<string> {
+  const uniqueFilename = `${Date.now()}-${Math.round(Math.random() * 1e6)}-${filename}`;
+  const { url } = await put(uniqueFilename, Buffer.from(base64, 'base64'), { access: 'public', contentType });
+  return url;
+}
+
+async function createCt() {
   const passwordHash = await bcrypt.hash('demodemo', 10);
-  const ca = await prisma.user.create({
+  const ct = await prisma.user.create({
     data: {
       nom: 'Martin', prenom: 'Sandrine', mobile: '0102030405', email: 's.martin@actiwork.fr',
-      passwordHash, role: 'chargeAffaires', isActive: true,
+      passwordHash, role: 'coordinateurTravaux', isActive: true,
     },
   });
   const login = await request(app).post('/auth/login').send({ identifier: 's.martin@actiwork.fr', password: 'demodemo' });
-  return { user: ca, accessToken: login.body.accessToken as string };
+  return { user: ct, accessToken: login.body.accessToken as string };
 }
 
 async function createAdmin() {
@@ -77,9 +89,9 @@ afterAll(async () => {
 });
 
 describe('POST /chantiers', () => {
-  it('un chargé d\'affaires peut créer un chantier avec ses points de contrôle pré-remplis', async () => {
-    const ca = await createCa();
-    const res = await createChantier(ca.accessToken);
+  it('un coordinateur travaux peut créer un chantier avec ses points de contrôle pré-remplis', async () => {
+    const ct = await createCt();
+    const res = await createChantier(ct.accessToken);
 
     expect(res.status).toBe(201);
     expect(res.body.chantier.reference).toBe('LD64397');
@@ -95,17 +107,17 @@ describe('POST /chantiers', () => {
   });
 
   it('refuse une référence déjà existante', async () => {
-    const ca = await createCa();
-    await createChantier(ca.accessToken);
-    const res = await createChantier(ca.accessToken);
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
+    const res = await createChantier(ct.accessToken);
     expect(res.status).toBe(409);
   });
 });
 
 describe('GET /chantiers — rattachement (EX-04)', () => {
   it("un installateur non rattaché ne voit aucun chantier", async () => {
-    const ca = await createCa();
-    await createChantier(ca.accessToken);
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
     const installateur = await createInstallateur({ isActive: true });
 
     const res = await request(app).get('/chantiers').set('Authorization', `Bearer ${installateur.accessToken}`);
@@ -113,44 +125,44 @@ describe('GET /chantiers — rattachement (EX-04)', () => {
     expect(res.body.chantiers).toHaveLength(0);
   });
 
-  it('un installateur rattaché voit le chantier ; le CA voit tout', async () => {
-    const ca = await createCa();
-    await createChantier(ca.accessToken);
+  it('un installateur rattaché voit le chantier ; le CT voit tout', async () => {
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
     const installateur = await createInstallateur({ isActive: true });
 
     await request(app)
       .post('/chantiers/LD64397/rattacher')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .set('Authorization', `Bearer ${ct.accessToken}`)
       .send({ userId: installateur.user.id });
 
     const asInstallateur = await request(app).get('/chantiers').set('Authorization', `Bearer ${installateur.accessToken}`);
     expect(asInstallateur.body.chantiers).toHaveLength(1);
     expect(asInstallateur.body.chantiers[0].installateursRattaches[0].id).toBe(installateur.user.id);
 
-    const asCa = await request(app).get('/chantiers').set('Authorization', `Bearer ${ca.accessToken}`);
-    expect(asCa.body.chantiers).toHaveLength(1);
+    const asCt = await request(app).get('/chantiers').set('Authorization', `Bearer ${ct.accessToken}`);
+    expect(asCt.body.chantiers).toHaveLength(1);
   });
 });
 
 describe('Progression et modules', () => {
   it('coche un point de contrôle et met à jour la progression', async () => {
-    const ca = await createCa();
-    const created = await createChantier(ca.accessToken);
+    const ct = await createCt();
+    const created = await createChantier(ct.accessToken);
     const pointId = created.body.chantier.receptionMarchandises[0].id;
 
     const patch = await request(app)
       .patch(`/chantiers/LD64397/points/${pointId}`)
-      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .set('Authorization', `Bearer ${ct.accessToken}`)
       .send({ status: 'conforme', photoPath: 'photo.jpg' });
     expect(patch.status).toBe(200);
 
-    const res = await request(app).get('/chantiers/LD64397').set('Authorization', `Bearer ${ca.accessToken}`);
+    const res = await request(app).get('/chantiers/LD64397').set('Authorization', `Bearer ${ct.accessToken}`);
     expect(res.body.chantier.progressionReception).toBeCloseTo(1 / 5);
   });
 
   it("génère l'auto-contrôle avec des catégories et des points de sécurité critiques", async () => {
-    const ca = await createCa();
-    const created = await createChantier(ca.accessToken);
+    const ct = await createCt();
+    const created = await createChantier(ct.accessToken);
     const autoControle = created.body.chantier.autoControle as { categorie: string; critique: boolean }[];
 
     expect(autoControle.some((p) => p.categorie === 'Portes palières' && p.critique)).toBe(true);
@@ -158,14 +170,14 @@ describe('Progression et modules', () => {
   });
 
   it('horodate et attribue nominativement la validation d\'un point au compte connecté', async () => {
-    const ca = await createCa();
-    const created = await createChantier(ca.accessToken);
+    const ct = await createCt();
+    const created = await createChantier(ct.accessToken);
     const pointId = created.body.chantier.receptionMarchandises[0].id;
     const clientValidatedAt = '2026-07-23T08:15:00.000Z';
 
     const patch = await request(app)
       .patch(`/chantiers/LD64397/points/${pointId}`)
-      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .set('Authorization', `Bearer ${ct.accessToken}`)
       .send({ status: 'conforme', photoPath: 'photo.jpg', clientValidatedAt });
 
     expect(patch.status).toBe(200);
@@ -174,63 +186,63 @@ describe('Progression et modules', () => {
   });
 
   it("enregistre la photo d'un point de contrôle sur le stockage distant et renvoie son URL", async () => {
-    const ca = await createCa();
-    const created = await createChantier(ca.accessToken);
+    const ct = await createCt();
+    const created = await createChantier(ct.accessToken);
     const pointId = created.body.chantier.receptionMarchandises[0].id;
 
+    const photoUrl = await fakeUpload(`point-${pointId}.jpg`, ONE_PX_PNG_BASE64, 'image/jpeg');
     const patch = await request(app)
       .patch(`/chantiers/LD64397/points/${pointId}`)
-      .set('Authorization', `Bearer ${ca.accessToken}`)
-      .send({ status: 'conforme', photo: `data:image/jpeg;base64,${ONE_PX_PNG_BASE64}` });
+      .set('Authorization', `Bearer ${ct.accessToken}`)
+      .send({ status: 'conforme', photoUrl });
 
     expect(patch.status).toBe(200);
-    const photoPath = patch.body.point.photoPath as string;
-    expect(photoPath).toMatch(new RegExp(`^https://blob\\.vercel-storage\\.com/test/point-${pointId}-.+\\.jpeg$`));
+    expect(patch.body.point.photoPath).toBe(photoUrl);
   });
 
   // Un vrai PDF valide est nécessaire depuis que la signature fusionne le
   // gabarit côté serveur avec pdf-lib (voir pvMerge.ts) — contrairement à
   // l'ancien flux, où le fichier reçu par /pv/signature n'était jamais
   // réellement ouvert/parsé côté backend (déjà fusionné côté app).
-  async function minimalPdfDataUrl(): Promise<string> {
+  async function minimalPdfFileUrl(): Promise<string> {
     const doc = await PDFDocument.create();
     doc.addPage([595, 842]);
     const bytes = await doc.save();
-    return `data:application/pdf;base64,${Buffer.from(bytes).toString('base64')}`;
+    return fakeUpload('gabarit.pdf', Buffer.from(bytes).toString('base64'), 'application/pdf');
   }
 
   const SIGNATURE_PNG_DATA_URL = `data:image/png;base64,${ONE_PX_PNG_BASE64}`;
   // Emplacement quelconque, valide pour une page A4 (595 x 842 pts) — voir
-  // minimalPdfDataUrl ci-dessus.
+  // minimalPdfFileUrl ci-dessus.
   const SIGNATURE_PLACEMENT = { pageNumber: 1, x: 350, y: 80, width: 180, height: 70 };
 
-  it('le CA dépose le gabarit PV — ne le valide pas', async () => {
-    const ca = await createCa();
-    await createChantier(ca.accessToken);
+  it('le CT dépose le gabarit PV — ne le valide pas', async () => {
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
 
     const res = await request(app)
       .post('/chantiers/LD64397/pv/document')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
-      .send({ file: await minimalPdfDataUrl() });
+      .set('Authorization', `Bearer ${ct.accessToken}`)
+      .send({ fileUrl: await minimalPdfFileUrl() });
 
     expect(res.status).toBe(200);
     expect(res.body.chantier.pvPdfPath).toBeTruthy();
     expect(res.body.chantier.pvSigne).toBe(false);
   });
 
-  it('l\'installateur signe le PV déposé par le CA, avec la seule image de la signature', async () => {
-    const ca = await createCa();
-    await createChantier(ca.accessToken);
+  it('l\'installateur signe le PV déposé par le CT, avec la seule image de la signature', async () => {
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
     const installateur = await createInstallateur({ isActive: true });
     await request(app)
       .post('/chantiers/LD64397/rattacher')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .set('Authorization', `Bearer ${ct.accessToken}`)
       .send({ userId: installateur.user.id });
 
     await request(app)
       .post('/chantiers/LD64397/pv/document')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
-      .send({ file: await minimalPdfDataUrl() });
+      .set('Authorization', `Bearer ${ct.accessToken}`)
+      .send({ fileUrl: await minimalPdfFileUrl() });
 
     const res = await request(app)
       .post('/chantiers/LD64397/pv/signature')
@@ -243,18 +255,18 @@ describe('Progression et modules', () => {
     expect(res.body.chantier.pvFonctionSignataire).toBe('Client');
   });
 
-  it('refuse de re-signer un PV déjà signé — seule une suppression par le CA/Admin déverrouille', async () => {
-    const ca = await createCa();
-    await createChantier(ca.accessToken);
+  it('refuse de re-signer un PV déjà signé — seule une suppression par le CT/Admin déverrouille', async () => {
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
     const installateur = await createInstallateur({ isActive: true });
     await request(app)
       .post('/chantiers/LD64397/rattacher')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .set('Authorization', `Bearer ${ct.accessToken}`)
       .send({ userId: installateur.user.id });
     await request(app)
       .post('/chantiers/LD64397/pv/document')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
-      .send({ file: await minimalPdfDataUrl() });
+      .set('Authorization', `Bearer ${ct.accessToken}`)
+      .send({ fileUrl: await minimalPdfFileUrl() });
     await request(app)
       .post('/chantiers/LD64397/pv/signature')
       .set('Authorization', `Bearer ${installateur.accessToken}`)
@@ -266,12 +278,12 @@ describe('Progression et modules', () => {
       .send({ nomSignataire: 'Un autre', fonctionSignataire: 'Responsable technique', signatureImage: SIGNATURE_PNG_DATA_URL, ...SIGNATURE_PLACEMENT });
     expect(second.status).toBe(400);
 
-    // La suppression par le CA repasse pvSigne à false : la signature redevient possible.
-    await request(app).delete('/chantiers/LD64397/pv').set('Authorization', `Bearer ${ca.accessToken}`);
+    // La suppression par le CT repasse pvSigne à false : la signature redevient possible.
+    await request(app).delete('/chantiers/LD64397/pv').set('Authorization', `Bearer ${ct.accessToken}`);
     await request(app)
       .post('/chantiers/LD64397/pv/document')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
-      .send({ file: await minimalPdfDataUrl() });
+      .set('Authorization', `Bearer ${ct.accessToken}`)
+      .send({ fileUrl: await minimalPdfFileUrl() });
     const third = await request(app)
       .post('/chantiers/LD64397/pv/signature')
       .set('Authorization', `Bearer ${installateur.accessToken}`)
@@ -280,13 +292,13 @@ describe('Progression et modules', () => {
     expect(third.body.chantier.pvSigneur).toBe('Un autre');
   }, 30000);
 
-  it('refuse de signer si le CA n\'a pas encore déposé de gabarit', async () => {
-    const ca = await createCa();
-    await createChantier(ca.accessToken);
+  it('refuse de signer si le CT n\'a pas encore déposé de gabarit', async () => {
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
     const installateur = await createInstallateur({ isActive: true });
     await request(app)
       .post('/chantiers/LD64397/rattacher')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .set('Authorization', `Bearer ${ct.accessToken}`)
       .send({ userId: installateur.user.id });
 
     const res = await request(app)
@@ -297,17 +309,17 @@ describe('Progression et modules', () => {
   }, 30000);
 
   it('enregistre le PDF fusionné sur le stockage distant et renvoie son URL', async () => {
-    const ca = await createCa();
-    await createChantier(ca.accessToken);
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
     const installateur = await createInstallateur({ isActive: true });
     await request(app)
       .post('/chantiers/LD64397/rattacher')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .set('Authorization', `Bearer ${ct.accessToken}`)
       .send({ userId: installateur.user.id });
     await request(app)
       .post('/chantiers/LD64397/pv/document')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
-      .send({ file: await minimalPdfDataUrl() });
+      .set('Authorization', `Bearer ${ct.accessToken}`)
+      .send({ fileUrl: await minimalPdfFileUrl() });
 
     const res = await request(app)
       .post('/chantiers/LD64397/pv/signature')
@@ -322,161 +334,166 @@ describe('Progression et modules', () => {
 
 describe('POST /chantiers/:reference/rex', () => {
   it('accepte un REX texte seul (sans audio)', async () => {
-    const ca = await createCa();
-    await createChantier(ca.accessToken);
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
 
     const res = await request(app)
       .post('/chantiers/LD64397/rex')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .set('Authorization', `Bearer ${ct.accessToken}`)
       .send({ transcription: 'Tout s\'est bien passé.' });
 
     expect(res.status).toBe(200);
-    expect(res.body.chantier.rexValide).toBe(true);
-    expect(res.body.chantier.rexTranscription).toBe('Tout s\'est bien passé.');
+    expect(res.body.chantier.rex).toHaveLength(1);
+    expect(res.body.chantier.rex[0].transcription).toBe('Tout s\'est bien passé.');
   });
 
   it('accepte une note vocale seule (sans transcription) et enregistre le fichier audio', async () => {
-    const ca = await createCa();
-    await createChantier(ca.accessToken);
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
+    const audioUrl = await fakeUpload('rex.webm', ONE_PX_PNG_BASE64, 'audio/webm');
 
     const res = await request(app)
       .post('/chantiers/LD64397/rex')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
-      .send({ audio: `data:audio/webm;base64,${ONE_PX_PNG_BASE64}` });
+      .set('Authorization', `Bearer ${ct.accessToken}`)
+      .send({ audioUrl });
 
     expect(res.status).toBe(200);
-    expect(res.body.chantier.rexValide).toBe(true);
-    expect(res.body.chantier.rexTranscription).toBeNull();
-    const audioPath = res.body.chantier.rexAudioPath as string;
-    expect(audioPath).toMatch(/^https:\/\/blob\.vercel-storage\.com\/test\/rex-LD64397-.+\.webm$/);
+    expect(res.body.chantier.rex[0].transcription).toBeNull();
+    expect(res.body.chantier.rex[0].audioPath).toBe(audioUrl);
   });
 
   it('refuse un REX sans transcription ni audio', async () => {
-    const ca = await createCa();
-    await createChantier(ca.accessToken);
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
 
     const res = await request(app)
       .post('/chantiers/LD64397/rex')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .set('Authorization', `Bearer ${ct.accessToken}`)
       .send({});
     expect(res.status).toBe(400);
   });
 
-  it('refuse un second REX tant que le CA/Admin n\'a pas supprimé le précédent', async () => {
-    const ca = await createCa();
-    await createChantier(ca.accessToken);
+  it('autorise plusieurs REX sur le même chantier (l\'installateur a oublié quelque chose)', async () => {
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
 
     await request(app)
       .post('/chantiers/LD64397/rex')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .set('Authorization', `Bearer ${ct.accessToken}`)
       .send({ transcription: 'Premier REX.' });
 
     const res = await request(app)
       .post('/chantiers/LD64397/rex')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
-      .send({ transcription: 'Deuxième tentative.' });
-    expect(res.status).toBe(409);
+      .set('Authorization', `Bearer ${ct.accessToken}`)
+      .send({ transcription: 'Deuxième REX.' });
+    expect(res.status).toBe(200);
+    expect(res.body.chantier.rex).toHaveLength(2);
+    expect(res.body.chantier.rex.map((r: { transcription: string }) => r.transcription).sort()).toEqual([
+      'Deuxième REX.',
+      'Premier REX.',
+    ]);
   });
 });
 
-describe('DELETE /chantiers/:reference/rex', () => {
-  it('le CA supprime le REX, ce qui débloque un nouvel envoi', async () => {
-    const ca = await createCa();
-    await createChantier(ca.accessToken);
+describe('DELETE /chantiers/:reference/rex/:rexId', () => {
+  it('le CT supprime une entrée REX précise, sans affecter les autres', async () => {
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
     await request(app)
       .post('/chantiers/LD64397/rex')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .set('Authorization', `Bearer ${ct.accessToken}`)
       .send({ transcription: 'À corriger.' });
+    const second = await request(app)
+      .post('/chantiers/LD64397/rex')
+      .set('Authorization', `Bearer ${ct.accessToken}`)
+      .send({ transcription: 'À garder.' });
+    const rexId = second.body.chantier.rex.find((r: { transcription: string }) => r.transcription === 'À corriger.').id;
 
     const del = await request(app)
-      .delete('/chantiers/LD64397/rex')
-      .set('Authorization', `Bearer ${ca.accessToken}`);
+      .delete(`/chantiers/LD64397/rex/${rexId}`)
+      .set('Authorization', `Bearer ${ct.accessToken}`);
     expect(del.status).toBe(200);
-    expect(del.body.chantier.rexValide).toBe(false);
-    expect(del.body.chantier.rexTranscription).toBeNull();
-
-    const res = await request(app)
-      .post('/chantiers/LD64397/rex')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
-      .send({ transcription: 'Nouveau REX après suppression.' });
-    expect(res.status).toBe(200);
-    expect(res.body.chantier.rexTranscription).toBe('Nouveau REX après suppression.');
+    expect(del.body.chantier.rex).toHaveLength(1);
+    expect(del.body.chantier.rex[0].transcription).toBe('À garder.');
   });
 
-  it('l\'Admin peut aussi supprimer le REX', async () => {
-    const ca = await createCa();
-    await createChantier(ca.accessToken);
-    await request(app)
+  it('l\'Admin peut aussi supprimer une entrée REX', async () => {
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
+    const created = await request(app)
       .post('/chantiers/LD64397/rex')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .set('Authorization', `Bearer ${ct.accessToken}`)
       .send({ transcription: 'À corriger.' });
+    const rexId = created.body.chantier.rex[0].id;
 
     const admin = await createAdmin();
     const del = await request(app)
-      .delete('/chantiers/LD64397/rex')
+      .delete(`/chantiers/LD64397/rex/${rexId}`)
       .set('Authorization', `Bearer ${admin.accessToken}`);
     expect(del.status).toBe(200);
-    expect(del.body.chantier.rexValide).toBe(false);
+    expect(del.body.chantier.rex).toHaveLength(0);
   });
 
-  it('refuse à un installateur de supprimer le REX', async () => {
-    const ca = await createCa();
-    await createChantier(ca.accessToken);
-    await request(app)
+  it('refuse à un installateur de supprimer une entrée REX', async () => {
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
+    const created = await request(app)
       .post('/chantiers/LD64397/rex')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .set('Authorization', `Bearer ${ct.accessToken}`)
       .send({ transcription: 'À corriger.' });
+    const rexId = created.body.chantier.rex[0].id;
 
     const installateur = await createInstallateur({ isActive: true });
     await request(app)
       .post('/chantiers/LD64397/rattacher')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .set('Authorization', `Bearer ${ct.accessToken}`)
       .send({ userId: installateur.user.id });
 
     const res = await request(app)
-      .delete('/chantiers/LD64397/rex')
+      .delete(`/chantiers/LD64397/rex/${rexId}`)
       .set('Authorization', `Bearer ${installateur.accessToken}`);
     expect(res.status).toBe(403);
   });
 
-  it('renvoie 404 si aucun REX n\'a été soumis pour ce chantier', async () => {
-    const ca = await createCa();
-    await createChantier(ca.accessToken);
+  it('renvoie 404 si l\'entrée REX n\'existe pas', async () => {
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
 
     const res = await request(app)
-      .delete('/chantiers/LD64397/rex')
-      .set('Authorization', `Bearer ${ca.accessToken}`);
+      .delete('/chantiers/LD64397/rex/inexistant')
+      .set('Authorization', `Bearer ${ct.accessToken}`);
     expect(res.status).toBe(404);
   });
 
   it('supprime aussi la note vocale associée', async () => {
-    const ca = await createCa();
-    await createChantier(ca.accessToken);
-    await request(app)
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
+    const created = await request(app)
       .post('/chantiers/LD64397/rex')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
-      .send({ audio: `data:audio/webm;base64,${ONE_PX_PNG_BASE64}` });
+      .set('Authorization', `Bearer ${ct.accessToken}`)
+      .send({ audioUrl: await fakeUpload('rex.webm', ONE_PX_PNG_BASE64, 'audio/webm') });
+    const rexId = created.body.chantier.rex[0].id;
 
     const del = await request(app)
-      .delete('/chantiers/LD64397/rex')
-      .set('Authorization', `Bearer ${ca.accessToken}`);
+      .delete(`/chantiers/LD64397/rex/${rexId}`)
+      .set('Authorization', `Bearer ${ct.accessToken}`);
     expect(del.status).toBe(200);
-    expect(del.body.chantier.rexAudioPath).toBeNull();
+    expect(del.body.chantier.rex).toHaveLength(0);
   });
 });
 
 describe('DELETE /chantiers/:reference (suppression définitive, Admin uniquement)', () => {
   it('supprime le chantier ainsi que les fichiers de ses documents/REX/PV associés', async () => {
-    const ca = await createCa();
-    await createChantier(ca.accessToken);
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
     await request(app)
       .post('/chantiers/LD64397/documents-chantier')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
-      .send({ type: 'securite', nom: 'PPSPS', file: `data:image/png;base64,${ONE_PX_PNG_BASE64}` });
+      .set('Authorization', `Bearer ${ct.accessToken}`)
+      .send({ type: 'securite', nom: 'PPSPS', fileUrl: await fakeUpload('doc.png', ONE_PX_PNG_BASE64, 'image/png') });
     await request(app)
       .post('/chantiers/LD64397/rex')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
-      .send({ audio: `data:audio/webm;base64,${ONE_PX_PNG_BASE64}` });
+      .set('Authorization', `Bearer ${ct.accessToken}`)
+      .send({ audioUrl: await fakeUpload('rex.webm', ONE_PX_PNG_BASE64, 'audio/webm') });
 
     const admin = await createAdmin();
     const del = await request(app)
@@ -488,72 +505,76 @@ describe('DELETE /chantiers/:reference (suppression définitive, Admin uniquemen
     expect(get.status).toBe(404);
   });
 
-  it('refuse à un CA de supprimer un chantier', async () => {
-    const ca = await createCa();
-    await createChantier(ca.accessToken);
+  it('refuse à un CT de supprimer un chantier', async () => {
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
 
     const res = await request(app)
       .delete('/chantiers/LD64397')
-      .set('Authorization', `Bearer ${ca.accessToken}`);
+      .set('Authorization', `Bearer ${ct.accessToken}`);
     expect(res.status).toBe(403);
   });
 });
 
 describe('POST /chantiers/:reference/documents', () => {
   it('dépose un document (photo) et enregistre le fichier sur le stockage distant', async () => {
-    const ca = await createCa();
-    await createChantier(ca.accessToken);
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
+    const fileUrl = await fakeUpload('doc.png', ONE_PX_PNG_BASE64, 'image/png');
 
     const res = await request(app)
       .post('/chantiers/LD64397/documents')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
-      .send({ titre: 'Bon de livraison', categorie: 'bonLivraison', file: `data:image/png;base64,${ONE_PX_PNG_BASE64}` });
+      .set('Authorization', `Bearer ${ct.accessToken}`)
+      .send({ titre: 'Bon de livraison', categorie: 'bonLivraison', fileUrl });
 
     expect(res.status).toBe(201);
     expect(res.body.document.categorie).toBe('bonLivraison');
-    const filePath = res.body.document.filePath as string;
-    expect(filePath).toMatch(/^https:\/\/blob\.vercel-storage\.com\/test\/doc-.+\.png$/);
+    expect(res.body.document.filePath).toBe(fileUrl);
   });
 
   it('refuse un dépôt sans catégorie', async () => {
-    const ca = await createCa();
-    await createChantier(ca.accessToken);
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
 
     const res = await request(app)
       .post('/chantiers/LD64397/documents')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
-      .send({ titre: 'Sans catégorie', file: `data:image/png;base64,${ONE_PX_PNG_BASE64}` });
+      .set('Authorization', `Bearer ${ct.accessToken}`)
+      .send({ titre: 'Sans catégorie', fileUrl: await fakeUpload('doc.png', ONE_PX_PNG_BASE64, 'image/png') });
     expect(res.status).toBe(400);
   });
 
   it('refuse un dépôt sans fichier', async () => {
-    const ca = await createCa();
-    await createChantier(ca.accessToken);
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
 
     const res = await request(app)
       .post('/chantiers/LD64397/documents')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .set('Authorization', `Bearer ${ct.accessToken}`)
       .send({ titre: 'Sans fichier', categorie: 'constat' });
     expect(res.status).toBe(400);
   });
 
-  it('refuse un dépôt dont le type MIME n\'est pas autorisé (ex. SVG)', async () => {
-    const ca = await createCa();
-    await createChantier(ca.accessToken);
+  // Le type de fichier est désormais restreint en amont, au moment de la
+  // génération du jeton d'upload (voir routes/uploads.ts et son test dédié) —
+  // cette route-ci ne fait plus que vérifier que l'URL fournie pointe
+  // effectivement vers notre store Vercel Blob, pour empêcher qu'un client
+  // fasse enregistrer une URL arbitraire comme si elle avait été déposée légitimement.
+  it('refuse une URL de fichier qui ne pointe pas vers notre store Vercel Blob', async () => {
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
 
-    const svg = Buffer.from('<svg onload="alert(1)"></svg>').toString('base64');
     const res = await request(app)
       .post('/chantiers/LD64397/documents')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
-      .send({ titre: 'Fichier suspect', categorie: 'constat', file: `data:image/svg+xml;base64,${svg}` });
+      .set('Authorization', `Bearer ${ct.accessToken}`)
+      .send({ titre: 'Fichier suspect', categorie: 'constat', fileUrl: 'https://evil.example.com/malware.svg' });
     expect(res.status).toBe(400);
   });
 });
 
 describe('Sécurité — rattachement obligatoire pour un installateur (bug 3B)', () => {
   it('refuse à un installateur non rattaché de modifier un point de contrôle', async () => {
-    const ca = await createCa();
-    const created = await createChantier(ca.accessToken);
+    const ct = await createCt();
+    const created = await createChantier(ct.accessToken);
     const pointId = created.body.chantier.receptionMarchandises[0].id;
     const etranger = await createInstallateur({ isActive: true });
 
@@ -565,8 +586,8 @@ describe('Sécurité — rattachement obligatoire pour un installateur (bug 3B)'
   });
 
   it('refuse à un installateur non rattaché de soumettre un REX', async () => {
-    const ca = await createCa();
-    await createChantier(ca.accessToken);
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
     const etranger = await createInstallateur({ isActive: true });
 
     const res = await request(app)
@@ -577,41 +598,41 @@ describe('Sécurité — rattachement obligatoire pour un installateur (bug 3B)'
   });
 
   it('refuse à un installateur non rattaché de signer le PV', async () => {
-    const ca = await createCa();
-    await createChantier(ca.accessToken);
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
     await request(app)
       .post('/chantiers/LD64397/pv/document')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
-      .send({ file: `data:application/pdf;base64,${ONE_PX_PNG_BASE64}` });
+      .set('Authorization', `Bearer ${ct.accessToken}`)
+      .send({ fileUrl: await fakeUpload('doc.pdf', ONE_PX_PNG_BASE64, 'application/pdf') });
     const etranger = await createInstallateur({ isActive: true });
 
     const res = await request(app)
       .post('/chantiers/LD64397/pv/signature')
       .set('Authorization', `Bearer ${etranger.accessToken}`)
-      .send({ nomSignataire: 'Tentative', fonctionSignataire: 'Non autorisée', file: `data:application/pdf;base64,${ONE_PX_PNG_BASE64}` });
+      .send({ nomSignataire: 'Tentative', fonctionSignataire: 'Non autorisée', fileUrl: await fakeUpload('doc.pdf', ONE_PX_PNG_BASE64, 'application/pdf') });
     expect(res.status).toBe(403);
   });
 
   it('refuse à un installateur non rattaché de déposer un document', async () => {
-    const ca = await createCa();
-    await createChantier(ca.accessToken);
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
     const etranger = await createInstallateur({ isActive: true });
 
     const res = await request(app)
       .post('/chantiers/LD64397/documents')
       .set('Authorization', `Bearer ${etranger.accessToken}`)
-      .send({ titre: 'Intrusion', categorie: 'constat', file: `data:image/png;base64,${ONE_PX_PNG_BASE64}` });
+      .send({ titre: 'Intrusion', categorie: 'constat', fileUrl: await fakeUpload('doc.png', ONE_PX_PNG_BASE64, 'image/png') });
     expect(res.status).toBe(403);
   });
 
   it('autorise toujours un installateur bien rattaché à modifier un point', async () => {
-    const ca = await createCa();
-    const created = await createChantier(ca.accessToken);
+    const ct = await createCt();
+    const created = await createChantier(ct.accessToken);
     const pointId = created.body.chantier.receptionMarchandises[0].id;
     const installateur = await createInstallateur({ isActive: true });
     await request(app)
       .post('/chantiers/LD64397/rattacher')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .set('Authorization', `Bearer ${ct.accessToken}`)
       .send({ userId: installateur.user.id });
 
     const res = await request(app)
@@ -622,8 +643,8 @@ describe('Sécurité — rattachement obligatoire pour un installateur (bug 3B)'
   });
 
   it('refuse à un installateur non rattaché de consulter le détail d\'un chantier (GET /:reference)', async () => {
-    const ca = await createCa();
-    await createChantier(ca.accessToken);
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
     const etranger = await createInstallateur({ isActive: true });
 
     const res = await request(app)
@@ -633,16 +654,16 @@ describe('Sécurité — rattachement obligatoire pour un installateur (bug 3B)'
   });
 
   it("refuse d'accéder à un point de contrôle appartenant à un autre chantier", async () => {
-    const ca = await createCa();
-    const chantierA = await createChantier(ca.accessToken, 'LD64397');
-    await createChantier(ca.accessToken, 'LD91245');
+    const ct = await createCt();
+    const chantierA = await createChantier(ct.accessToken, 'LD64397');
+    await createChantier(ct.accessToken, 'LD91245');
     const pointDeA = chantierA.body.chantier.receptionMarchandises[0].id;
 
     const installateur = await createInstallateur({ isActive: true });
     // Rattaché à LD91245, mais pas à LD64397 — pointDeA appartient à LD64397.
     await request(app)
       .post('/chantiers/LD91245/rattacher')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
+      .set('Authorization', `Bearer ${ct.accessToken}`)
       .send({ userId: installateur.user.id });
 
     const res = await request(app)
@@ -653,8 +674,8 @@ describe('Sécurité — rattachement obligatoire pour un installateur (bug 3B)'
   });
 });
 
-describe("Rôles back-office — l'Admin a toutes les fonctionnalités du CA", () => {
-  it("permet à l'Admin d'accéder à la liste des chantiers (super-CA, depuis la fusion des rôles)", async () => {
+describe("Rôles back-office — l'Admin a toutes les fonctionnalités du CT", () => {
+  it("permet à l'Admin d'accéder à la liste des chantiers (super-CT, depuis la fusion des rôles)", async () => {
     const passwordHash = await bcrypt.hash('demodemo', 10);
     await prisma.user.create({
       data: {
@@ -670,46 +691,60 @@ describe("Rôles back-office — l'Admin a toutes les fonctionnalités du CA", (
 });
 
 describe('POST /chantiers/:reference/documents-chantier (Modules 1-3)', () => {
-  it('permet au CA de déposer un document de référence, lisible ensuite via GET', async () => {
-    const ca = await createCa();
-    await createChantier(ca.accessToken);
+  it('permet au CT de déposer un document de référence, lisible ensuite via GET', async () => {
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
+    const fileUrl = await fakeUpload('doc.png', ONE_PX_PNG_BASE64, 'image/png');
 
     const res = await request(app)
       .post('/chantiers/LD64397/documents-chantier')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
-      .send({ type: 'securite', nom: 'PPSPS', file: `data:image/png;base64,${ONE_PX_PNG_BASE64}` });
+      .set('Authorization', `Bearer ${ct.accessToken}`)
+      .send({ type: 'securite', nom: 'PPSPS', fileUrl });
 
     expect(res.status).toBe(201);
     expect(res.body.chantier.documentsChantier).toHaveLength(1);
     expect(res.body.chantier.documentsChantier[0].type).toBe('securite');
     expect(res.body.chantier.documentsChantier[0].nom).toBe('PPSPS');
-    const filePath = res.body.chantier.documentsChantier[0].filePath as string;
-    expect(filePath).toMatch(/^https:\/\/blob\.vercel-storage\.com\/test\/doc-chantier-.+\.png$/);
+    expect(res.body.chantier.documentsChantier[0].filePath).toBe(fileUrl);
 
-    const get = await request(app).get('/chantiers/LD64397').set('Authorization', `Bearer ${ca.accessToken}`);
+    const get = await request(app).get('/chantiers/LD64397').set('Authorization', `Bearer ${ct.accessToken}`);
     expect(get.body.chantier.documentsChantier).toHaveLength(1);
   });
 
+  it('nommer le document est optionnel — le nom du fichier d\'origine fait l\'affaire', async () => {
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
+    const fileUrl = await fakeUpload('doc.png', ONE_PX_PNG_BASE64, 'image/png');
+
+    const res = await request(app)
+      .post('/chantiers/LD64397/documents-chantier')
+      .set('Authorization', `Bearer ${ct.accessToken}`)
+      .send({ type: 'securite', nomFichierOriginal: 'PPSPS_signe.pdf', fileUrl });
+
+    expect(res.status).toBe(201);
+    expect(res.body.chantier.documentsChantier[0].nom).toBe('PPSPS_signe.pdf');
+  });
+
   it('refuse à un installateur de déposer un document de référence', async () => {
-    const ca = await createCa();
-    await createChantier(ca.accessToken);
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
     const installateur = await createInstallateur({ isActive: true });
 
     const res = await request(app)
       .post('/chantiers/LD64397/documents-chantier')
       .set('Authorization', `Bearer ${installateur.accessToken}`)
-      .send({ type: 'technique', nom: 'Plan', file: `data:image/png;base64,${ONE_PX_PNG_BASE64}` });
+      .send({ type: 'technique', nom: 'Plan', fileUrl: await fakeUpload('doc.png', ONE_PX_PNG_BASE64, 'image/png') });
     expect(res.status).toBe(403);
   });
 
   it('refuse un type de document invalide', async () => {
-    const ca = await createCa();
-    await createChantier(ca.accessToken);
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
 
     const res = await request(app)
       .post('/chantiers/LD64397/documents-chantier')
-      .set('Authorization', `Bearer ${ca.accessToken}`)
-      .send({ type: 'autre', nom: 'PPSPS', file: `data:image/png;base64,${ONE_PX_PNG_BASE64}` });
+      .set('Authorization', `Bearer ${ct.accessToken}`)
+      .send({ type: 'autre', nom: 'PPSPS', fileUrl: await fakeUpload('doc.png', ONE_PX_PNG_BASE64, 'image/png') });
     expect(res.status).toBe(400);
   });
 });

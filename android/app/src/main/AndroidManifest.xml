@@ -1,4 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.BLUETOOTH"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
     <application
         android:label="vertical_app"
         android:name="${applicationName}"
@@ -40,6 +45,14 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- Requis par speech_to_text sur Android 11+ (API 30+) : sans ça,
+             SpeechRecognizer.isRecognitionAvailable() renvoie false (le
+             service de reconnaissance vocale est invisible à l'app à cause
+             de la visibilité de paquets d'Android 11+) et la transcription
+             automatique du REX ne s'active jamais silencieusement. -->
+        <intent>
+            <action android:name="android.speech.RecognitionService"/>
         </intent>
     </queries>
 </manifest>

@@ -4,15 +4,15 @@ import { z } from 'zod';
 import { prisma } from '../prisma';
 import { serializeUser } from '../serializers';
 import { requireAuth, requireRole, AuthedRequest } from '../middleware/auth';
-import { saveBase64File, deleteBlobFile, isAllowedFileDataUrl } from '../lib/imageStorage';
+import { deleteBlobFile, isOwnBlobUrl } from '../lib/imageStorage';
 import { isValidMobileInput, normalizePhoneInput, MOBILE_FORMAT_ERROR } from '../lib/sms';
 
 export const comptesRouter = Router();
 
-const INTERNAL_ROLES = ['chargeAffaires', 'qualite', 'direction', 'admin'];
+const INTERNAL_ROLES = ['coordinateurTravaux', 'qualite', 'direction', 'admin'];
 
 // Ce routeur ne gère que les comptes installateurs (voir GET / ci-dessous, qui
-// ne liste qu'eux) — sans cette vérification, un CA/Direction pouvait valider,
+// ne liste qu'eux) — sans cette vérification, un CT/Direction pouvait valider,
 // suspendre, réactiver ou réinitialiser le mot de passe d'un AUTRE compte
 // interne (y compris un Admin) en appelant directement l'API avec son id.
 async function findInstallateurOrNull(id: string) {
@@ -29,7 +29,7 @@ comptesRouter.get('/', requireAuth, requireRole(...INTERNAL_ROLES), async (_req,
   res.json({ installateurs: users.map(serializeUser) });
 });
 
-comptesRouter.post('/:id/valider', requireAuth, requireRole('chargeAffaires', 'direction', 'admin'), async (req, res) => {
+comptesRouter.post('/:id/valider', requireAuth, requireRole('coordinateurTravaux', 'direction', 'admin'), async (req, res) => {
   if (!(await findInstallateurOrNull(req.params.id))) return res.status(404).json({ error: 'Compte introuvable' });
 
   const user = await prisma.user.update({
@@ -40,7 +40,7 @@ comptesRouter.post('/:id/valider', requireAuth, requireRole('chargeAffaires', 'd
   res.json({ user: serializeUser(user) });
 });
 
-comptesRouter.post('/:id/suspendre', requireAuth, requireRole('chargeAffaires', 'direction', 'admin'), async (req, res) => {
+comptesRouter.post('/:id/suspendre', requireAuth, requireRole('coordinateurTravaux', 'direction', 'admin'), async (req, res) => {
   if (!(await findInstallateurOrNull(req.params.id))) return res.status(404).json({ error: 'Compte introuvable' });
 
   const user = await prisma.user.update({
@@ -51,7 +51,7 @@ comptesRouter.post('/:id/suspendre', requireAuth, requireRole('chargeAffaires', 
   res.json({ user: serializeUser(user) });
 });
 
-comptesRouter.post('/:id/reactiver', requireAuth, requireRole('chargeAffaires', 'direction', 'admin'), async (req, res) => {
+comptesRouter.post('/:id/reactiver', requireAuth, requireRole('coordinateurTravaux', 'direction', 'admin'), async (req, res) => {
   if (!(await findInstallateurOrNull(req.params.id))) return res.status(404).json({ error: 'Compte introuvable' });
 
   const user = await prisma.user.update({
@@ -93,13 +93,13 @@ comptesRouter.delete('/:id', requireAuth, requireRole('admin'), async (req: Auth
 
 const resetPasswordSchema = z.object({ password: z.string().min(6) });
 
-// Réinitialisation du mot de passe d'un installateur par le CA/Admin — le
-// nouveau mot de passe est choisi par le CA/Admin et communiqué ensuite à
+// Réinitialisation du mot de passe d'un installateur par le CT/Admin — le
+// nouveau mot de passe est choisi par le CT/Admin et communiqué ensuite à
 // l'installateur (pas de flux d'email de réinitialisation dans cette V1).
 comptesRouter.post(
   '/:id/reinitialiser-mot-de-passe',
   requireAuth,
-  requireRole('chargeAffaires', 'direction', 'admin'),
+  requireRole('coordinateurTravaux', 'direction', 'admin'),
   async (req, res) => {
     const parsed = resetPasswordSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
@@ -150,10 +150,10 @@ comptesRouter.patch('/moi', requireAuth, async (req: AuthedRequest, res) => {
   res.json({ user: serializeUser(user) });
 });
 
-// Le CA/Admin modifie le profil d'un installateur depuis le back-office
+// Le CT/Admin modifie le profil d'un installateur depuis le back-office
 // (distinct de /moi, réservé à l'auto-modification) — pas de changement de
 // mot de passe ni de rôle ici non plus.
-comptesRouter.patch('/:id', requireAuth, requireRole('chargeAffaires', 'direction', 'admin'), async (req, res) => {
+comptesRouter.patch('/:id', requireAuth, requireRole('coordinateurTravaux', 'direction', 'admin'), async (req, res) => {
   const parsed = updateProfileSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
   const { email, mobile } = parsed.data;
@@ -179,27 +179,25 @@ comptesRouter.patch('/:id', requireAuth, requireRole('chargeAffaires', 'directio
 });
 
 const avatarSchema = z.object({
-  file: z.string().min(1, 'La photo est requise'),
+  fileUrl: z.string().min(1, 'La photo est requise'),
 });
 
-// Photo de profil, tout rôle confondu (installateur, CA, Admin...) — même
-// convention que le reste de l'app pour les fichiers (data URL base64, voir
-// lib/imageStorage.ts) plutôt que multipart/form-data, que rien d'autre ici
-// ne parle : ni le reste du backend, ni l'app Flutter (Web compris, où
-// dart:io File n'existe pas — voir PhotoCapture côté app, même mécanisme).
+// Photo de profil, tout rôle confondu (installateur, CT, Admin...) — le
+// fichier est déposé directement par l'app sur Vercel Blob (voir
+// routes/uploads.ts, kind "avatar", qui restreint déjà le type à JPEG/PNG) ;
+// cette route ne fait que rattacher l'URL obtenue au compte.
 comptesRouter.post('/moi/avatar', requireAuth, async (req: AuthedRequest, res) => {
   const parsed = avatarSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-  const mime = parsed.data.file.match(/^data:([\w-]+\/[\w.+-]+);base64,/)?.[1];
-  if (mime !== 'image/jpeg' && mime !== 'image/png') {
-    return res.status(400).json({ error: 'La photo de profil doit être une image (JPEG ou PNG)' });
+  if (!isOwnBlobUrl(parsed.data.fileUrl)) {
+    return res.status(400).json({ error: 'URL de fichier invalide' });
   }
 
   const existing = await prisma.user.findUnique({ where: { id: req.auth!.userId } });
   if (!existing) return res.status(404).json({ error: 'Compte introuvable' });
 
-  const avatarUrl = await saveBase64File(parsed.data.file, `avatar-${req.auth!.userId}`);
+  const avatarUrl = parsed.data.fileUrl;
   // Remplace l'ancienne photo : jamais deux fichiers orphelins facturés sur
   // Vercel Blob pour un seul avatar.
   if (existing.avatarUrl) await deleteBlobFile(existing.avatarUrl);
@@ -232,28 +230,27 @@ comptesRouter.delete('/moi/avatar', requireAuth, async (req: AuthedRequest, res)
 const habilitationSchema = z.object({
   titre: z.string().min(1),
   dateExpiration: z.string(), // ISO date
-  file: z.string().min(1, 'Le certificat (PDF ou image) est requis'),
+  fileUrl: z.string().min(1, 'Le certificat (PDF ou image) est requis'),
 });
 
 // Un installateur ajoute son propre certificat (EX-13) ; consulté par soi-même
-// via /auth/me, et par le CA/Qualité/Admin via /comptes et /comptes/moi.
-// Le fichier réel (PDF ou image) est stocké sur le serveur — l'Admin et le CA
-// doivent pouvoir l'ouvrir depuis le back-office.
+// via /auth/me, et par le CT/Qualité/Admin via /comptes et /comptes/moi. Le
+// fichier (PDF ou image) est déposé directement par l'app sur Vercel Blob
+// (voir routes/uploads.ts, kind "habilitation") ; cette route ne fait que
+// créer l'enregistrement avec l'URL obtenue.
 comptesRouter.post('/moi/habilitations', requireAuth, async (req: AuthedRequest, res) => {
   const parsed = habilitationSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
-  if (!isAllowedFileDataUrl(parsed.data.file)) {
-    return res.status(400).json({ error: 'Type de fichier non autorisé' });
+  if (!isOwnBlobUrl(parsed.data.fileUrl)) {
+    return res.status(400).json({ error: 'URL de fichier invalide' });
   }
-
-  const filePath = await saveBase64File(parsed.data.file, `habilitation-${req.auth!.userId}`);
 
   const habilitation = await prisma.habilitation.create({
     data: {
       titre: parsed.data.titre,
       dateExpiration: new Date(parsed.data.dateExpiration),
-      filePath,
+      filePath: parsed.data.fileUrl,
       userId: req.auth!.userId,
     },
   });

@@ -74,13 +74,13 @@ class ChantierDetailsScreen extends StatelessWidget {
                     ? 'En attente du PV (back-office)'
                     : 'Verrouillé — terminer l\'auto-contrôle',
         icon: Icons.draw_outlined,
-        isLocked: !chantier.pvSigne && !chantier.canSignPV,
+        isLocked: !chantier.pvSigne && !chantier.canSignPV && !chantier.pvEnAttenteSignature,
         onTap: () => context.push(chantier.pvSigne ? '/confirmation' : '/signature'),
       ),
       _ModuleItem(
         index: 7,
         titre: 'Retour d\'expérience',
-        sousTitre: chantier.rexValide ? 'Validé' : 'À saisir',
+        sousTitre: chantier.rex.isEmpty ? 'À saisir' : '${chantier.rex.length} envoyé(s)',
         icon: Icons.mic_none_outlined,
         onTap: () => context.push('/chantier/${chantier.reference}/rex'),
       ),

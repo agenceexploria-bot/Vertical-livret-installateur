@@ -14,12 +14,12 @@ async function createInstallateur() {
   return signup.body.accessToken as string;
 }
 
-async function createCa() {
+async function createCt() {
   const passwordHash = await bcrypt.hash('demodemo', 10);
   await prisma.user.create({
     data: {
       nom: 'Martin', prenom: 'Sandrine', mobile: '0102030405', email: 's.martin@actiwork.fr',
-      passwordHash, role: 'chargeAffaires', isActive: true,
+      passwordHash, role: 'coordinateurTravaux', isActive: true,
     },
   });
   const login = await request(app).post('/auth/login').send({ identifier: 's.martin@actiwork.fr', password: 'demodemo' });
@@ -63,8 +63,8 @@ describe('POST /pusher/auth', () => {
     expect(res.status).toBe(403);
   });
 
-  it('autorise un CA sur private-notifications (503 : Pusher non configuré en test)', async () => {
-    const token = await createCa();
+  it('autorise un CT sur private-notifications (503 : Pusher non configuré en test)', async () => {
+    const token = await createCt();
     const res = await request(app)
       .post('/pusher/auth')
       .set('Authorization', `Bearer ${token}`)
@@ -73,7 +73,7 @@ describe('POST /pusher/auth', () => {
   });
 
   it('refuse un nom de canal inconnu', async () => {
-    const token = await createCa();
+    const token = await createCt();
     const res = await request(app)
       .post('/pusher/auth')
       .set('Authorization', `Bearer ${token}`)

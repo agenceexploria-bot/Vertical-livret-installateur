@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import request from 'supertest';
 import bcrypt from 'bcryptjs';
+import { put } from '@vercel/blob';
 import { createApp } from '../app';
 import { prisma } from '../prisma';
 import { resetDb, signup as doSignup } from './helpers';
@@ -10,6 +11,16 @@ const ONE_PX_PNG_BASE64 =
 
 const app = createApp();
 
+// Les endpoints n'acceptent plus le fichier en base64 : l'app le dépose
+// d'abord directement sur Vercel Blob (voir routes/uploads.ts), puis
+// transmet l'URL obtenue. En test, `put` est mocké (voir vitest.setup.ts) —
+// l'appeler ici simule ce dépôt direct.
+async function fakeUpload(filename: string, base64: string, contentType: string): Promise<string> {
+  const uniqueFilename = `${Date.now()}-${Math.round(Math.random() * 1e6)}-${filename}`;
+  const { url } = await put(uniqueFilename, Buffer.from(base64, 'base64'), { access: 'public', contentType });
+  return url;
+}
+
 async function createInstallateur() {
   const signup = await doSignup(app, {
     nom: 'Roux', prenom: 'Thomas', mobile: '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo',
@@ -17,12 +28,12 @@ async function createInstallateur() {
   return signup.body.accessToken as string;
 }
 
-async function createCa() {
+async function createCt() {
   const passwordHash = await bcrypt.hash('demodemo', 10);
   await prisma.user.create({
     data: {
       nom: 'Martin', prenom: 'Sandrine', mobile: '0102030405', email: 's.martin@actiwork.fr',
-      passwordHash, role: 'chargeAffaires', isActive: true,
+      passwordHash, role: 'coordinateurTravaux', isActive: true,
     },
   });
   const login = await request(app).post('/auth/login').send({ identifier: 's.martin@actiwork.fr', password: 'demodemo' });
@@ -38,8 +49,8 @@ afterAll(async () => {
 });
 
 describe('Cycle de vie des comptes installateurs (EX-01 à EX-06)', () => {
-  it('un compte nouvellement inscrit apparaît en attente pour le CA', async () => {
-    const caToken = await createCa();
+  it('un compte nouvellement inscrit apparaît en attente pour le CT', async () => {
+    const caToken = await createCt();
     await doSignup(app, { nom: 'Roux', prenom: 'Thomas', mobile: '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo' });
 
     const res = await request(app).get('/comptes').set('Authorization', `Bearer ${caToken}`);
@@ -48,8 +59,8 @@ describe('Cycle de vie des comptes installateurs (EX-01 à EX-06)', () => {
     expect(res.body.installateurs[0].isActive).toBe(false);
   });
 
-  it('le CA peut valider un compte, qui devient alors actif', async () => {
-    const caToken = await createCa();
+  it('le CT peut valider un compte, qui devient alors actif', async () => {
+    const caToken = await createCt();
     const signup = await doSignup(app, { nom: 'Roux', prenom: 'Thomas', mobile: '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo' });
 
     const res = await request(app)
@@ -66,7 +77,7 @@ describe('Cycle de vie des comptes installateurs (EX-01 à EX-06)', () => {
   });
 
   it('suspendre puis réactiver un compte fonctionne', async () => {
-    const caToken = await createCa();
+    const caToken = await createCt();
     const signup = await doSignup(app, { nom: 'Roux', prenom: 'Thomas', mobile: '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo' });
     await request(app).post(`/comptes/${signup.body.user.id}/valider`).set('Authorization', `Bearer ${caToken}`);
 
@@ -80,8 +91,8 @@ describe('Cycle de vie des comptes installateurs (EX-01 à EX-06)', () => {
 });
 
 describe('comptes.ts ne doit agir que sur des comptes installateurs', () => {
-  it('refuse à un CA de suspendre un autre compte interne (ex. un Admin)', async () => {
-    const caToken = await createCa();
+  it('refuse à un CT de suspendre un autre compte interne (ex. un Admin)', async () => {
+    const caToken = await createCt();
     const passwordHash = await bcrypt.hash('demodemo', 10);
     const admin = await prisma.user.create({
       data: {
@@ -103,6 +114,7 @@ describe('comptes.ts ne doit agir que sur des comptes installateurs', () => {
 describe('POST /comptes/moi/habilitations (EX-13)', () => {
   it('téléverse un vrai certificat et enregistre le fichier sur le stockage distant', async () => {
     const token = await createInstallateur();
+    const fileUrl = await fakeUpload('habilitation.png', ONE_PX_PNG_BASE64, 'image/png');
 
     const res = await request(app)
       .post('/comptes/moi/habilitations')
@@ -110,16 +122,15 @@ describe('POST /comptes/moi/habilitations (EX-13)', () => {
       .send({
         titre: 'Habilitation électrique BR',
         dateExpiration: '2027-03-12T00:00:00.000Z',
-        file: `data:image/png;base64,${ONE_PX_PNG_BASE64}`,
+        fileUrl,
       });
 
     expect(res.status).toBe(201);
-    const filePath = res.body.habilitation.filePath as string;
-    expect(filePath).toMatch(/^https:\/\/blob\.vercel-storage\.com\/test\/habilitation-.+\.png$/);
+    expect(res.body.habilitation.filePath).toBe(fileUrl);
 
-    const caToken = await createCa();
+    const caToken = await createCt();
     const list = await request(app).get('/comptes').set('Authorization', `Bearer ${caToken}`);
-    expect(list.body.installateurs[0].habilitations[0].filePath).toBe(filePath);
+    expect(list.body.installateurs[0].habilitations[0].filePath).toBe(fileUrl);
   });
 
   it('refuse un certificat sans fichier', async () => {
@@ -142,7 +153,7 @@ describe('DELETE /comptes/:id (suppression définitive, Admin uniquement)', () =
       .send({
         titre: 'Habilitation électrique BR',
         dateExpiration: '2027-03-12T00:00:00.000Z',
-        file: `data:image/png;base64,${ONE_PX_PNG_BASE64}`,
+        fileUrl: await fakeUpload('doc.png', ONE_PX_PNG_BASE64, 'image/png'),
       });
     const me = await request(app).get('/auth/me').set('Authorization', `Bearer ${token}`);
 
@@ -168,14 +179,15 @@ describe('DELETE /comptes/:id (suppression définitive, Admin uniquement)', () =
 describe('POST /comptes/moi/avatar', () => {
   it('téléverse une photo de profil et enregistre le fichier sur le stockage distant', async () => {
     const token = await createInstallateur();
+    const fileUrl = await fakeUpload('avatar.png', ONE_PX_PNG_BASE64, 'image/png');
 
     const res = await request(app)
       .post('/comptes/moi/avatar')
       .set('Authorization', `Bearer ${token}`)
-      .send({ file: `data:image/png;base64,${ONE_PX_PNG_BASE64}` });
+      .send({ fileUrl });
 
     expect(res.status).toBe(200);
-    expect(res.body.user.avatarUrl).toMatch(/^https:\/\/blob\.vercel-storage\.com\/test\/avatar-.+\.png$/);
+    expect(res.body.user.avatarUrl).toBe(fileUrl);
   });
 
   it('remplace la photo précédente plutôt que d\'en accumuler plusieurs', async () => {
@@ -184,23 +196,26 @@ describe('POST /comptes/moi/avatar', () => {
     const first = await request(app)
       .post('/comptes/moi/avatar')
       .set('Authorization', `Bearer ${token}`)
-      .send({ file: `data:image/png;base64,${ONE_PX_PNG_BASE64}` });
+      .send({ fileUrl: await fakeUpload('doc.png', ONE_PX_PNG_BASE64, 'image/png') });
     const second = await request(app)
       .post('/comptes/moi/avatar')
       .set('Authorization', `Bearer ${token}`)
-      .send({ file: `data:image/png;base64,${ONE_PX_PNG_BASE64}` });
+      .send({ fileUrl: await fakeUpload('doc.png', ONE_PX_PNG_BASE64, 'image/png') });
 
     expect(second.status).toBe(200);
     expect(second.body.user.avatarUrl).not.toBe(first.body.user.avatarUrl);
   });
 
-  it('refuse un fichier qui n\'est pas une image', async () => {
+  // Le type de fichier est désormais restreint en amont, au moment de la
+  // génération du jeton d'upload (kind "avatar", voir routes/uploads.ts) —
+  // cette route-ci ne vérifie plus que l'URL pointe vers notre store Blob.
+  it('refuse une URL de fichier qui ne pointe pas vers notre store Vercel Blob', async () => {
     const token = await createInstallateur();
 
     const res = await request(app)
       .post('/comptes/moi/avatar')
       .set('Authorization', `Bearer ${token}`)
-      .send({ file: `data:application/pdf;base64,${ONE_PX_PNG_BASE64}` });
+      .send({ fileUrl: 'https://evil.example.com/malware.png' });
     expect(res.status).toBe(400);
   });
 
@@ -218,7 +233,7 @@ describe('DELETE /comptes/moi/avatar', () => {
     await request(app)
       .post('/comptes/moi/avatar')
       .set('Authorization', `Bearer ${token}`)
-      .send({ file: `data:image/png;base64,${ONE_PX_PNG_BASE64}` });
+      .send({ fileUrl: await fakeUpload('doc.png', ONE_PX_PNG_BASE64, 'image/png') });
 
     const res = await request(app).delete('/comptes/moi/avatar').set('Authorization', `Bearer ${token}`);
 

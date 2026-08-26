@@ -14,19 +14,19 @@ import '../../state/auth_state.dart';
 import '../../state/chantier_state.dart';
 import '../../state/comptes_state.dart';
 
-/// Interface mobile dédiée au CA — volontairement réduite par rapport au
+/// Interface mobile dédiée au CT — volontairement réduite par rapport au
 /// back-office Web (BoShell) : consultation de l'avancement des chantiers en
 /// cours, relance des installateurs n'ayant pas ouvert leur livret, et
-/// validation des inscriptions. Pas de tableau de bord complet ici, le CA en
+/// validation des inscriptions. Pas de tableau de bord complet ici, le CT en
 /// déplacement n'a besoin que de ces trois gestes rapides.
-class CaHomeScreen extends StatefulWidget {
-  const CaHomeScreen({super.key});
+class CtHomeScreen extends StatefulWidget {
+  const CtHomeScreen({super.key});
 
   @override
-  State<CaHomeScreen> createState() => _CaHomeScreenState();
+  State<CtHomeScreen> createState() => _CtHomeScreenState();
 }
 
-class _CaHomeScreenState extends State<CaHomeScreen> {
+class _CtHomeScreenState extends State<CtHomeScreen> {
   @override
   void initState() {
     super.initState();
@@ -50,7 +50,7 @@ class _CaHomeScreenState extends State<CaHomeScreen> {
   }
 
   /// Statut affiché sur la carte chantier — les trois étapes concrètes que
-  /// le CA doit surveiller en priorité en déplacement, dans leur ordre
+  /// le CT doit surveiller en priorité en déplacement, dans leur ordre
   /// naturel (une seule étiquette à la fois, pas un pourcentage abstrait).
   (String, StatusType) _chantierStatus(Chantier c) {
     if (c.pvSigne) return ('PV signé', StatusType.conforme);
@@ -93,7 +93,7 @@ class _CaHomeScreenState extends State<CaHomeScreen> {
         foregroundColor: Colors.white,
         actions: [
           IconButton(
-            onPressed: () => context.push('/ca/chantier/nouveau'),
+            onPressed: () => context.push('/ct/chantier/nouveau'),
             icon: const Icon(Icons.add),
             tooltip: 'Nouveau chantier',
           ),
@@ -151,7 +151,7 @@ class _CaHomeScreenState extends State<CaHomeScreen> {
                   context,
                   'Valider une inscription',
                   Icons.person_add_outlined,
-                  onTap: () => context.push('/ca/validation'),
+                  onTap: () => context.push('/ct/validation'),
                 ),
               ],
             ),
@@ -183,7 +183,7 @@ class _CaHomeScreenState extends State<CaHomeScreen> {
           ),
           const SizedBox(height: 12),
           ElevatedButton(
-            onPressed: () => context.push('/ca/validation'),
+            onPressed: () => context.push('/ct/validation'),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.orange,
               minimumSize: const Size(0, 32),
@@ -199,7 +199,7 @@ class _CaHomeScreenState extends State<CaHomeScreen> {
     final (label, type) = _chantierStatus(c);
     final progress = c.progressionAutoControle;
     return AppCard(
-      onTap: () => context.push('/ca/chantier/${c.reference}'),
+      onTap: () => context.push('/ct/chantier/${c.reference}'),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

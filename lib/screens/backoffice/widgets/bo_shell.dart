@@ -24,27 +24,28 @@ class _BoSpace {
   const _BoSpace(this.name, this.tabs);
 }
 
-const _caTabs = [
-  _BoNavTab('Chantiers', '/backoffice/ca', 'chantiers'),
-  _BoNavTab('Comptes', '/backoffice/ca/comptes', 'comptes'),
+const _ctTabs = [
+  _BoNavTab('Chantiers', '/backoffice/ct', 'chantiers'),
+  _BoNavTab('Comptes', '/backoffice/ct/comptes', 'comptes'),
 ];
-const _caSpace = _BoSpace('Espace Chargé d\'Affaires', _caTabs);
+const _ctSpace = _BoSpace('Espace Coordinateur travaux', _ctTabs);
 
 /// Un espace back-office par rôle, utilisé pour le nom affiché et les onglets
 /// de navigation (le garde côté routeur empêche déjà la navigation croisée —
-/// voir router.dart / _boAllowedPrefixesFor). L'Admin est "super-CA" : en plus
+/// voir router.dart / _boAllowedPrefixesFor). L'Admin est "super-CT" : en plus
 /// de son propre tableau de bord, il a aussi les onglets Chantiers/Comptes de
-/// l'espace CA. Le rôle Qualité n'a plus d'espace dédié depuis sa fusion dans
-/// l'espace CA — l'entrée reste ici en filet de sécurité si un compte encore
+/// l'espace CT. Le rôle Qualité n'a plus d'espace dédié depuis sa fusion dans
+/// l'espace CT — l'entrée reste ici en filet de sécurité si un compte encore
 /// marqué `qualite` en base atteint malgré tout cet écran.
 const _spaces = <UserRole, _BoSpace>{
   UserRole.admin: _BoSpace('Espace Administration', [
     _BoNavTab('Tableau de bord', '/backoffice/admin', 'admin'),
-    ..._caTabs,
+    _BoNavTab('Listes', '/backoffice/admin/checklists', 'checklists'),
+    ..._ctTabs,
   ]),
-  UserRole.chargeAffaires: _caSpace,
-  UserRole.direction: _caSpace,
-  UserRole.qualite: _caSpace,
+  UserRole.coordinateurTravaux: _ctSpace,
+  UserRole.direction: _ctSpace,
+  UserRole.qualite: _ctSpace,
 };
 
 class BoShell extends StatelessWidget {
@@ -82,16 +83,16 @@ class BoShell extends StatelessWidget {
 
     // L'Admin a maintenant aussi accès aux chantiers et aux comptes
     // installateurs (voir la refonte des rôles : l'Admin a toutes les
-    // fonctionnalités du CA en plus des siennes), donc il précharge les mêmes
-    // données que le CA/Direction.
-    final needsChantiers = user?.role == UserRole.chargeAffaires ||
+    // fonctionnalités du CT en plus des siennes), donc il précharge les mêmes
+    // données que le CT/Direction.
+    final needsChantiers = user?.role == UserRole.coordinateurTravaux ||
         user?.role == UserRole.direction ||
         user?.role == UserRole.admin;
     final needsComptes = needsChantiers;
     // Les notifications de prévention (auto-contrôle à 80%) ne concernent que
-    // le CA et l'Admin côté backend (voir notificationsRouter) — Direction
+    // le CT et l'Admin côté backend (voir notificationsRouter) — Direction
     // n'y a pas droit.
-    final needsNotifications = user?.role == UserRole.chargeAffaires || user?.role == UserRole.admin;
+    final needsNotifications = user?.role == UserRole.coordinateurTravaux || user?.role == UserRole.admin;
 
     if (needsChantiers) {
       final chantierState = context.watch<ChantierState>();
@@ -190,7 +191,7 @@ class _TopBar extends StatelessWidget {
           ),
           const SizedBox(width: 16),
           IconButton(
-            onPressed: () => context.push('/backoffice/ca/auto-controle'),
+            onPressed: () => context.push('/backoffice/ct/auto-controle'),
             icon: const Icon(Icons.ios_share_outlined, color: Colors.white, size: 18),
             tooltip: 'Exports Qualité (PDF/CSV)',
             style: IconButton.styleFrom(
@@ -287,7 +288,7 @@ class _TopBar extends StatelessWidget {
                               onTap: () {
                                 Navigator.pop(dialogContext);
                                 if (!n.lue) context.read<NotificationsState>().marquerLue(n.id);
-                                context.go('/backoffice/ca/chantiers/${n.chantierReference}');
+                                context.go('/backoffice/ct/chantiers/${n.chantierReference}');
                               },
                             ))
                         .toList(),

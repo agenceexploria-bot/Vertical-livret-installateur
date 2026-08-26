@@ -6,12 +6,12 @@ import '../../data/api_client.dart';
 import '../../data/models/chantier.dart';
 import '../../state/chantier_state.dart';
 
-/// Dépôt (ou remplacement) du gabarit PV par le back-office (CA/Admin/
+/// Dépôt (ou remplacement) du gabarit PV par le back-office (CT/Admin/
 /// Direction) — un PDF, rien de plus. Ça NE valide PAS le PV : celui-ci reste
 /// "en attente de signature" tant que l'installateur n'a pas fait signer le
 /// client (voir signature_screen.dart, seul endroit qui fait passer le PV à
 /// "validé"). Partagé entre le back-office web (BoChantierDetailScreen) et la
-/// fiche chantier mobile du CA (CaChantierDetailScreen).
+/// fiche chantier mobile du CT (CtChantierDetailScreen).
 class RenseignerPvDialog extends StatefulWidget {
   final Chantier chantier;
   const RenseignerPvDialog({super.key, required this.chantier});

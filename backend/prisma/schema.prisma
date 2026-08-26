@@ -9,7 +9,7 @@ datasource db {
 
 enum UserRole {
   installateur
-  chargeAffaires
+  coordinateurTravaux
   qualite
   direction
   admin
@@ -46,7 +46,7 @@ model User {
   chantiersRattaches  ChantierInstallateur[]
   documentsTerrain    DocumentTerrain[]
   refreshTokens       RefreshToken[]
-  chantiersCommeCA    Chantier[]             @relation("ChantierChargeAffaires")
+  chantiersCommeCT    Chantier[]             @relation("ChantierCoordinateurTravaux")
 }
 
 model Habilitation {
@@ -97,10 +97,6 @@ model Chantier {
   niveaux           Int
   referenceAffaire  String
   syncStatus        String   @default("nouveau")
-  rexValide         Boolean  @default(false)
-  rexTranscription  String?
-  rexAudioPath      String?
-  rexSoumisAt       DateTime?
   // PV de réception : le back-office dépose un gabarit PDF (pvPdfPath), qui
   // n'est PAS encore validé — l'installateur le consulte, fait signer le
   // client et renseigne son nom/sa fonction ; ce n'est qu'à ce moment que
@@ -114,21 +110,35 @@ model Chantier {
   pvSignatureImagePath String?
   createdAt         DateTime @default(now())
 
-  // Rattachement direct à un CA responsable, renseigné par l'Admin à la
-  // création (voir la refonte : sélecteur de CA dans le formulaire admin) —
-  // optionnel, distinct de ChantierInstallateur qui rattache des installateurs.
-  chargeAffaires      User?    @relation("ChantierChargeAffaires", fields: [chargeAffairesId], references: [id])
-  chargeAffairesId    String?
+  // Rattachement direct à un Coordinateur travaux responsable, renseigné par
+  // l'Admin à la création (voir la refonte : sélecteur de CT dans le
+  // formulaire admin) — optionnel, distinct de ChantierInstallateur qui
+  // rattache des installateurs.
+  coordinateurTravaux      User?    @relation("ChantierCoordinateurTravaux", fields: [coordinateurTravauxId], references: [id])
+  coordinateurTravauxId    String?
 
   pointsControle      PointControle[]
   installateurs       ChantierInstallateur[]
   documentsTerrain    DocumentTerrain[]
   documentsChantier   DocumentChantier[]
+  rex                 Rex[]
   notifications       Notification[]
   livretsOuvertsJson  String @default("[]") // JSON-encoded list of user ids
 }
 
-// Notifications internes (CA/Admin), ex. alerte de prévention quand
+// Retour d'expérience (REX) d'un installateur sur un chantier — plusieurs
+// entrées possibles par chantier (un installateur peut compléter son retour
+// s'il a oublié quelque chose), voir POST/DELETE .../rex dans chantiers.ts.
+model Rex {
+  id            String   @id @default(cuid())
+  chantier      Chantier @relation(fields: [chantierId], references: [id], onDelete: Cascade)
+  chantierId    String
+  transcription String?
+  audioPath     String?
+  soumisAt      DateTime @default(now())
+}
+
+// Notifications internes (CT/Admin), ex. alerte de prévention quand
 // l'auto-contrôle d'un chantier atteint 80% — pas de push/email, juste un
 // panneau consulté dans le back-office.
 model Notification {
@@ -179,6 +189,19 @@ model PointControle {
   ordre         Int         @default(0)
 }
 
+// Modèle des listes de réception/contrôle appliqué à la création de chaque
+// nouveau chantier (voir POST /chantiers) — modifiable par l'Admin (ajout,
+// renommage, suppression d'items) sans toucher au code. Ne modifie jamais les
+// PointControle déjà créés sur des chantiers existants.
+model ChecklistTemplateItem {
+  id        String    @id @default(cuid())
+  type      PointType
+  categorie String    @default("generale")
+  libelle   String
+  critique  Boolean   @default(false)
+  ordre     Int       @default(0)
+}
+
 enum CategorieDocument {
   bonLivraison
   documentClient
@@ -205,7 +228,7 @@ enum TypeDocumentChantier {
   technique
 }
 
-// Documents de référence déposés par le CA (PPSPS, plans, notices...) —
+// Documents de référence déposés par le Coordinateur travaux (PPSPS, plans, notices...) —
 // consultés en lecture seule par l'installateur (Modules 1-3), à ne pas
 // confondre avec DocumentTerrain (dépôts de l'installateur lui-même sur site).
 model DocumentChantier {

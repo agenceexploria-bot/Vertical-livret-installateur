@@ -132,14 +132,14 @@ class ChantierState extends ChangeNotifier {
   }
 
   Future<void> addDocumentChantier(String reference,
-      {required String type, required String nom, String? nomFichierOriginal, required String file}) async {
+      {required String type, String? nom, String? nomFichierOriginal, required String file}) async {
     final updated = await _repository.addDocumentChantier(reference,
         type: type, nom: nom, nomFichierOriginal: nomFichierOriginal, file: file);
     _replaceInList(updated);
   }
 
   /// Optimistic UI : le document disparaît immédiatement de la liste. En cas
-  /// d'échec réseau (pas de file d'attente hors-ligne pour cette action CA),
+  /// d'échec réseau (pas de file d'attente hors-ligne pour cette action CT),
   /// on le réaffiche et on laisse l'erreur remonter à l'écran appelant.
   Future<void> deleteDocumentChantier(String reference, String docId) async {
     final chantier = findByReference(reference);
@@ -211,25 +211,24 @@ class ChantierState extends ChangeNotifier {
     _replaceInList(updated);
   }
 
-  /// Optimistic UI : le REX disparaît immédiatement, avec restauration en cas
-  /// d'échec réseau réel.
-  Future<void> deleteRex(String reference) async {
+  /// Optimistic UI : l'entrée REX disparaît immédiatement, avec restauration
+  /// en cas d'échec réseau réel. Les autres entrées REX du chantier ne sont
+  /// pas affectées.
+  Future<void> deleteRex(String reference, String rexId) async {
     final chantier = findByReference(reference);
-    final prevRexValide = chantier?.rexValide ?? false;
-    final prevTranscription = chantier?.rexTranscription;
-    if (chantier != null) {
-      chantier.rexValide = false;
-      chantier.rexTranscription = null;
+    final removedIndex = chantier?.rex.indexWhere((r) => r.id == rexId) ?? -1;
+    Rex? removed;
+    if (chantier != null && removedIndex != -1) {
+      removed = chantier.rex.removeAt(removedIndex);
       notifyListeners();
       await _repository.cacheChantierLocally(chantier);
     }
     try {
-      final updated = await _repository.deleteRex(reference);
+      final updated = await _repository.deleteRex(reference, rexId);
       _replaceInList(updated);
     } catch (e) {
-      if (chantier != null) {
-        chantier.rexValide = prevRexValide;
-        chantier.rexTranscription = prevTranscription;
+      if (chantier != null && removed != null) {
+        chantier.rex.insert(removedIndex, removed);
         notifyListeners();
         await _repository.cacheChantierLocally(chantier);
       }

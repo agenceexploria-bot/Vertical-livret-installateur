@@ -9,7 +9,7 @@ import 'realtime_config.dart';
 /// - `private-app-events` (chantier-changed/chantier-deleted) : ouvert à
 ///   tout utilisateur authentifié, y compris installateur (doit être notifié
 ///   des changements sur SES chantiers).
-/// - `private-notifications` (notification-created) : réservé CA/Admin, pour
+/// - `private-notifications` (notification-created) : réservé CT/Admin, pour
 ///   rester cohérent avec la restriction déjà en place sur GET /notifications
 ///   — un installateur qui tenterait quand même de s'y abonner se ferait
 ///   simplement refuser (403) par /pusher/auth.
@@ -29,14 +29,14 @@ class RealtimeService {
   void Function(Map<String, dynamic> notification)? onNotificationCreated;
 
   /// Initialise la connexion une seule fois (au premier appel) puis
-  /// ajoute l'abonnement `private-notifications` selon [isCaOuAdmin] — à
+  /// ajoute l'abonnement `private-notifications` selon [isCtOuAdmin] — à
   /// rappeler à chaque fois que le rôle de l'utilisateur connecté est
   /// susceptible d'avoir changé (connexion, restauration de session
   /// asynchrone au démarrage), pas seulement une fois au lancement de l'app :
   /// [AuthState.currentUser] n'est pas encore connu au tout premier appel
   /// (auto-login asynchrone), d'où le ré-appel depuis un listener côté
   /// [VerticalApp] plutôt qu'un unique appel dans initState.
-  Future<void> connect({required bool isCaOuAdmin}) async {
+  Future<void> connect({required bool isCtOuAdmin}) async {
     if (!RealtimeConfig.isConfigured) return;
 
     if (!_initialized) {
@@ -57,7 +57,7 @@ class RealtimeService {
       }
     }
 
-    if (isCaOuAdmin && !_notificationsSubscribed) {
+    if (isCtOuAdmin && !_notificationsSubscribed) {
       try {
         await _pusher.subscribe(channelName: _notificationsChannel);
         _notificationsSubscribed = true;

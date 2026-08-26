@@ -137,7 +137,7 @@ class _DocsTerrainScreenState extends State<DocsTerrainScreen> {
     }
 
     setState(() => _isCapturing = true);
-    final picked = await DocumentCapture.pickFile();
+    final picked = await DocumentCapture.pickWithCameraOption(context);
     if (!context.mounted) return;
     if (picked == null) {
       setState(() => _isCapturing = false);

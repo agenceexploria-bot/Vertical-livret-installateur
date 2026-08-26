@@ -187,7 +187,7 @@ class _PointCardState extends State<_PointCard> {
   Future<void> _prendrePhoto(BuildContext context) async {
     setState(() => _isCapturing = true);
     try {
-      final photo = await PhotoCapture.captureCompressed();
+      final photo = await PhotoCapture.captureCompressed(context);
       if (photo == null || !context.mounted) return;
       await context.read<ChantierState>().updatePoint(widget.reference, widget.point.id, photo: photo);
     } finally {

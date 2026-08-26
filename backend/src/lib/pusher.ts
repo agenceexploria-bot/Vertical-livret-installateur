@@ -25,7 +25,7 @@ if (!pusher) {
 // séparés selon qui a le droit de recevoir quoi, pas par commodité technique :
 // CHANTIER_CHANGES concerne tout utilisateur authentifié (un installateur doit
 // être notifié des changements sur SES chantiers), alors que NOTIFICATIONS
-// (alertes internes type "auto-contrôle à 80%") reste réservé à CA/Admin,
+// (alertes internes type "auto-contrôle à 80%") reste réservé à CT/Admin,
 // comme l'impose déjà GET /notifications côté REST — avant cette séparation,
 // tout transitait sur un unique channel public, ce qui exposait le contenu
 // des notifications internes à quiconque récupérait la clé Pusher publique

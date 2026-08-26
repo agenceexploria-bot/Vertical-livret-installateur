@@ -128,7 +128,7 @@ class _BoLoginScreenState extends State<BoLoginScreen> {
     }
 
     final role = authState.currentUser?.role;
-    const boRoles = {UserRole.chargeAffaires, UserRole.qualite, UserRole.direction, UserRole.admin};
+    const boRoles = {UserRole.coordinateurTravaux, UserRole.qualite, UserRole.direction, UserRole.admin};
     if (!boRoles.contains(role)) {
       await authState.logout();
       if (!context.mounted) return;
@@ -138,10 +138,10 @@ class _BoLoginScreenState extends State<BoLoginScreen> {
       return;
     }
 
-    // Les comptes CA/Qualité créés via "Demander un accès" restent bloqués
+    // Les comptes CT/Qualité créés via "Demander un accès" restent bloqués
     // tant qu'un Admin ne les a pas validés (Admin et Direction sont créés
     // déjà actifs, hors de ce circuit de validation).
-    const rolesSoumisValidation = {UserRole.chargeAffaires, UserRole.qualite};
+    const rolesSoumisValidation = {UserRole.coordinateurTravaux, UserRole.qualite};
     if (rolesSoumisValidation.contains(role) && !authState.currentUser!.isActive) {
       await authState.logout();
       if (!context.mounted) return;

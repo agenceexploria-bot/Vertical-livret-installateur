@@ -43,6 +43,6 @@ class BoBackButton extends StatelessWidget {
       return;
     }
     final role = context.read<AuthState>().currentUser?.role;
-    context.go(role == UserRole.admin ? '/backoffice/admin' : '/backoffice/ca');
+    context.go(role == UserRole.admin ? '/backoffice/admin' : '/backoffice/ct');
   }
 }

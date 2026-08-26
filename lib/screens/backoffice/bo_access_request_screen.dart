@@ -55,7 +55,7 @@ class _BoAccessRequestScreenState extends State<BoAccessRequestScreen> {
                 const SizedBox(height: 12),
                 _field('Téléphone mobile', _mobileController, hint: '06 12 34 56 78'),
                 const SizedBox(height: 12),
-                _field('Fonction', _fonctionController, hint: 'Chargé d\'affaires'),
+                _field('Fonction', _fonctionController, hint: 'Coordinateur travaux'),
                 const SizedBox(height: 12),
                 _field('Mot de passe', _passwordController, obscure: true),
                 const SizedBox(height: 12),
@@ -146,7 +146,7 @@ class _BoAccessRequestScreenState extends State<BoAccessRequestScreen> {
       mobile: _mobileController.text,
       password: _passwordController.text,
       email: _emailController.text,
-      role: 'chargeAffaires',
+      role: 'coordinateurTravaux',
     );
 
     // Le compte est créé mais non validé : on se déconnecte immédiatement,

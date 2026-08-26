@@ -32,7 +32,7 @@ class _BoNewChantierScreenState extends State<BoNewChantierScreen> {
   final _villeController = TextEditingController();
   final _contactNomController = TextEditingController();
   final _contactTelController = TextEditingController();
-  String? _chargeAffairesId;
+  String? _coordinateurTravauxId;
 
   @override
   void initState() {
@@ -71,7 +71,7 @@ class _BoNewChantierScreenState extends State<BoNewChantierScreen> {
   @override
   Widget build(BuildContext context) {
     final isAdmin = context.watch<AuthState>().currentUser?.role == UserRole.admin;
-    final chargesAffaires = context.watch<AdminState>().tousLesComptes.where((u) => u.role == UserRole.chargeAffaires).toList();
+    final coordinateursTravaux = context.watch<AdminState>().tousLesComptes.where((u) => u.role == UserRole.coordinateurTravaux).toList();
 
     return BoShell(
       activeNav: 'chantiers',
@@ -90,7 +90,7 @@ class _BoNewChantierScreenState extends State<BoNewChantierScreen> {
           LayoutBuilder(
             builder: (context, constraints) {
               final isWide = constraints.maxWidth > 800;
-              final left = _buildLeftColumn(isAdmin: isAdmin, chargesAffaires: chargesAffaires);
+              final left = _buildLeftColumn(isAdmin: isAdmin, coordinateursTravaux: coordinateursTravaux);
               final right = _buildRightColumn();
               if (!isWide) return Column(children: [left, const SizedBox(height: 4), right]);
               return Row(
@@ -121,7 +121,11 @@ class _BoNewChantierScreenState extends State<BoNewChantierScreen> {
     final cleaned = _collageController.text.replaceAll('«', '').replaceAll('»', '').trim();
     if (cleaned.isEmpty) return;
 
-    final parts = cleaned.split('—').map((p) => p.trim()).where((p) => p.isNotEmpty).toList();
+    // Certains ERP exportent avec un tiret simple (" - ") plutôt que le
+    // tiret cadratin (" — ") de l'exemple ci-dessus — sans cette variante, le
+    // découpage échouait silencieusement et tout le texte collé finissait
+    // dans le champ Client.
+    final parts = cleaned.split(RegExp(r'\s[-–—]\s')).map((p) => p.trim()).where((p) => p.isNotEmpty).toList();
 
     if (parts.isNotEmpty) _clientController.text = parts[0];
 
@@ -194,33 +198,33 @@ class _BoNewChantierScreenState extends State<BoNewChantierScreen> {
       'capacite': '500 kg',
       'niveaux': 2,
       'referenceAffaire': reference,
-      'chargeAffairesId': ?_chargeAffairesId,
+      'coordinateurTravauxId': ?_coordinateurTravauxId,
     };
 
     final router = GoRouter.of(context);
     try {
       await context.read<ChantierState>().createChantier(body);
-      router.go('/backoffice/ca/chantiers/$reference');
+      router.go('/backoffice/ct/chantiers/$reference');
     } on ApiException catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
     }
   }
 
-  Widget _buildLeftColumn({required bool isAdmin, required List<User> chargesAffaires}) {
+  Widget _buildLeftColumn({required bool isAdmin, required List<User> coordinateursTravaux}) {
     return Column(
       children: [
         if (isAdmin)
           BoPanel(
-            title: 'CA responsable',
+            title: 'CT responsable',
             child: DropdownButtonFormField<String>(
-              initialValue: _chargeAffairesId,
+              initialValue: _coordinateurTravauxId,
               isExpanded: true,
               hint: const Text('Aucun (optionnel)', style: TextStyle(fontSize: 12)),
-              items: chargesAffaires
+              items: coordinateursTravaux
                   .map((u) => DropdownMenuItem(value: u.id, child: Text(u.fullName, style: const TextStyle(fontSize: 12.5))))
                   .toList(),
-              onChanged: (value) => setState(() => _chargeAffairesId = value),
+              onChanged: (value) => setState(() => _coordinateurTravauxId = value),
             ),
           ),
         BoPanel(

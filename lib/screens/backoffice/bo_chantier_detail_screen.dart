@@ -72,15 +72,15 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
 
     final livretOk = chantier.installateursRattaches.isNotEmpty &&
         chantier.installateursRattaches.every((u) => chantier.livretsOuverts.contains(u.id));
-    // Modifier un chantier est ouvert au CA et à l'Admin ; la suppression
+    // Modifier un chantier est ouvert au CT et à l'Admin ; la suppression
     // reste réservée à l'Admin (capacité destructive supplémentaire).
     final role = context.watch<AuthState>().currentUser?.role;
     final isAdmin = role == UserRole.admin;
-    final canModifier = isAdmin || role == UserRole.chargeAffaires || role == UserRole.direction;
-    final canRenseignerPv = role == UserRole.admin || role == UserRole.chargeAffaires || role == UserRole.direction;
-    // Suppression réservée au CA/Admin, comme côté backend (DELETE .../pv) —
+    final canModifier = isAdmin || role == UserRole.coordinateurTravaux || role == UserRole.direction;
+    final canRenseignerPv = role == UserRole.admin || role == UserRole.coordinateurTravaux || role == UserRole.direction;
+    // Suppression réservée au CT/Admin, comme côté backend (DELETE .../pv) —
     // Direction peut renseigner le PV mais pas le supprimer.
-    final canSupprimerPv = role == UserRole.admin || role == UserRole.chargeAffaires;
+    final canSupprimerPv = role == UserRole.admin || role == UserRole.coordinateurTravaux;
 
     return BoShell(
       activeNav: 'chantiers',
@@ -274,42 +274,60 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
   }
 
   Widget _buildRex(BuildContext context, Chantier chantier, UserRole? role) {
-    final peutSupprimer = role == UserRole.chargeAffaires || role == UserRole.admin;
+    final peutSupprimer = role == UserRole.coordinateurTravaux || role == UserRole.admin;
     return BoPanel(
-      title: 'Retour d\'expérience (REX)',
-      child: !chantier.rexValide
+      title: 'Retour d\'expérience (REX) (${chantier.rex.length})',
+      child: chantier.rex.isEmpty
           ? const Text('Aucun REX soumis pour l\'instant.', style: TextStyle(fontSize: 12.5, color: AppColors.acierClair))
-          : Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          : Column(
               children: [
-                Expanded(
-                  child: Text(
-                    chantier.rexTranscription ?? '(note vocale sans transcription)',
-                    style: const TextStyle(fontSize: 13, color: AppColors.acier),
+                for (final rex in chantier.rex) ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                DateFormat('dd/MM/yyyy HH:mm').format(rex.soumisAt),
+                                style: const TextStyle(fontSize: 11, color: AppColors.acierClair),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                rex.transcription ?? '(note vocale sans transcription)',
+                                style: const TextStyle(fontSize: 13, color: AppColors.acier),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (peutSupprimer) ...[
+                          const SizedBox(width: 8),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.acierClair),
+                            tooltip: 'Supprimer ce REX',
+                            onPressed: () => _confirmerSuppressionRex(context, chantier, rex),
+                          ),
+                        ],
+                      ],
+                    ),
                   ),
-                ),
-                if (peutSupprimer) ...[
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.acierClair),
-                    tooltip: 'Supprimer ce REX',
-                    onPressed: () => _confirmerSuppressionRex(context, chantier),
-                  ),
+                  if (rex != chantier.rex.last) const Divider(height: 1, color: Color(0xFFEEF1F3)),
                 ],
               ],
             ),
     );
   }
 
-  // Seule façon de débloquer l'installateur pour qu'il puisse soumettre un
-  // nouveau REX — voir le contrôle rexValide côté backend (POST .../rex).
-  void _confirmerSuppressionRex(BuildContext context, Chantier chantier) {
+  void _confirmerSuppressionRex(BuildContext context, Chantier chantier, Rex rex) {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Supprimer ce REX ?'),
         content: Text(
-          'Le REX du chantier ${chantier.reference} sera supprimé définitivement, y compris la note vocale. L\'installateur pourra ensuite en soumettre un nouveau. Cette action est irréversible.',
+          'Cette entrée REX du chantier ${chantier.reference} sera supprimée définitivement, y compris la note vocale. Les autres REX du chantier ne sont pas affectés. Cette action est irréversible.',
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Annuler')),
@@ -317,7 +335,7 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
             style: TextButton.styleFrom(foregroundColor: AppColors.rouge),
             onPressed: () {
               Navigator.pop(dialogContext);
-              _handleAction(context, () => context.read<ChantierState>().deleteRex(chantier.reference));
+              _handleAction(context, () => context.read<ChantierState>().deleteRex(chantier.reference, rex.id));
             },
             child: const Text('Supprimer définitivement'),
           ),
@@ -423,8 +441,8 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
           ),
           BoKv(
             label: '7 · REX',
-            value: chantier.rexValide
-                ? const StatusIndicator(label: 'Envoyé', type: StatusType.conforme)
+            value: chantier.rex.isNotEmpty
+                ? StatusIndicator(label: '${chantier.rex.length} envoyé(s)', type: StatusType.conforme)
                 : const Text('—', style: TextStyle(fontSize: 12.5, color: AppColors.acierClair)),
           ),
           BoKv(
@@ -862,7 +880,7 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
               Navigator.pop(dialogContext);
               try {
                 await context.read<ChantierState>().deleteChantier(chantier.reference);
-                if (context.mounted) context.go('/backoffice/ca');
+                if (context.mounted) context.go('/backoffice/ct');
               } on ApiException catch (e) {
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));

@@ -58,6 +58,7 @@ dependencies:
   pdfrx: ^2.4.7
   image_picker: ^1.2.0
   cached_network_image: ^3.4.1
+  desktop_drop: ^0.6.1
 
 dev_dependencies:
   flutter_test:

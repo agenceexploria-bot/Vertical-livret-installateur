@@ -7,8 +7,8 @@ import '../../core/widgets/app_card.dart';
 import '../../data/models/user.dart';
 import '../../state/comptes_state.dart';
 
-class CaValidationScreen extends StatelessWidget {
-  const CaValidationScreen({super.key});
+class CtValidationScreen extends StatelessWidget {
+  const CtValidationScreen({super.key});
 
   @override
   Widget build(BuildContext context) {

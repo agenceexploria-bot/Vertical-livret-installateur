@@ -3,7 +3,7 @@ enum TypeDocumentChantier { ficheChantier, securite, technique }
 TypeDocumentChantier typeDocumentChantierFromJson(String value) =>
     TypeDocumentChantier.values.firstWhere((t) => t.name == value);
 
-/// Document de référence déposé par le CA (PPSPS, plans, notices...) —
+/// Document de référence déposé par le CT (PPSPS, plans, notices...) —
 /// consulté en lecture seule par l'installateur (Modules 1-3). À ne pas
 /// confondre avec [DocumentTerrain], que l'installateur dépose lui-même.
 class DocumentChantier {
@@ -12,7 +12,7 @@ class DocumentChantier {
   final String nom;
   /// Nom du fichier tel qu'il existait sur l'ordinateur de la personne qui l'a
   /// déposé (ex. "Plan_2024.pdf") — distinct de [nom] (le titre libre donné
-  /// par le CA). Null pour les documents déposés avant ce champ.
+  /// par le CT). Null pour les documents déposés avant ce champ.
   final String? nomFichierOriginal;
   final String filePath;
   final DateTime createdAt;

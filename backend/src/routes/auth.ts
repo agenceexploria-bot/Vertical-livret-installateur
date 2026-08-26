@@ -157,14 +157,15 @@ const signupInterneSchema = z.object({
   mobile: z.string().min(6).refine((v) => isValidMobileInput(normalizePhoneInput(v)), MOBILE_FORMAT_ERROR),
   email: z.string().email('Email invalide'),
   password: z.string().min(6),
-  // Le rôle Qualité a été fusionné dans l'espace CA (refonte des rôles
-  // back-office) — il n'est plus proposé à l'inscription, seul chargeAffaires
-  // l'est. L'enum du schéma Prisma garde 'qualite' pour ne pas casser un
-  // compte déjà existant avec ce rôle (redirigé côté front vers l'espace CA).
-  role: z.enum(['chargeAffaires']),
+  // Le rôle Qualité a été fusionné dans l'espace CT (refonte des rôles
+  // back-office) — il n'est plus proposé à l'inscription, seul
+  // coordinateurTravaux l'est. L'enum du schéma Prisma garde 'qualite' pour ne
+  // pas casser un compte déjà existant avec ce rôle (redirigé côté front vers
+  // l'espace CT).
+  role: z.enum(['coordinateurTravaux']),
 });
 
-// Demande d'accès pour un compte interne (CA) : créé immédiatement mais
+// Demande d'accès pour un compte interne (CT) : créé immédiatement mais
 // isActive=false — le compte ne peut se connecter au back-office tant qu'un
 // Admin ne l'a pas validé (voir /admin/comptes-internes).
 authRouter.post('/signup-interne', async (req, res) => {
@@ -195,7 +196,7 @@ const loginSchema = z.object({
 // Admin sont créés déjà actifs, hors de ce circuit. Un installateur non
 // encore validé, lui, peut se connecter (redirigé vers /pending) : seule sa
 // liste de chantiers reste vide tant qu'il n'est rattaché à rien.
-const INTERNAL_ROLES_SOUMIS_VALIDATION = ['chargeAffaires', 'qualite'];
+const INTERNAL_ROLES_SOUMIS_VALIDATION = ['coordinateurTravaux', 'qualite'];
 
 function rejectIfBlocked(user: { role: string; isActive: boolean; suspendu: boolean }): string | null {
   if (user.suspendu) return 'Ce compte a été suspendu — contactez un administrateur.';

@@ -7,7 +7,7 @@ const prisma = new PrismaClient();
 // Script ponctuel de bootstrap d'un compte Admin — il n'existe aucune route
 // API pour créer un compte admin/direction/qualite (voir backend/src/routes/
 // auth.ts : POST /auth/signup crée toujours role='installateur',
-// POST /auth/signup-interne n'accepte que role='chargeAffaires') : ces rôles
+// POST /auth/signup-interne n'accepte que role='coordinateurTravaux') : ces rôles
 // à privilèges ne sont volontairement pas self-service. Seul le seed
 // (prisma/seed.ts) ou ce type de script, exécuté manuellement contre la
 // base cible, peut en créer un.

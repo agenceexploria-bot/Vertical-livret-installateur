@@ -98,7 +98,8 @@ class AuthRepository {
   /// est déclenché par un geste explicite de l'utilisateur qui reste sur
   /// l'écran, pas une action terrain à ne jamais perdre.
   Future<User> uploadAvatar(String file) async {
-    final data = await _api.uploadAvatar(file);
+    final fileUrl = await _api.uploadFile(kind: 'avatar', dataUrl: file);
+    final data = await _api.uploadAvatar(fileUrl);
     final user = User.fromJson(data['user'] as Map<String, dynamic>);
     await _persistUser(user);
     return user;
@@ -117,7 +118,8 @@ class AuthRepository {
   Future<void> addHabilitation({required String titre, required DateTime dateExpiration, required String file}) async {
     final dateExpirationIso = dateExpiration.toIso8601String();
     try {
-      await _api.addHabilitation(titre: titre, dateExpiration: dateExpirationIso, file: file);
+      final fileUrl = await _api.uploadFile(kind: 'habilitation', dataUrl: file);
+      await _api.addHabilitation(titre: titre, dateExpiration: dateExpirationIso, fileUrl: fileUrl);
     } catch (_) {
       await _db.enqueueOperation(
         type: 'addHabilitation',

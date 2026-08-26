@@ -239,8 +239,8 @@ class ProfilScreen extends StatelessWidget {
     switch (role) {
       case UserRole.installateur:
         return 'Installateur';
-      case UserRole.chargeAffaires:
-        return 'Chargé d\'Affaires';
+      case UserRole.coordinateurTravaux:
+        return 'Coordinateur travaux';
       case UserRole.qualite:
         return 'Qualité';
       case UserRole.direction:
@@ -250,7 +250,7 @@ class ProfilScreen extends StatelessWidget {
     }
   }
 
-  /// Salarié/Sous-traitant (`user.status`) — distinct du rôle : un CA ou un
+  /// Salarié/Sous-traitant (`user.status`) — distinct du rôle : un CT ou un
   /// Admin n'a pas ce champ renseigné (nullable), seuls les appelants
   /// vérifient `user.status != null` avant d'appeler cette méthode.
   String _statutLabel(User user) {
@@ -512,7 +512,7 @@ class _AddCertificatDialogState extends State<_AddCertificatDialog> {
   }
 
   Future<void> _choisirFichier() async {
-    final picked = await DocumentCapture.pickFile();
+    final picked = await DocumentCapture.pickWithCameraOption(context);
     if (picked == null) return;
     setState(() {
       _file = picked.dataUrl;

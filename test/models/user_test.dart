@@ -34,7 +34,7 @@ void main() {
         'prenom': 'Sandrine',
         'mobile': '0102030405',
         'email': null,
-        'role': 'chargeAffaires',
+        'role': 'coordinateurTravaux',
         'status': null,
       });
 

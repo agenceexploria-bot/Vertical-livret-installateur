@@ -1,4 +1,4 @@
-import { Chantier, ChantierInstallateur, DocumentChantier, DocumentTerrain, Habilitation, PointControle, User } from '@prisma/client';
+import { Chantier, ChantierInstallateur, DocumentChantier, DocumentTerrain, Habilitation, PointControle, Rex, User } from '@prisma/client';
 import { isPointComplete } from './lib/pointControleStatus';
 
 export function serializeUser(user: User & { habilitations?: Habilitation[] }) {
@@ -62,13 +62,23 @@ export function serializeDocumentChantier(d: DocumentChantier) {
   };
 }
 
+export function serializeRex(r: Rex) {
+  return {
+    id: r.id,
+    transcription: r.transcription,
+    audioPath: r.audioPath,
+    soumisAt: r.soumisAt,
+  };
+}
+
 export function serializeChantier(
   c: Chantier & {
     pointsControle?: PointControle[];
     installateurs?: (ChantierInstallateur & { user: User })[];
     documentsTerrain?: (DocumentTerrain & { auteur: User })[];
     documentsChantier?: DocumentChantier[];
-    chargeAffaires?: User | null;
+    coordinateurTravaux?: User | null;
+    rex?: Rex[];
   },
 ) {
   const reception = (c.pointsControle ?? []).filter((p) => p.type === 'reception');
@@ -89,12 +99,10 @@ export function serializeChantier(
     capacite: c.capacite,
     niveaux: c.niveaux,
     referenceAffaire: c.referenceAffaire,
-    chargeAffairesId: c.chargeAffairesId,
-    chargeAffairesNom: c.chargeAffaires ? `${c.chargeAffaires.prenom} ${c.chargeAffaires.nom}` : null,
+    coordinateurTravauxId: c.coordinateurTravauxId,
+    coordinateurTravauxNom: c.coordinateurTravaux ? `${c.coordinateurTravaux.prenom} ${c.coordinateurTravaux.nom}` : null,
     syncStatus: c.syncStatus,
-    rexValide: c.rexValide,
-    rexTranscription: c.rexTranscription,
-    rexAudioPath: c.rexAudioPath,
+    rex: (c.rex ?? []).map(serializeRex),
     pvPdfPath: c.pvPdfPath,
     pvSigne: c.pvSigne,
     pvSigneur: c.pvSigneur,

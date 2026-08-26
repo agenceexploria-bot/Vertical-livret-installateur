@@ -5,6 +5,31 @@ import 'document_chantier.dart';
 
 enum ChantierSyncStatus { nouveau, charge }
 
+/// Retour d'expérience d'un installateur sur un chantier — plusieurs entrées
+/// possibles par chantier (voir [Chantier.rex]).
+class Rex {
+  final String id;
+  final String? transcription;
+  final String? audioPath;
+  final DateTime soumisAt;
+
+  Rex({required this.id, this.transcription, this.audioPath, required this.soumisAt});
+
+  factory Rex.fromJson(Map<String, dynamic> json) => Rex(
+        id: json['id'] as String,
+        transcription: json['transcription'] as String?,
+        audioPath: json['audioPath'] as String?,
+        soumisAt: DateTime.parse(json['soumisAt'] as String),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'transcription': transcription,
+        'audioPath': audioPath,
+        'soumisAt': soumisAt.toIso8601String(),
+      };
+}
+
 class Chantier {
   final String reference;
   final String client;
@@ -20,14 +45,15 @@ class Chantier {
   final String capacite;
   final int niveaux;
   final String referenceAffaire;
-  final String? chargeAffairesId;
-  final String? chargeAffairesNom;
+  final String? coordinateurTravauxId;
+  final String? coordinateurTravauxNom;
   ChantierSyncStatus syncStatus;
 
   final List<PointControle> receptionMarchandises;
   final List<PointControle> autoControle;
-  bool rexValide;
-  String? rexTranscription;
+  // Plusieurs REX possibles par chantier — un installateur peut compléter son
+  // retour s'il a oublié quelque chose (voir Rex, chantiers.ts POST/DELETE .../rex).
+  final List<Rex> rex;
   // Gabarit PDF déposé par le back-office — ne vaut PAS validation (voir
   // pvSigne, qui ne passe à true qu'une fois signé par le client via
   // l'installateur). pvSignatureImagePath devient alors le PDF final
@@ -45,7 +71,7 @@ class Chantier {
   final Set<String> livretsOuverts;
   // Module 8 (EX-10 à EX-13) : dépôts terrain de l'installateur.
   final List<DocumentTerrain> docsTerrain;
-  // Modules 1-3 : documents de référence déposés par le CA (PPSPS, plans...).
+  // Modules 1-3 : documents de référence déposés par le CT (PPSPS, plans...).
   final List<DocumentChantier> documentsChantier;
 
   Chantier({
@@ -63,13 +89,12 @@ class Chantier {
     required this.capacite,
     required this.niveaux,
     required this.referenceAffaire,
-    this.chargeAffairesId,
-    this.chargeAffairesNom,
+    this.coordinateurTravauxId,
+    this.coordinateurTravauxNom,
     this.syncStatus = ChantierSyncStatus.nouveau,
     required this.receptionMarchandises,
     required this.autoControle,
-    this.rexValide = false,
-    this.rexTranscription,
+    List<Rex>? rex,
     this.pvPdfPath,
     this.pvSigne = false,
     this.pvSigneur,
@@ -80,7 +105,8 @@ class Chantier {
     Set<String>? livretsOuverts,
     List<DocumentTerrain>? docsTerrain,
     List<DocumentChantier>? documentsChantier,
-  })  : installateursRattaches = installateursRattaches ?? [],
+  })  : rex = rex ?? [],
+        installateursRattaches = installateursRattaches ?? [],
         livretsOuverts = livretsOuverts ?? {},
         docsTerrain = docsTerrain ?? [],
         documentsChantier = documentsChantier ?? [];
@@ -117,8 +143,8 @@ class Chantier {
         capacite: json['capacite'] as String,
         niveaux: json['niveaux'] as int,
         referenceAffaire: json['referenceAffaire'] as String,
-        chargeAffairesId: json['chargeAffairesId'] as String?,
-        chargeAffairesNom: json['chargeAffairesNom'] as String?,
+        coordinateurTravauxId: json['coordinateurTravauxId'] as String?,
+        coordinateurTravauxNom: json['coordinateurTravauxNom'] as String?,
         syncStatus: ChantierSyncStatus.values.firstWhere((s) => s.name == json['syncStatus'], orElse: () => ChantierSyncStatus.nouveau),
         receptionMarchandises: ((json['receptionMarchandises'] as List?) ?? [])
             .map((p) => PointControle.fromJson(p as Map<String, dynamic>))
@@ -126,8 +152,7 @@ class Chantier {
         autoControle: ((json['autoControle'] as List?) ?? [])
             .map((p) => PointControle.fromJson(p as Map<String, dynamic>))
             .toList(),
-        rexValide: json['rexValide'] as bool? ?? false,
-        rexTranscription: json['rexTranscription'] as String?,
+        rex: ((json['rex'] as List?) ?? []).map((r) => Rex.fromJson(r as Map<String, dynamic>)).toList(),
         pvPdfPath: json['pvPdfPath'] as String?,
         pvSigne: json['pvSigne'] as bool? ?? false,
         pvSigneur: json['pvSigneur'] as String?,
@@ -163,13 +188,12 @@ class Chantier {
         'capacite': capacite,
         'niveaux': niveaux,
         'referenceAffaire': referenceAffaire,
-        'chargeAffairesId': chargeAffairesId,
-        'chargeAffairesNom': chargeAffairesNom,
+        'coordinateurTravauxId': coordinateurTravauxId,
+        'coordinateurTravauxNom': coordinateurTravauxNom,
         'syncStatus': syncStatus.name,
         'receptionMarchandises': receptionMarchandises.map((p) => p.toJson()).toList(),
         'autoControle': autoControle.map((p) => p.toJson()).toList(),
-        'rexValide': rexValide,
-        'rexTranscription': rexTranscription,
+        'rex': rex.map((r) => r.toJson()).toList(),
         'pvPdfPath': pvPdfPath,
         'pvSigne': pvSigne,
         'pvSigneur': pvSigneur,

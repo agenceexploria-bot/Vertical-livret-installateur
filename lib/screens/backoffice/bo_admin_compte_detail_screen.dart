@@ -13,8 +13,8 @@ import 'widgets/bo_shell.dart';
 import 'widgets/bo_table_row.dart';
 
 /// Fiche détaillée d'un compte, consultable par l'Admin pour n'importe quel
-/// rôle (Installateur, CA, Direction, Qualité) — contrairement à
-/// BoInstallateurDetailScreen (utilisée par le CA), réservée aux
+/// rôle (Installateur, CT, Direction, Qualité) — contrairement à
+/// BoInstallateurDetailScreen (utilisée par le CT), réservée aux
 /// installateurs. Lecture seule : les actions de gestion (suspendre,
 /// réinitialiser le mot de passe, supprimer...) restent dans la liste
 /// "Gestion des comptes" (voir BoComptesScreen).
@@ -107,8 +107,8 @@ class BoAdminCompteDetailScreen extends StatelessWidget {
     switch (role) {
       case UserRole.installateur:
         return 'Installateur';
-      case UserRole.chargeAffaires:
-        return 'Chargé d\'affaires';
+      case UserRole.coordinateurTravaux:
+        return 'Coordinateur travaux';
       case UserRole.qualite:
         return 'Qualité';
       case UserRole.direction:

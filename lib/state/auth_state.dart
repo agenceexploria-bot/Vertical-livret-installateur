@@ -303,7 +303,7 @@ class AuthState extends ChangeNotifier {
   }
 
   /// Recharge le profil depuis le serveur — utilisé sur l'écran d'attente pour
-  /// détecter qu'un chargé d'affaires a validé le compte (EX-02).
+  /// détecter qu'un coordinateur travaux a validé le compte (EX-02).
   Future<void> refreshCurrentUser() async {
     final user = await _repository.refreshCurrentUser();
     if (user != null) {

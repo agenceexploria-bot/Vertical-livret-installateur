@@ -131,14 +131,14 @@ describe('POST /auth/verify-email-code', () => {
 });
 
 describe('POST /auth/signup-interne', () => {
-  it('crée un compte chargé d\'affaires en attente de validation par un admin', async () => {
+  it('crée un compte coordinateur travaux en attente de validation par un admin', async () => {
     const res = await request(app).post('/auth/signup-interne').send({
       nom: 'Bernard', prenom: 'Julien', mobile: '0611223344', email: 'j.bernard@actiwork.fr',
-      password: 'motdepasse', role: 'chargeAffaires',
+      password: 'motdepasse', role: 'coordinateurTravaux',
     });
 
     expect(res.status).toBe(201);
-    expect(res.body.user.role).toBe('chargeAffaires');
+    expect(res.body.user.role).toBe('coordinateurTravaux');
     expect(res.body.user.isActive).toBe(false);
     expect(res.body.accessToken).toBeTruthy();
   });
@@ -146,7 +146,7 @@ describe('POST /auth/signup-interne', () => {
   it('accepte un email hors domaine @actiwork.fr — tous les domaines sont autorisés', async () => {
     const res = await request(app).post('/auth/signup-interne').send({
       nom: 'Bernard', prenom: 'Julien', mobile: '0611223344', email: 'j.bernard@gmail.com',
-      password: 'motdepasse', role: 'chargeAffaires',
+      password: 'motdepasse', role: 'coordinateurTravaux',
     });
     expect(res.status).toBe(201);
   });

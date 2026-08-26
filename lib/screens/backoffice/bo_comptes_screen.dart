@@ -58,7 +58,7 @@ class _BoComptesScreenState extends State<BoComptesScreen> {
 
     // L'Admin a le contrôle total sur TOUS les comptes du système (voir la
     // refonte des rôles) — accessible uniquement via cet onglet 'Comptes',
-    // pas depuis le tableau de bord. Le CA/Direction ne voit lui que ses
+    // pas depuis le tableau de bord. Le CT/Direction ne voit lui que ses
     // installateurs ci-dessous, inchangé.
     if (isAdmin) {
       final adminState = context.watch<AdminState>();
@@ -141,11 +141,11 @@ class _BoComptesScreenState extends State<BoComptesScreen> {
   }
 
   // Ordre d'affichage des groupes — du plus "back-office" au plus nombreux,
-  // Qualité en dernier car legacy (fusionné dans l'espace CA, voir ailleurs).
-  static const _ordreGroupes = [UserRole.chargeAffaires, UserRole.direction, UserRole.installateur, UserRole.qualite];
+  // Qualité en dernier car legacy (fusionné dans l'espace CT, voir ailleurs).
+  static const _ordreGroupes = [UserRole.coordinateurTravaux, UserRole.direction, UserRole.installateur, UserRole.qualite];
 
   /// Gestion globale des comptes (Admin uniquement) : contrairement à la table
-  /// ci-dessous (réservée aux installateurs, utilisée aussi par le CA), cette
+  /// ci-dessous (réservée aux installateurs, utilisée aussi par le CT), cette
   /// vue couvre tous les rôles sauf Admin (exclus côté backend) — seul
   /// l'Admin peut supprimer, réinitialiser le mot de passe ou
   /// suspendre/réactiver un compte. Regroupés par rôle plutôt qu'un seul
@@ -234,8 +234,8 @@ class _BoComptesScreenState extends State<BoComptesScreen> {
     switch (role) {
       case UserRole.installateur:
         return 'Installateurs';
-      case UserRole.chargeAffaires:
-        return 'Chargés d\'affaires';
+      case UserRole.coordinateurTravaux:
+        return 'Coordinateurs travaux';
       case UserRole.qualite:
         return 'Qualité';
       case UserRole.direction:
@@ -249,8 +249,8 @@ class _BoComptesScreenState extends State<BoComptesScreen> {
     switch (role) {
       case UserRole.installateur:
         return 'Installateur';
-      case UserRole.chargeAffaires:
-        return 'Chargé d\'affaires';
+      case UserRole.coordinateurTravaux:
+        return 'Coordinateur travaux';
       case UserRole.qualite:
         return 'Qualité';
       case UserRole.direction:
@@ -316,11 +316,11 @@ class _BoComptesScreenState extends State<BoComptesScreen> {
               children: [
                 // Validation d'un compte fraîchement inscrit — deux routes
                 // backend distinctes selon le rôle : comptes-internes/:id/valider
-                // (CA/Qualité, voir AdminState.validerCompteInterne) ou
+                // (CT/Qualité, voir AdminState.validerCompteInterne) ou
                 // comptes/:id/valider (installateur uniquement, voir
                 // AdminState.validerCompte) ; direction/admin ne passent
                 // jamais par cet état "en attente" (créés déjà actifs).
-                if (!u.isActive && !u.suspendu && (u.role == UserRole.chargeAffaires || u.role == UserRole.qualite))
+                if (!u.isActive && !u.suspendu && (u.role == UserRole.coordinateurTravaux || u.role == UserRole.qualite))
                   ElevatedButton.icon(
                     onPressed: () => _handleAction(context, () => adminState.validerCompteInterne(u)),
                     icon: const Icon(Icons.check, size: 16),
@@ -570,7 +570,7 @@ class _BoComptesScreenState extends State<BoComptesScreen> {
     );
 
     return BoTableRow(
-      onTap: () => context.push('/backoffice/ca/comptes/${u.id}'),
+      onTap: () => context.push('/backoffice/ct/comptes/${u.id}'),
       border: const Border(top: BorderSide(color: AppColors.lignes)),
       backgroundColor: index.isOdd ? const Color(0xFFF7F8F9) : null,
       child: Row(

@@ -51,6 +51,71 @@ class ApiClient {
         if (auth && _accessToken != null) 'Authorization': 'Bearer $_accessToken',
       };
 
+  /// Dépose un fichier (fourni en data URL base64, ex. "data:image/jpeg;base64,...")
+  /// directement sur Vercel Blob plutôt que dans le corps JSON d'une requête à
+  /// cette API — le corps des requêtes de nos fonctions serverless est
+  /// plafonné à 4,5 Mo par Vercel, une limite non contournable côté code (voir
+  /// backend/src/routes/uploads.ts). [kind] détermine, côté serveur, le type
+  /// de fichier et la taille max réellement autorisés (jamais dictés par le
+  /// client). Renvoie l'URL publique du fichier déposé, à transmettre ensuite
+  /// à l'endpoint métier concerné (ex. addDocumentChantier).
+  Future<String> uploadFile({required String kind, required String dataUrl, String? filename}) async {
+    final match = RegExp(r'^data:([\w-]+/[\w.+-]+);base64,(.+)$').firstMatch(dataUrl);
+    if (match == null) throw ApiException(0, 'Fichier invalide.');
+    final contentType = match.group(1)!;
+    final bytes = base64Decode(match.group(2)!);
+    final resolvedFilename = filename ?? '$kind.${contentType.split('/').last}';
+
+    final tokenData = await _request('POST', '/uploads/token', body: {
+      'type': 'blob.generate-client-token',
+      'payload': {
+        'pathname': resolvedFilename,
+        'callbackUrl': '$baseUrl/uploads/token',
+        'clientPayload': jsonEncode({'kind': kind}),
+        'multipart': false,
+      },
+    });
+    final clientToken = tokenData['clientToken'] as String;
+
+    final uri = Uri.parse('https://blob.vercel-storage.com/').replace(queryParameters: {'pathname': resolvedFilename});
+    http.Response response;
+    try {
+      response = await http.put(uri, headers: {
+        'authorization': 'Bearer $clientToken',
+        'x-api-version': '9',
+        'x-content-type': contentType,
+      }, body: bytes);
+    } catch (_) {
+      throw ApiException(0, 'Erreur réseau. Vérifiez votre connexion.');
+    }
+    if (response.statusCode >= 400) {
+      throw ApiException(response.statusCode, _extractBlobError(response.body));
+    }
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return data['url'] as String;
+  }
+
+  /// Messages lisibles pour les erreurs renvoyées par Vercel Blob lors du
+  /// dépôt direct (forme `{ error: { code, message } }`, distincte de celle
+  /// de notre propre API — voir [_extractError]).
+  String _extractBlobError(String body) {
+    try {
+      final decoded = jsonDecode(body);
+      final error = decoded is Map ? decoded['error'] : null;
+      final code = error is Map ? error['code'] : null;
+      switch (code) {
+        case 'file_too_large':
+          return 'Ce fichier est trop volumineux.';
+        case 'content_type_not_allowed':
+          return 'Ce type de fichier n\'est pas autorisé ici.';
+        default:
+          return 'Impossible d\'envoyer le fichier. Réessayez.';
+      }
+    } catch (_) {
+      return 'Erreur réseau. Vérifiez votre connexion.';
+    }
+  }
+
   Future<Map<String, dynamic>> _request(
     String method,
     String path, {
@@ -272,11 +337,11 @@ class ApiClient {
   /// refonte des rôles) ; le backend rejette la requête pour tout autre rôle.
   Future<void> supprimerCompte(String id) => _request('DELETE', '/comptes/$id');
 
-  /// Réinitialisation du mot de passe d'un installateur — CA/Direction/Admin.
+  /// Réinitialisation du mot de passe d'un installateur — CT/Direction/Admin.
   Future<void> reinitialiserMotDePasse(String id, String password) =>
       _request('POST', '/comptes/$id/reinitialiser-mot-de-passe', body: {'password': password});
 
-  /// Modification du profil d'un installateur par le CA/Admin (distinct de
+  /// Modification du profil d'un installateur par le CT/Admin (distinct de
   /// updateProfile ci-dessus, qui modifie le compte connecté lui-même).
   Future<Map<String, dynamic>> updateCompte(String id,
       {String? nom, String? prenom, String? email, String? mobile, String? societe}) {
@@ -299,19 +364,18 @@ class ApiClient {
     });
   }
 
-  Future<Map<String, dynamic>> addHabilitation({required String titre, required String dateExpiration, required String file}) {
+  Future<Map<String, dynamic>> addHabilitation({required String titre, required String dateExpiration, required String fileUrl}) {
     return _request('POST', '/comptes/moi/habilitations', body: {
       'titre': titre,
       'dateExpiration': dateExpiration,
-      'file': file,
+      'fileUrl': fileUrl,
     });
   }
 
-  /// [file] : photo de profil en data URL base64 (JPEG/PNG), même convention
-  /// que les autres pièces jointes de l'app — voir PhotoCapture côté app et
-  /// imageStorage.ts côté serveur.
-  Future<Map<String, dynamic>> uploadAvatar(String file) {
-    return _request('POST', '/comptes/moi/avatar', body: {'file': file});
+  /// [fileUrl] : photo de profil (JPEG/PNG) déjà déposée sur Vercel Blob —
+  /// voir [uploadFile].
+  Future<Map<String, dynamic>> uploadAvatar(String fileUrl) {
+    return _request('POST', '/comptes/moi/avatar', body: {'fileUrl': fileUrl});
   }
 
   Future<Map<String, dynamic>> deleteAvatar() {
@@ -385,30 +449,30 @@ class ApiClient {
   Future<void> markLivretOuvert(String reference) =>
       _request('POST', '/chantiers/$reference/livret-ouvert');
 
-  Future<void> updatePoint(String reference, String pointId, {String? status, String? photo, String? clientValidatedAt}) {
+  Future<void> updatePoint(String reference, String pointId, {String? status, String? photoUrl, String? clientValidatedAt}) {
     return _request('PATCH', '/chantiers/$reference/points/$pointId', body: {
       'status': ?status,
-      'photo': ?photo,
+      'photoUrl': ?photoUrl,
       'clientValidatedAt': ?clientValidatedAt,
     });
   }
 
-  Future<Map<String, dynamic>> postRex(String reference, {String? transcription, String? audio}) {
+  Future<Map<String, dynamic>> postRex(String reference, {String? transcription, String? audioUrl}) {
     return _request('POST', '/chantiers/$reference/rex', body: {
       'transcription': ?transcription,
-      'audio': ?audio,
+      'audioUrl': ?audioUrl,
     });
   }
 
-  /// Supprime le REX d'un chantier (CA/Admin) — seule façon de débloquer
-  /// l'installateur pour qu'il puisse en soumettre un nouveau.
-  Future<Map<String, dynamic>> deleteRex(String reference) =>
-      _request('DELETE', '/chantiers/$reference/rex');
+  /// Supprime une entrée REX précise (CT/Admin) — les autres entrées REX du
+  /// chantier ne sont pas affectées.
+  Future<Map<String, dynamic>> deleteRex(String reference, String rexId) =>
+      _request('DELETE', '/chantiers/$reference/rex/$rexId');
 
   /// Dépôt (ou remplacement) du gabarit PV par le back-office — ne valide
   /// rien, voir signPv pour la signature qui valide effectivement le PV.
-  Future<Map<String, dynamic>> uploadPvDocument(String reference, String file) {
-    return _request('POST', '/chantiers/$reference/pv/document', body: {'file': file});
+  Future<Map<String, dynamic>> uploadPvDocument(String reference, String fileUrl) {
+    return _request('POST', '/chantiers/$reference/pv/document', body: {'fileUrl': fileUrl});
   }
 
   /// Signature du PV par le client, soumise par l'installateur — le client
@@ -441,27 +505,27 @@ class ApiClient {
     });
   }
 
-  /// Supprime définitivement le PV d'un chantier (CA/Admin) — gabarit et
+  /// Supprime définitivement le PV d'un chantier (CT/Admin) — gabarit et
   /// signature éventuelle.
   Future<Map<String, dynamic>> deletePv(String reference) =>
       _request('DELETE', '/chantiers/$reference/pv');
 
-  Future<Map<String, dynamic>> addDocument(String reference, {required String titre, required String categorie, required String file}) {
-    return _request('POST', '/chantiers/$reference/documents', body: {'titre': titre, 'categorie': categorie, 'file': file});
+  Future<Map<String, dynamic>> addDocument(String reference, {required String titre, required String categorie, required String fileUrl}) {
+    return _request('POST', '/chantiers/$reference/documents', body: {'titre': titre, 'categorie': categorie, 'fileUrl': fileUrl});
   }
 
   /// Suppression d'un document terrain (Module 8) — réservée à son auteur ou
-  /// à un CA/Admin (vérifié côté serveur).
+  /// à un CT/Admin (vérifié côté serveur).
   Future<Map<String, dynamic>> deleteDocument(String reference, String docId) =>
       _request('DELETE', '/chantiers/$reference/documents/$docId');
 
   Future<Map<String, dynamic>> addDocumentChantier(String reference,
-      {required String type, required String nom, String? nomFichierOriginal, required String file}) {
+      {required String type, String? nom, String? nomFichierOriginal, required String fileUrl}) {
     return _request('POST', '/chantiers/$reference/documents-chantier', body: {
       'type': type,
-      'nom': nom,
+      'nom': ?nom,
       'nomFichierOriginal': ?nomFichierOriginal,
-      'file': file,
+      'fileUrl': fileUrl,
     });
   }
 
@@ -469,9 +533,9 @@ class ApiClient {
       _request('DELETE', '/chantiers/$reference/documents-chantier/$docId');
 
   Future<Map<String, dynamic>> replaceDocumentChantier(String reference, String docId,
-      {required String file, String? nomFichierOriginal}) {
+      {required String fileUrl, String? nomFichierOriginal}) {
     return _request('PUT', '/chantiers/$reference/documents-chantier/$docId', body: {
-      'file': file,
+      'fileUrl': fileUrl,
       'nomFichierOriginal': ?nomFichierOriginal,
     });
   }
@@ -493,4 +557,35 @@ class ApiClient {
 
   Future<Map<String, dynamic>> marquerNotificationLue(String id) =>
       _request('PATCH', '/notifications/$id/lue');
+
+  // ---- Listes de réception/contrôle (Admin) ----
+
+  Future<List<dynamic>> getChecklistTemplates() async {
+    final data = await _request('GET', '/checklist-templates');
+    return data['items'] as List<dynamic>;
+  }
+
+  Future<Map<String, dynamic>> addChecklistTemplateItem({
+    required String type,
+    required String categorie,
+    required String libelle,
+    bool critique = false,
+  }) {
+    return _request('POST', '/checklist-templates', body: {
+      'type': type,
+      'categorie': categorie,
+      'libelle': libelle,
+      'critique': critique,
+    });
+  }
+
+  Future<Map<String, dynamic>> updateChecklistTemplateItem(String id, {String? categorie, String? libelle, bool? critique}) {
+    return _request('PATCH', '/checklist-templates/$id', body: {
+      'categorie': ?categorie,
+      'libelle': ?libelle,
+      'critique': ?critique,
+    });
+  }
+
+  Future<void> deleteChecklistTemplateItem(String id) => _request('DELETE', '/checklist-templates/$id');
 }

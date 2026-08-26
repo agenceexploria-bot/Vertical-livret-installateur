@@ -77,13 +77,17 @@ class ChantierRepository {
 
   Future<void> deleteChantier(String reference) => _api.deleteChantier(reference);
 
-  /// Dépôt d'un document de référence (PPSPS, plan...) par le CA — action
-  /// back-office web, pas de file d'attente hors-ligne (comme [createChantier]
-  /// et [rattacher], qui supposent déjà un réseau disponible).
+  /// Dépôt d'un document de référence (PPSPS, plan, vidéo...) par le CT —
+  /// action back-office web, pas de file d'attente hors-ligne (comme
+  /// [createChantier] et [rattacher], qui supposent déjà un réseau
+  /// disponible). [file] est déposé directement sur Vercel Blob (voir
+  /// [ApiClient.uploadFile]) avant de créer l'enregistrement — [nom] est
+  /// optionnel, le nom du fichier d'origine fait l'affaire à défaut.
   Future<Chantier> addDocumentChantier(String reference,
-      {required String type, required String nom, String? nomFichierOriginal, required String file}) async {
+      {required String type, String? nom, String? nomFichierOriginal, required String file}) async {
+    final fileUrl = await _api.uploadFile(kind: 'documentChantier', dataUrl: file, filename: nomFichierOriginal);
     final data = await _api.addDocumentChantier(reference,
-        type: type, nom: nom, nomFichierOriginal: nomFichierOriginal, file: file);
+        type: type, nom: nom, nomFichierOriginal: nomFichierOriginal, fileUrl: fileUrl);
     return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
   }
 
@@ -97,7 +101,8 @@ class ChantierRepository {
 
   Future<Chantier> replaceDocumentChantier(String reference, String docId,
       {required String file, String? nomFichierOriginal}) async {
-    final data = await _api.replaceDocumentChantier(reference, docId, file: file, nomFichierOriginal: nomFichierOriginal);
+    final fileUrl = await _api.uploadFile(kind: 'documentChantier', dataUrl: file, filename: nomFichierOriginal);
+    final data = await _api.replaceDocumentChantier(reference, docId, fileUrl: fileUrl, nomFichierOriginal: nomFichierOriginal);
     return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
   }
 
@@ -135,7 +140,8 @@ class ChantierRepository {
   Future<void> updatePoint(String reference, String pointId, {String? status, String? photo, String? validatedByName}) async {
     final clientValidatedAt = status != null ? DateTime.now().toIso8601String() : null;
     try {
-      await _api.updatePoint(reference, pointId, status: status, photo: photo, clientValidatedAt: clientValidatedAt);
+      final photoUrl = photo != null ? await _api.uploadFile(kind: 'pointPhoto', dataUrl: photo) : null;
+      await _api.updatePoint(reference, pointId, status: status, photoUrl: photoUrl, clientValidatedAt: clientValidatedAt);
     } catch (_) {
       await _db.enqueueOperation(
         type: 'updatePoint',
@@ -172,7 +178,8 @@ class ChantierRepository {
   /// (Whisper) n'est pas requise pour la V1 : l'audio seul est accepté.
   Future<Chantier> submitRex(String reference, {String? transcription, String? audio}) async {
     try {
-      final data = await _api.postRex(reference, transcription: transcription, audio: audio);
+      final audioUrl = audio != null ? await _api.uploadFile(kind: 'rexAudio', dataUrl: audio) : null;
+      final data = await _api.postRex(reference, transcription: transcription, audioUrl: audioUrl);
       return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
     } catch (_) {
       await _db.enqueueOperation(
@@ -181,24 +188,24 @@ class ChantierRepository {
         payload: {'transcription': ?transcription, 'audio': ?audio},
       );
       await _applyOptimisticUpdate(reference, (chantier) {
-        chantier.rexValide = true;
-        if (transcription != null) chantier.rexTranscription = transcription;
+        chantier.rex.insert(0, Rex(id: 'local-${DateTime.now().microsecondsSinceEpoch}', transcription: transcription, soumisAt: DateTime.now()));
       });
       return getChantier(reference);
     }
   }
 
-  /// Supprime le REX d'un chantier (CA/Admin, back-office) — action toujours
-  /// en ligne, comme [deleteChantier]/[deleteDocumentChantier].
-  Future<Chantier> deleteRex(String reference) async {
-    final data = await _api.deleteRex(reference);
+  /// Supprime une entrée REX précise (CT/Admin, back-office) — action
+  /// toujours en ligne, comme [deleteChantier]/[deleteDocumentChantier].
+  Future<Chantier> deleteRex(String reference, String rexId) async {
+    final data = await _api.deleteRex(reference, rexId);
     return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
   }
 
   /// Dépôt du gabarit PV par le back-office — toujours en ligne, comme
   /// [addDocumentChantier] (action web, pas de file d'attente hors-ligne).
   Future<Chantier> uploadPvDocument(String reference, String file) async {
-    final data = await _api.uploadPvDocument(reference, file);
+    final fileUrl = await _api.uploadFile(kind: 'pvDocument', dataUrl: file);
+    final data = await _api.uploadPvDocument(reference, fileUrl);
     return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
   }
 
@@ -230,7 +237,7 @@ class ChantierRepository {
     return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
   }
 
-  /// Supprime définitivement le PV d'un chantier (CA/Admin, back-office) —
+  /// Supprime définitivement le PV d'un chantier (CT/Admin, back-office) —
   /// action toujours en ligne, comme [deleteRex]/[deleteChantier].
   Future<Chantier> deletePv(String reference) async {
     final data = await _api.deletePv(reference);
@@ -249,7 +256,8 @@ class ChantierRepository {
   /// [auteurName] n'est utilisé que pour l'affichage optimiste local.
   Future<void> addDocument(String reference, {required String titre, required String categorie, required String file, String? auteurName}) async {
     try {
-      await _api.addDocument(reference, titre: titre, categorie: categorie, file: file);
+      final fileUrl = await _api.uploadFile(kind: 'documentTerrain', dataUrl: file);
+      await _api.addDocument(reference, titre: titre, categorie: categorie, fileUrl: fileUrl);
     } catch (_) {
       await _db.enqueueOperation(
         type: 'addDocument',

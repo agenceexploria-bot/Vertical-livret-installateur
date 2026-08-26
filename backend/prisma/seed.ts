@@ -1,12 +1,17 @@
 import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import { PrismaClient } from '@prisma/client';
-import { RECEPTION_POINTS, AUTO_CONTROLE_POINTS } from '../src/lib/checklistDefaults';
 
 const prisma = new PrismaClient();
 
 async function main() {
   const password = await bcrypt.hash('demodemo', 10);
+
+  // Mêmes listes de réception/contrôle que POST /chantiers (voir
+  // routes/chantiers.ts) — déjà en base via la migration
+  // checklist_template_items, éditables ensuite par l'Admin.
+  const templates = await prisma.checklistTemplateItem.findMany({ orderBy: { ordre: 'asc' } });
+  const pointsControleDefaults = templates.map(({ type, categorie, libelle, critique, ordre }) => ({ type, categorie, libelle, critique, ordre }));
 
   const thomas = await prisma.user.upsert({
     where: { mobile: '0652417890' },
@@ -88,7 +93,7 @@ async function main() {
       mobile: '0102030405',
       email: 's.martin@actiwork.fr',
       passwordHash: password,
-      role: 'chargeAffaires',
+      role: 'coordinateurTravaux',
       isActive: true,
     },
   });
@@ -145,7 +150,7 @@ async function main() {
       referenceAffaire: 'AF-2026-001',
       syncStatus: 'charge',
       pointsControle: {
-        create: [...RECEPTION_POINTS, ...AUTO_CONTROLE_POINTS],
+        create: pointsControleDefaults,
       },
       installateurs: { create: [{ userId: thomas.id }, { userId: costa.id }] },
     },
@@ -170,7 +175,7 @@ async function main() {
       niveaux: 3,
       referenceAffaire: 'AF-2026-042',
       pointsControle: {
-        create: [...RECEPTION_POINTS, ...AUTO_CONTROLE_POINTS],
+        create: pointsControleDefaults,
       },
     },
   });

@@ -3,7 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/vertical_logo.dart';
 
-/// Écran affiché après l'envoi d'une demande d'accès interne (CA) — le
+/// Écran affiché après l'envoi d'une demande d'accès interne (CT) — le
 /// compte est créé mais inactif tant qu'un Admin ne l'a pas validé (voir
 /// BoAccessRequestScreen._submit), donc pas de connexion automatique ici.
 class BoAccessConfirmationScreen extends StatelessWidget {

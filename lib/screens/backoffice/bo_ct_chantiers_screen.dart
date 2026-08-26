@@ -19,18 +19,18 @@ import 'widgets/bo_responsive_table.dart';
 import 'widgets/bo_table_row.dart';
 import 'widgets/pv_signature_panel.dart';
 
-/// Espace Chargé d'Affaires — gestion des chantiers (création, suivi, PV
+/// Espace Coordinateur travaux — gestion des chantiers (création, suivi, PV
 /// signés pour facturation), validation des installateurs, et — depuis la
 /// fusion du rôle Qualité dans cet espace — auto-contrôles, REX à qualifier,
 /// anomalies et habilitations.
-class BoCaChantiersScreen extends StatefulWidget {
-  const BoCaChantiersScreen({super.key});
+class BoCtChantiersScreen extends StatefulWidget {
+  const BoCtChantiersScreen({super.key});
 
   @override
-  State<BoCaChantiersScreen> createState() => _BoCaChantiersScreenState();
+  State<BoCtChantiersScreen> createState() => _BoCtChantiersScreenState();
 }
 
-class _BoCaChantiersScreenState extends State<BoCaChantiersScreen> {
+class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
   final _searchController = TextEditingController();
   String _search = '';
 
@@ -170,7 +170,7 @@ class _BoCaChantiersScreenState extends State<BoCaChantiersScreen> {
             ),
             const SizedBox(width: 12),
             ElevatedButton.icon(
-              onPressed: () => context.push('/backoffice/ca/chantiers/nouveau'),
+              onPressed: () => context.push('/backoffice/ct/chantiers/nouveau'),
               icon: const Icon(Icons.add, size: 20),
               label: const Text('Nouveau chantier'),
               style: ElevatedButton.styleFrom(minimumSize: const Size(0, 46), padding: const EdgeInsets.symmetric(horizontal: 20)),
@@ -184,7 +184,7 @@ class _BoCaChantiersScreenState extends State<BoCaChantiersScreen> {
               icon: Icons.construction_outlined,
               message: isSearching ? 'Aucun résultat pour « ${_search.trim()} ».' : 'Aucun chantier en cours pour l\'instant.',
               actionLabel: isSearching ? null : 'Créer un nouveau chantier',
-              onAction: isSearching ? null : () => context.push('/backoffice/ca/chantiers/nouveau'),
+              onAction: isSearching ? null : () => context.push('/backoffice/ct/chantiers/nouveau'),
             ),
           )
         else
@@ -233,7 +233,7 @@ class _BoCaChantiersScreenState extends State<BoCaChantiersScreen> {
     final livret = _livretBadge(c);
     final pv = _pvBadge(c);
     return BoTableRow(
-      onTap: () => context.push('/backoffice/ca/chantiers/${c.reference}'),
+      onTap: () => context.push('/backoffice/ct/chantiers/${c.reference}'),
       border: const Border(top: BorderSide(color: AppColors.lignes)),
       backgroundColor: index.isOdd ? const Color(0xFFF7F8F9) : null,
       child: Row(
@@ -267,7 +267,7 @@ class _BoCaChantiersScreenState extends State<BoCaChantiersScreen> {
 
     // Fond légèrement teinté dès qu'il y a des éléments à traiter — pour que
     // ce panneau attire l'œil en priorité, comme demandé pour les actions
-    // urgentes du CA.
+    // urgentes du CT.
     return Container(
       decoration: items.isNotEmpty
           ? BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.orange.withValues(alpha: 0.35)))

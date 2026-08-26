@@ -16,12 +16,12 @@ import '../../data/models/document_chantier.dart';
 import '../../data/models/user.dart';
 import '../../state/chantier_state.dart';
 
-/// Fiche chantier mobile pour le CA — consultation de l'avancement, des
+/// Fiche chantier mobile pour le CT — consultation de l'avancement, des
 /// installateurs rattachés et dépôt de documents de référence (Modules 1 à 3),
-/// avec accès à la modification (voir [CaEditChantierScreen] atteint via
+/// avec accès à la modification (voir [CtEditChantierScreen] atteint via
 /// l'icône crayon). Version réduite de BoChantierDetailScreen (Web).
-class CaChantierDetailScreen extends StatelessWidget {
-  const CaChantierDetailScreen({super.key});
+class CtChantierDetailScreen extends StatelessWidget {
+  const CtChantierDetailScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -49,7 +49,7 @@ class CaChantierDetailScreen extends StatelessWidget {
         foregroundColor: Colors.white,
         actions: [
           IconButton(
-            onPressed: () => context.push('/ca/chantier/${chantier.reference}/modifier'),
+            onPressed: () => context.push('/ct/chantier/${chantier.reference}/modifier'),
             icon: const Icon(Icons.edit_outlined),
             tooltip: 'Modifier ce chantier',
           ),

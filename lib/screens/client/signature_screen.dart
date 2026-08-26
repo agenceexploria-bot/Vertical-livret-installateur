@@ -27,7 +27,7 @@ import '../../state/chantier_state.dart';
 /// l'image sur le PDF gabarit original sans le rasteriser (voir
 /// backend/src/lib/pvMerge.ts). Une fois le PV signé (pvSigne == true), cet
 /// écran se verrouille totalement — voir le garde dans [build] — et ne se
-/// déverrouille que si un CA/Admin supprime le PV depuis le back-office
+/// déverrouille que si un CT/Admin supprime le PV depuis le back-office
 /// (DELETE .../pv, qui repasse pvSigne à false).
 class SignatureScreen extends StatefulWidget {
   const SignatureScreen({super.key});
@@ -107,7 +107,7 @@ class _SignatureScreenState extends State<SignatureScreen> {
 
     // Verrou : un PV déjà signé ne se rouvre jamais en mode édition, même en
     // cas de navigation directe vers cette route (deep link, retour
-    // arrière...) — la seule porte de sortie est qu'un CA/Admin supprime le
+    // arrière...) — la seule porte de sortie est qu'un CT/Admin supprime le
     // PV côté back-office, ce qui repasse pvSigne à false et débloque cet
     // écran automatiquement (rebuild réactif via context.watch).
     if (chantier != null && chantier.pvSigne) {
