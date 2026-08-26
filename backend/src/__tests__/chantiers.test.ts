@@ -328,7 +328,7 @@ describe('Progression et modules', () => {
 
     expect(res.status).toBe(200);
     const imagePath = res.body.chantier.pvSignatureImagePath as string;
-    expect(imagePath).toMatch(/^https:\/\/blob\.vercel-storage\.com\/test\/pv-signe-.+\.pdf$/);
+    expect(imagePath).toMatch(/^https:\/\/teststoreid\.public\.blob\.vercel-storage\.com\/test\/pv-signe-.+\.pdf$/);
   }, 30000);
 });
 

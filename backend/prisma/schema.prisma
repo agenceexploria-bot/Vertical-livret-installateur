@@ -42,6 +42,13 @@ model User {
   resetPasswordExpires  DateTime?
   resetPasswordAttempts Int       @default(0)
 
+  // Verrou de connexion persistant en base (voir /auth/login) — le
+  // rate-limit en mémoire (authRateLimit) est par IP et non fiable en
+  // serverless (état perdu à chaque cold start) ; ce compteur, lui, résiste
+  // à un brute-force distribué ou étalé dans le temps sur un même compte.
+  loginFailedAttempts Int       @default(0)
+  loginLockedUntil    DateTime?
+
   habilitations       Habilitation[]
   chantiersRattaches  ChantierInstallateur[]
   documentsTerrain    DocumentTerrain[]

@@ -1,3 +1,4 @@
+import 'express-async-errors';
 import express from 'express';
 import cors from 'cors';
 import { authRouter } from './routes/auth';
@@ -45,6 +46,18 @@ export function createApp() {
   app.use('/pusher', pusherRouter);
   app.use('/uploads', uploadsRouter);
   app.use('/checklist-templates', checklistTemplatesRouter);
+
+  // Filet de sécurité : la plupart des handlers n'ont pas leur propre
+  // try/catch (revue de sécurité) — sans `express-async-errors` (importé en
+  // tête de fichier, patch le routeur pour transmettre ici tout rejet de
+  // promesse d'un handler async), une exception non interceptée y laisserait
+  // la requête sans réponse jusqu'au timeout de la fonction serverless
+  // plutôt que de renvoyer une erreur JSON propre.
+  app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    console.error('Erreur non interceptée sur une route', err);
+    if (res.headersSent) return;
+    res.status(500).json({ error: 'Une erreur inattendue est survenue.' });
+  });
 
   return app;
 }

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import request from 'supertest';
+import bcrypt from 'bcryptjs';
 import { getPayloadFromClientToken } from '@vercel/blob/client';
 import { createApp } from '../app';
 import { prisma } from '../prisma';
@@ -12,6 +13,18 @@ async function createInstallateurToken() {
     nom: 'Roux', prenom: 'Thomas', mobile: '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo',
   });
   return signup.body.accessToken as string;
+}
+
+async function createCtToken() {
+  const passwordHash = await bcrypt.hash('demodemo', 10);
+  await prisma.user.create({
+    data: {
+      nom: 'Martin', prenom: 'Sandrine', mobile: '0102030405', email: 's.martin@actiwork.fr',
+      passwordHash, role: 'coordinateurTravaux', isActive: true,
+    },
+  });
+  const login = await request(app).post('/auth/login').send({ identifier: 's.martin@actiwork.fr', password: 'demodemo' });
+  return login.body.accessToken as string;
 }
 
 beforeEach(async () => {
@@ -52,8 +65,24 @@ describe('POST /uploads/token', () => {
     expect(payload.maximumSizeInBytes).toBe(10 * 1024 * 1024);
   });
 
-  it('autorise les vidéos pour les documents chantier/terrain', async () => {
+  it('autorise les vidéos pour les documents terrain (installateur)', async () => {
     const token = await createInstallateurToken();
+
+    const res = await request(app)
+      .post('/uploads/token')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        type: 'blob.generate-client-token',
+        payload: { pathname: 'x.mp4', callbackUrl: 'http://x', clientPayload: JSON.stringify({ kind: 'documentTerrain' }), multipart: false },
+      });
+
+    expect(res.status).toBe(200);
+    const payload = getPayloadFromClientToken(res.body.clientToken as string);
+    expect(payload.allowedContentTypes).toContain('video/mp4');
+  });
+
+  it('autorise les vidéos pour les documents chantier (CT/direction/admin)', async () => {
+    const token = await createCtToken();
 
     const res = await request(app)
       .post('/uploads/token')
@@ -66,6 +95,34 @@ describe('POST /uploads/token', () => {
     expect(res.status).toBe(200);
     const payload = getPayloadFromClientToken(res.body.clientToken as string);
     expect(payload.allowedContentTypes).toContain('video/mp4');
+  });
+
+  it('refuse un installateur pour les documents chantier (réservés CT/direction/admin)', async () => {
+    const token = await createInstallateurToken();
+
+    const res = await request(app)
+      .post('/uploads/token')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        type: 'blob.generate-client-token',
+        payload: { pathname: 'x.mp4', callbackUrl: 'http://x', clientPayload: JSON.stringify({ kind: 'documentChantier' }), multipart: false },
+      });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('refuse un installateur pour le PV gabarit (réservé CT/direction/admin)', async () => {
+    const token = await createInstallateurToken();
+
+    const res = await request(app)
+      .post('/uploads/token')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        type: 'blob.generate-client-token',
+        payload: { pathname: 'x.pdf', callbackUrl: 'http://x', clientPayload: JSON.stringify({ kind: 'pvDocument' }), multipart: false },
+      });
+
+    expect(res.status).toBe(400);
   });
 
   it('refuse un kind inconnu', async () => {

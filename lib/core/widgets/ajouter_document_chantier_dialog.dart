@@ -38,7 +38,7 @@ class _AjouterDocumentChantierDialogState extends State<AjouterDocumentChantierD
 
   Future<void> _choisirFichiers() async {
     final picked = await DocumentCapture.pickMultipleFiles();
-    if (picked.isEmpty) return;
+    if (picked.isEmpty || !mounted) return;
     setState(() => _picked.addAll(picked));
   }
 
@@ -129,7 +129,7 @@ class _AjouterDocumentChantierDialogState extends State<AjouterDocumentChantierD
     return DropZone(
       onFilesDropped: (files) async {
         final dropped = await DocumentCapture.fromDroppedFiles(files);
-        if (dropped.isEmpty) return;
+        if (dropped.isEmpty || !mounted) return;
         setState(() => _picked.addAll(dropped));
       },
       child: SizedBox(

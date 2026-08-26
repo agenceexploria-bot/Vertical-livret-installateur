@@ -50,7 +50,7 @@ class _RenseignerPvDialogState extends State<RenseignerPvDialog> {
       return;
     }
     final picked = (await DocumentCapture.fromDroppedFiles([pdf])).firstOrNull;
-    if (picked == null) return;
+    if (picked == null || !mounted) return;
     setState(() {
       _pdfDataUrl = picked.dataUrl;
       _pdfName = picked.fileName;

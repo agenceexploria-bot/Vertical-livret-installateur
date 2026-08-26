@@ -206,6 +206,9 @@ function rejectIfBlocked(user: { role: string; isActive: boolean; suspendu: bool
   return null;
 }
 
+const MAX_LOGIN_ATTEMPTS = 10;
+const LOGIN_LOCKOUT_MINUTES = 15;
+
 authRouter.post('/login', authRateLimit, async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
@@ -217,11 +220,31 @@ authRouter.post('/login', authRateLimit, async (req, res) => {
   });
   if (!user) return res.status(401).json({ error: 'Identifiants incorrects' });
 
+  if (user.loginLockedUntil && user.loginLockedUntil > new Date()) {
+    return res.status(429).json({ error: 'Trop de tentatives — réessayez dans quelques minutes.' });
+  }
+
   const valid = await bcrypt.compare(password, user.passwordHash);
-  if (!valid) return res.status(401).json({ error: 'Identifiants incorrects' });
+  if (!valid) {
+    // Compteur persistant par compte (voir déclaration du champ dans
+    // schema.prisma) — complète authRateLimit, qui protège par IP mais perd
+    // son état à chaque cold start serverless.
+    const attempts = user.loginFailedAttempts + 1;
+    await prisma.user.update({
+      where: { id: user.id },
+      data: attempts >= MAX_LOGIN_ATTEMPTS
+        ? { loginFailedAttempts: 0, loginLockedUntil: new Date(Date.now() + LOGIN_LOCKOUT_MINUTES * 60 * 1000) }
+        : { loginFailedAttempts: attempts },
+    });
+    return res.status(401).json({ error: 'Identifiants incorrects' });
+  }
 
   const blockedReason = rejectIfBlocked(user);
   if (blockedReason) return res.status(403).json({ error: blockedReason });
+
+  if (user.loginFailedAttempts > 0 || user.loginLockedUntil) {
+    await prisma.user.update({ where: { id: user.id }, data: { loginFailedAttempts: 0, loginLockedUntil: null } });
+  }
 
   const tokens = await issueTokens(user.id, user.role);
   res.json({ user: serializeUser(user), ...tokens });

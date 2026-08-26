@@ -5,23 +5,33 @@ import { AuthedRequest } from '../middleware/auth';
 
 export const uploadsRouter = Router();
 
-// Types et tailles autorisés par nature de pièce jointe — décidés côté
-// serveur uniquement (jamais à partir de ce que le client déclare, à part le
-// choix du `kind` lui-même), pour qu'un client ne puisse pas s'accorder un
-// type de fichier ou une taille non prévus en trafiquant sa requête.
-const KIND_CONFIG: Record<string, { allowedContentTypes: string[]; maximumSizeInBytes: number }> = {
+// Types, tailles ET rôles autorisés par nature de pièce jointe — décidés
+// côté serveur uniquement (jamais à partir de ce que le client déclare, à
+// part le choix du `kind` lui-même), pour qu'un client ne puisse pas
+// s'accorder un type de fichier, une taille ou un jeton non prévus en
+// trafiquant sa requête. `allowedRoles: undefined` = tout utilisateur
+// authentifié (cas des pièces jointes "libre-service" : avatar,
+// habilitation, ou déposées par l'installateur lui-même sur le terrain) ;
+// pvDocument/documentChantier sont réservés au même périmètre que leurs
+// routes d'attachement (voir routes/chantiers.ts).
+const KIND_CONFIG: Record<string, { allowedContentTypes: string[]; maximumSizeInBytes: number; allowedRoles?: string[] }> = {
   avatar: { allowedContentTypes: ['image/jpeg', 'image/png'], maximumSizeInBytes: 10 * 1024 * 1024 },
   habilitation: { allowedContentTypes: ['application/pdf', 'image/jpeg', 'image/png'], maximumSizeInBytes: 25 * 1024 * 1024 },
   pointPhoto: { allowedContentTypes: ['image/jpeg', 'image/png'], maximumSizeInBytes: 25 * 1024 * 1024 },
   rexAudio: { allowedContentTypes: ['audio/webm'], maximumSizeInBytes: 50 * 1024 * 1024 },
-  pvDocument: { allowedContentTypes: ['application/pdf'], maximumSizeInBytes: 25 * 1024 * 1024 },
   documentTerrain: {
     allowedContentTypes: ['application/pdf', 'image/jpeg', 'image/png', 'video/mp4', 'video/webm'],
     maximumSizeInBytes: 100 * 1024 * 1024,
   },
+  pvDocument: {
+    allowedContentTypes: ['application/pdf'],
+    maximumSizeInBytes: 25 * 1024 * 1024,
+    allowedRoles: ['coordinateurTravaux', 'direction', 'admin'],
+  },
   documentChantier: {
     allowedContentTypes: ['application/pdf', 'image/jpeg', 'image/png', 'video/mp4', 'video/webm'],
     maximumSizeInBytes: 100 * 1024 * 1024,
+    allowedRoles: ['coordinateurTravaux', 'direction', 'admin'],
   },
 };
 
@@ -41,6 +51,7 @@ const KIND_CONFIG: Record<string, { allowedContentTypes: string[]; maximumSizeIn
 // vérification de signature HMAC faite en interne par handleUpload.
 uploadsRouter.post('/token', async (req: AuthedRequest, res) => {
   const body = req.body as HandleUploadBody;
+  let role: string | undefined;
 
   if (body.type === 'blob.generate-client-token') {
     const header = req.headers.authorization;
@@ -48,7 +59,7 @@ uploadsRouter.post('/token', async (req: AuthedRequest, res) => {
       return res.status(401).json({ error: 'Authentification requise' });
     }
     try {
-      verifyAccessToken(header.slice('Bearer '.length));
+      role = verifyAccessToken(header.slice('Bearer '.length)).role;
     } catch {
       return res.status(401).json({ error: 'Session invalide ou expirée' });
     }
@@ -62,6 +73,9 @@ uploadsRouter.post('/token', async (req: AuthedRequest, res) => {
         const { kind } = JSON.parse(clientPayload ?? '{}') as { kind?: string };
         const config = kind ? KIND_CONFIG[kind] : undefined;
         if (!config) throw new Error('Type de pièce jointe inconnu');
+        if (config.allowedRoles && !config.allowedRoles.includes(role ?? '')) {
+          throw new Error('Rôle non autorisé pour ce type de pièce jointe');
+        }
         return {
           allowedContentTypes: config.allowedContentTypes,
           maximumSizeInBytes: config.maximumSizeInBytes,

@@ -4,15 +4,26 @@ const EXTENSION_BY_MIME: Record<string, string> = {
   'application/pdf': 'pdf',
 };
 
+/// Hostname du store Blob de l'application, dérivé de BLOB_READ_WRITE_TOKEN
+/// (format `vercel_blob_rw_<storeId>_<secret>` — voir @vercel/blob, qui sert
+/// ses fichiers sur `https://<storeId>.public.blob.vercel-storage.com`).
+function ownBlobHostname(): string | null {
+  const storeId = process.env.BLOB_READ_WRITE_TOKEN?.split('_')[3];
+  return storeId ? `${storeId}.public.blob.vercel-storage.com` : null;
+}
+
 /// Vérifie qu'une URL de fichier fournie par le client (après un upload
 /// direct vers Vercel Blob, voir routes/uploads.ts) pointe bien vers notre
-/// propre store Blob — sans ce contrôle, un client pourrait fournir
-/// n'importe quelle URL arbitraire et la faire enregistrer comme si elle
-/// avait été légitimement déposée.
+/// propre store Blob — un simple suffixe `vercel-storage.com` ne suffit pas,
+/// n'importe qui peut créer gratuitement son propre store Blob avec le même
+/// suffixe de domaine et le fournir comme `fileUrl` pour contourner
+/// entièrement le contrôle d'autorisation/type/taille de /uploads/token.
 export function isOwnBlobUrl(url: string): boolean {
+  const hostname = ownBlobHostname();
+  if (!hostname) return false;
   try {
     const parsed = new URL(url);
-    return parsed.protocol === 'https:' && parsed.hostname.endsWith('vercel-storage.com');
+    return parsed.protocol === 'https:' && parsed.hostname === hostname;
   } catch {
     return false;
   }

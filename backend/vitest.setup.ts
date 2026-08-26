@@ -10,9 +10,20 @@ if (!process.env.TEST_DATABASE_URL) {
     'TEST_DATABASE_URL manquant (voir backend/.env) — les tests ont besoin de leur propre base Postgres.',
   );
 }
+// Les tests font un reset complet du schéma (voir `prisma db push
+// --accept-data-loss` plus bas) — si TEST_DATABASE_URL pointait par erreur
+// (mauvais copier-coller dans .env) vers la même base que DATABASE_URL, ça
+// écraserait la production à chaque `npm test`.
+if (process.env.DATABASE_URL && process.env.DATABASE_URL === process.env.TEST_DATABASE_URL) {
+  throw new Error('TEST_DATABASE_URL est identique à DATABASE_URL — vérifiez backend/.env avant de lancer les tests.');
+}
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
 process.env.JWT_ACCESS_SECRET = 'test-access-secret';
 process.env.JWT_REFRESH_SECRET = 'test-refresh-secret';
+// isOwnBlobUrl (voir imageStorage.ts) dérive le hostname attendu du store à
+// partir de ce jeton — le mock `put` ci-dessous doit renvoyer des URLs sur ce
+// même hostname pour rester reconnues comme "notre" store en test.
+process.env.BLOB_READ_WRITE_TOKEN = 'vercel_blob_rw_teststoreid_testsecret';
 
 // Pas d'appel réseau réel vers Vercel Blob en test — voir imageStorage.ts.
 // Un Map en mémoire tient lieu de stockage : `put` y écrit le contenu reçu et
@@ -23,7 +34,7 @@ const blobStore = new Map<string, Buffer>();
 
 vi.mock('@vercel/blob', () => ({
   put: vi.fn(async (filename: string, body: Buffer) => {
-    const url = `https://blob.vercel-storage.com/test/${filename}`;
+    const url = `https://teststoreid.public.blob.vercel-storage.com/test/${filename}`;
     blobStore.set(url, Buffer.isBuffer(body) ? body : Buffer.from(body));
     return { url };
   }),

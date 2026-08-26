@@ -257,7 +257,7 @@ describe("Tableau de bord d'activité Admin", () => {
     expect(feed.body.pvRecents[0].pvSigneur).toBe('M. Weber');
     expect(feed.body.rexEnAttente).toHaveLength(1);
     expect(feed.body.rexEnAttente[0].rexTranscription).toContain('bien passé');
-    expect(feed.body.pvRecents[0].pvSignatureImagePath).toMatch(/^https:\/\/blob\.vercel-storage\.com\/test\/pv-signe-.+\.pdf$/);
+    expect(feed.body.pvRecents[0].pvSignatureImagePath).toMatch(/^https:\/\/teststoreid\.public\.blob\.vercel-storage\.com\/test\/pv-signe-.+\.pdf$/);
   }, 30000);
 });
 

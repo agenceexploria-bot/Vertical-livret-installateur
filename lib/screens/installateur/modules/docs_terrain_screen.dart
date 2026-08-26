@@ -195,38 +195,42 @@ class _DocsTerrainScreenState extends State<DocsTerrainScreen> {
     }
 
     setState(() => _isCapturing = true);
-    final picked = await DocumentCapture.fromDroppedFiles(files);
-    if (!context.mounted) return;
-    if (picked.isEmpty) {
-      setState(() => _isCapturing = false);
-      return;
-    }
+    try {
+      final picked = await DocumentCapture.fromDroppedFiles(files);
+      if (!context.mounted) return;
+      if (picked.isEmpty) return;
 
-    final isOnline = context.read<NetworkState>().isOnline;
-    final chantierState = context.read<ChantierState>();
-    final reference = chantierState.currentChantier!.reference;
-    final auteur = context.read<AuthState>().currentUser?.fullName;
+      final isOnline = context.read<NetworkState>().isOnline;
+      final chantierState = context.read<ChantierState>();
+      final reference = chantierState.currentChantier!.reference;
+      final auteur = context.read<AuthState>().currentUser?.fullName;
 
-    for (final doc in picked) {
-      await chantierState.addDocument(
-        reference,
-        titre: doc.fileName,
-        categorie: categorie.name,
-        file: doc.dataUrl,
-        auteurName: auteur,
-      );
-    }
+      for (final doc in picked) {
+        await chantierState.addDocument(
+          reference,
+          titre: doc.fileName,
+          categorie: categorie.name,
+          file: doc.dataUrl,
+          auteurName: auteur,
+        );
+      }
 
-    if (!context.mounted) return;
-    if (!isOnline) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Hors-ligne : le document sera envoyé au retour du réseau.')),
-      );
+      if (!context.mounted) return;
+      if (!isOnline) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Hors-ligne : le document sera envoyé au retour du réseau.')),
+        );
+      }
+      setState(() => _selectedCategory = null);
+    } on ApiException catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Une erreur est survenue. Réessayez.')));
+    } finally {
+      if (mounted) setState(() => _isCapturing = false);
     }
-    setState(() {
-      _selectedCategory = null;
-      _isCapturing = false;
-    });
   }
 
   Widget _buildDocItem(BuildContext context, DocumentTerrain d, {required bool canDelete}) {

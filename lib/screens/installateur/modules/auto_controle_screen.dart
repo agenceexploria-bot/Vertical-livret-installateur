@@ -8,6 +8,7 @@ import '../../../core/photo_capture.dart';
 import '../../../core/widgets/responsive_layout.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/drop_zone.dart';
+import '../../../data/api_client.dart';
 import '../../../state/auth_state.dart';
 import '../../../state/chantier_state.dart';
 import '../../../data/models/point_controle.dart';
@@ -227,6 +228,12 @@ class _PointCardState extends State<_PointCard> {
       final photo = PhotoCapture.fromDroppedBytes(bytes);
       if (photo == null || !context.mounted) return;
       await context.read<ChantierState>().updatePoint(widget.reference, widget.point.id, photo: photo);
+    } on ApiException catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Une erreur est survenue. Réessayez.')));
     } finally {
       if (mounted) setState(() => _isCapturing = false);
     }

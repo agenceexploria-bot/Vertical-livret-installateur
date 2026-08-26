@@ -17,6 +17,25 @@ jobs:
 
       - run: flutter pub get
 
+      # Garde-fou avant déploiement : sans ça, un commit qui casse la
+      # compilation ou fait régresser un test atteignait directement la
+      # production (voir revue de sécurité/déploiement). Les tests backend
+      # (vitest) ne sont pas inclus ici : ils tournent contre une vraie base
+      # Neon et ont besoin de secrets non câblés dans ce workflow.
+      - run: flutter analyze --no-fatal-infos
+      - run: flutter test
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Vérifie le typage TypeScript du backend
+        working-directory: backend
+        run: |
+          npm ci
+          npx prisma generate
+          npx tsc --noEmit
+
       # Invalide le cache du service worker PWA à chaque déploiement (voir
       # web/pwa_cache_worker.js) en y injectant le SHA du commit — sans ça,
       # les visiteurs déjà passés sur le site peuvent continuer à voir une
