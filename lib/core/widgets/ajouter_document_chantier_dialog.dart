@@ -42,15 +42,26 @@ class _AjouterDocumentChantierDialogState extends State<AjouterDocumentChantierD
     setState(() => _picked.addAll(picked));
   }
 
+  /// Envoie chaque fichier indépendamment — l'échec de l'un ne doit pas
+  /// empêcher les autres d'être ajoutés (voir la carte de retour de tests :
+  /// avec l'ancienne version, une erreur sur un seul fichier faisait échouer
+  /// toute la liste). Les fichiers déjà ajoutés avec succès sont retirés de
+  /// la sélection, pour ne pas les renvoyer deux fois si l'utilisateur
+  /// retente l'envoi.
   Future<void> _envoyer() async {
     setState(() => _isSubmitting = true);
     final chantierState = context.read<ChantierState>();
+    final messenger = ScaffoldMessenger.of(context);
     // Le nom saisi (s'il y en a un) ne s'applique qu'au premier fichier —
     // au-delà, ou s'il est vide, chaque document prend le nom de son propre
     // fichier d'origine (voir doc de la classe).
     final nomSaisi = _nomController.text.trim();
-    try {
-      for (final (i, picked) in _picked.indexed) {
+    final aEnvoyer = List<PickedDocument>.from(_picked);
+    final enEchec = <String>[];
+    var nbSucces = 0;
+
+    for (final (i, picked) in aEnvoyer.indexed) {
+      try {
         await chantierState.addDocumentChantier(
           widget.reference,
           type: _type.name,
@@ -58,19 +69,33 @@ class _AjouterDocumentChantierDialogState extends State<AjouterDocumentChantierD
           nomFichierOriginal: picked.fileName,
           file: picked.dataUrl,
         );
+        nbSucces++;
+        _picked.remove(picked);
+      } on ApiException catch (e) {
+        enEchec.add('${picked.fileName} (${e.message})');
+      } catch (_) {
+        enEchec.add(picked.fileName);
       }
-      if (!mounted) return;
+    }
+
+    if (!mounted) return;
+    setState(() => _isSubmitting = false);
+
+    if (enEchec.isEmpty) {
       Navigator.of(context).pop();
-    } on ApiException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Échec de l\'envoi du document — réessayez.')),
-      );
-    } finally {
-      if (mounted) setState(() => _isSubmitting = false);
+      return;
+    }
+    if (nbSucces > 0) {
+      messenger.showSnackBar(SnackBar(
+        content: Text('$nbSucces document${nbSucces > 1 ? 's' : ''} ajouté${nbSucces > 1 ? 's' : ''}, '
+            '${enEchec.length} en échec : ${enEchec.join(', ')}'),
+      ));
+    } else {
+      messenger.showSnackBar(SnackBar(
+        content: Text(enEchec.length > 1
+            ? 'Échec de l\'envoi de ${enEchec.length} documents : ${enEchec.join(', ')}'
+            : 'Échec de l\'envoi — ${enEchec.first}'),
+      ));
     }
   }
 

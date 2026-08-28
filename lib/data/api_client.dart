@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb, kReleaseMode;
 import 'package:http/http.dart' as http;
+import '../core/blob_filename.dart';
 
 class ApiException implements Exception {
   final int statusCode;
@@ -64,7 +65,11 @@ class ApiClient {
     if (match == null) throw ApiException(0, 'Fichier invalide.');
     final contentType = match.group(1)!;
     final bytes = base64Decode(match.group(2)!);
-    final resolvedFilename = filename ?? '$kind.${contentType.split('/').last}';
+    // Le nom d'origine (accents, espaces, tirets cadratins, points médians...)
+    // n'est jamais utilisé tel quel comme chemin de stockage : mal encodé, il
+    // peut faire échouer la validation du jeton côté Blob pour ce fichier
+    // précis — voir [sanitizeBlobFilename].
+    final resolvedFilename = sanitizeBlobFilename(filename ?? '$kind.${contentType.split('/').last}');
 
     final tokenData = await _request('POST', '/uploads/token', body: {
       'type': 'blob.generate-client-token',
