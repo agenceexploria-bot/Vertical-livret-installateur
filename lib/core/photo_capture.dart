@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:image/image.dart' as img;
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image_picker/image_picker.dart';
 import 'theme.dart';
 
@@ -12,10 +12,27 @@ enum _PhotoSheetChoice { camera, gallery }
 /// comme [AvatarCapture] — puis la redimensionne/recompresse en JPEG avant
 /// de la renvoyer en data URL base64, pour ne pas saturer la base locale
 /// Drift quand elle transite par le fichier d'attente hors-ligne
-/// (PendingOperations).
+/// (PendingOperations). La compression passe par flutter_image_compress
+/// (natif sur mobile, Canvas sur Web) plutôt que le package `image` en pur
+/// Dart — nettement plus rapide, notamment sur les photos de caméra en haute
+/// résolution qui rendaient la prise de photo perceptiblement lente.
 class PhotoCapture {
-  static const int _maxWidth = 1280;
-  static const int _jpegQuality = 70;
+  static const int _maxDimension = 1600;
+  static const int _jpegQuality = 80;
+
+  static Future<Uint8List?> _compress(Uint8List bytes) async {
+    try {
+      return await FlutterImageCompress.compressWithList(
+        bytes,
+        minWidth: _maxDimension,
+        minHeight: _maxDimension,
+        quality: _jpegQuality,
+        format: CompressFormat.jpeg,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
 
   static Future<String?> captureCompressed(BuildContext context) async {
     final choice = await showModalBottomSheet<_PhotoSheetChoice>(
@@ -47,23 +64,17 @@ class PhotoCapture {
     if (picked == null) return null;
 
     final bytes = await picked.readAsBytes();
-    final decoded = img.decodeImage(bytes);
-    if (decoded == null) return null;
-
-    final resized = decoded.width > _maxWidth ? img.copyResize(decoded, width: _maxWidth) : decoded;
-    final jpeg = img.encodeJpg(resized, quality: _jpegQuality);
-    return 'data:image/jpeg;base64,${base64Encode(jpeg)}';
+    final compressed = await _compress(bytes);
+    if (compressed == null) return null;
+    return 'data:image/jpeg;base64,${base64Encode(compressed)}';
   }
 
   /// Convertit une image obtenue par glisser-déposer (voir [DropZone]) en
   /// data URL base64 — même compression que [captureCompressed]. `null` si
   /// le fichier déposé n'est pas une image reconnue.
-  static String? fromDroppedBytes(Uint8List bytes) {
-    final decoded = img.decodeImage(bytes);
-    if (decoded == null) return null;
-
-    final resized = decoded.width > _maxWidth ? img.copyResize(decoded, width: _maxWidth) : decoded;
-    final jpeg = img.encodeJpg(resized, quality: _jpegQuality);
-    return 'data:image/jpeg;base64,${base64Encode(jpeg)}';
+  static Future<String?> fromDroppedBytes(Uint8List bytes) async {
+    final compressed = await _compress(bytes);
+    if (compressed == null) return null;
+    return 'data:image/jpeg;base64,${base64Encode(compressed)}';
   }
 }

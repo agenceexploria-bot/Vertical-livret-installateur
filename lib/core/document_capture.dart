@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:image/image.dart' as img;
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:image_picker/image_picker.dart';
 import 'theme.dart';
 
@@ -27,14 +27,32 @@ const documentPickerExtensions = ['jpg', 'jpeg', 'png', 'pdf', 'mp4', 'webm'];
 /// sélecteur natif. Les images sont redimensionnées et recompressées comme
 /// [PhotoCapture] ; un PDF ou une vidéo sont envoyés tels quels.
 class DocumentCapture {
-  static const int _maxWidth = 1280;
-  static const int _jpegQuality = 70;
+  static const int _maxDimension = 1600;
+  static const int _jpegQuality = 80;
+
+  /// Compresse une image via flutter_image_compress (natif sur mobile,
+  /// Canvas sur Web) plutôt que le package `image` en pur Dart — nettement
+  /// plus rapide, notamment sur les photos de caméra en haute résolution.
+  /// `null` si [bytes] n'est pas une image reconnue.
+  static Future<Uint8List?> _compressImage(Uint8List bytes) async {
+    try {
+      return await FlutterImageCompress.compressWithList(
+        bytes,
+        minWidth: _maxDimension,
+        minHeight: _maxDimension,
+        quality: _jpegQuality,
+        format: CompressFormat.jpeg,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
 
   /// Cœur commun à toutes les sources de fichiers (sélecteur natif, caméra,
   /// glisser-déposer) : à partir d'un nom et d'octets bruts, produit le
   /// [PickedDocument] correspondant — images recompressées, PDF/vidéo
   /// envoyés tels quels. `null` si le type de fichier n'est pas reconnu.
-  static PickedDocument? _fromBytes(String fileName, Uint8List bytes) {
+  static Future<PickedDocument?> _fromBytes(String fileName, Uint8List bytes) async {
     final extension = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
 
     if (extension == 'pdf') {
@@ -45,14 +63,12 @@ class DocumentCapture {
       return PickedDocument(dataUrl: 'data:$videoMime;base64,${base64Encode(bytes)}', fileName: fileName);
     }
 
-    final decoded = img.decodeImage(bytes);
-    if (decoded == null) return null;
-    final resized = decoded.width > _maxWidth ? img.copyResize(decoded, width: _maxWidth) : decoded;
-    final jpeg = img.encodeJpg(resized, quality: _jpegQuality);
-    return PickedDocument(dataUrl: 'data:image/jpeg;base64,${base64Encode(jpeg)}', fileName: fileName);
+    final compressed = await _compressImage(bytes);
+    if (compressed == null) return null;
+    return PickedDocument(dataUrl: 'data:image/jpeg;base64,${base64Encode(compressed)}', fileName: fileName);
   }
 
-  static PickedDocument? _toPickedDocument(PlatformFile picked) {
+  static Future<PickedDocument?> _toPickedDocument(PlatformFile picked) async {
     final bytes = picked.bytes;
     if (bytes == null) return null;
     return _fromBytes(picked.name, bytes);
@@ -66,7 +82,7 @@ class DocumentCapture {
     final result = <PickedDocument>[];
     for (final file in files) {
       final bytes = await file.readAsBytes();
-      final picked = _fromBytes(file.name, bytes);
+      final picked = await _fromBytes(file.name, bytes);
       if (picked != null) result.add(picked);
     }
     return result;
@@ -93,7 +109,8 @@ class DocumentCapture {
       allowMultiple: true,
     );
     if (result == null) return [];
-    return result.files.map(_toPickedDocument).whereType<PickedDocument>().toList();
+    final picked = await Future.wait(result.files.map(_toPickedDocument));
+    return picked.whereType<PickedDocument>().toList();
   }
 
   /// Enregistrement caméra plafonné à 3 minutes : la vidéo transite ensuite
@@ -140,11 +157,9 @@ class DocumentCapture {
         final picked = await ImagePicker().pickImage(source: ImageSource.camera, maxWidth: 1600, imageQuality: 85);
         if (picked == null) return null;
         final bytes = await picked.readAsBytes();
-        final decoded = img.decodeImage(bytes);
-        if (decoded == null) return null;
-        final resized = decoded.width > _maxWidth ? img.copyResize(decoded, width: _maxWidth) : decoded;
-        final jpeg = img.encodeJpg(resized, quality: _jpegQuality);
-        return PickedDocument(dataUrl: 'data:image/jpeg;base64,${base64Encode(jpeg)}', fileName: picked.name);
+        final compressed = await _compressImage(bytes);
+        if (compressed == null) return null;
+        return PickedDocument(dataUrl: 'data:image/jpeg;base64,${base64Encode(compressed)}', fileName: picked.name);
       case _DocumentSheetChoice.video:
         final picked = await ImagePicker().pickVideo(source: ImageSource.camera, maxDuration: _maxVideoDuration);
         if (picked == null) return null;
