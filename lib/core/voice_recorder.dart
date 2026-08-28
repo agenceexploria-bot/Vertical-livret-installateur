@@ -4,9 +4,11 @@ import 'package:http/http.dart' as http;
 import 'package:record/record.dart';
 
 /// Capture une note vocale et la renvoie en data URL base64 (webm/opus),
-/// prête à être mise en file d'attente hors-ligne (PendingOperations) — la
-/// transcription automatique (Whisper) n'est pas requise pour la V1, seul
-/// l'envoi de l'audio (ou d'un texte saisi) l'est.
+/// prête à être mise en file d'attente hors-ligne (PendingOperations) — ce
+/// fichier n'a besoin d'envoyer que l'audio (ou un texte saisi) : la
+/// transcription automatique tourne ensuite côté serveur si la
+/// reconnaissance vocale en direct de l'app (voir rex_screen.dart) n'a rien
+/// donné (voir backend/src/lib/transcription.ts).
 class VoiceRecorder {
   final _recorder = AudioRecorder();
 

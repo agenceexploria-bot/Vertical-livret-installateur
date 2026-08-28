@@ -174,8 +174,9 @@ class ChantierRepository {
   }
 
   /// [transcription] (texte) et/ou [audio] (note vocale compressée, en data
-  /// URL base64) — l'un des deux suffit. La transcription automatique
-  /// (Whisper) n'est pas requise pour la V1 : l'audio seul est accepté.
+  /// URL base64) — l'un des deux suffit, l'audio seul est accepté. Si
+  /// [transcription] est absente, le backend tente une transcription
+  /// automatique de l'audio (voir backend/src/lib/transcription.ts).
   Future<Chantier> submitRex(String reference, {String? transcription, String? audio}) async {
     try {
       final audioUrl = audio != null ? await _api.uploadFile(kind: 'rexAudio', dataUrl: audio) : null;

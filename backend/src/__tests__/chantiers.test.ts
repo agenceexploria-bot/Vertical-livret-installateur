@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import request from 'supertest';
 import bcrypt from 'bcryptjs';
 import { PDFDocument } from 'pdf-lib';
@@ -356,6 +356,62 @@ describe('POST /chantiers/:reference/rex', () => {
       .post('/chantiers/LD64397/rex')
       .set('Authorization', `Bearer ${ct.accessToken}`)
       .send({ audioUrl });
+
+    expect(res.status).toBe(200);
+    expect(res.body.chantier.rex[0].transcription).toBeNull();
+    expect(res.body.chantier.rex[0].audioPath).toBe(audioUrl);
+  });
+
+  // OPENAI_API_KEY est explicitement absente en test (voir vitest.setup.ts) —
+  // ces deux tests la renseignent temporairement et interceptent l'appel
+  // Whisper pour ne jamais faire de vrai appel réseau payant.
+  async function withStubbedOpenAi<T>(openAiResponse: Response, run: () => Promise<T>): Promise<T> {
+    const previousKey = process.env.OPENAI_API_KEY;
+    const previousFetch = globalThis.fetch;
+    process.env.OPENAI_API_KEY = 'test-openai-key';
+    globalThis.fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url === 'https://api.openai.com/v1/audio/transcriptions') return openAiResponse;
+      return previousFetch(input, init);
+    }) as typeof fetch;
+    try {
+      return await run();
+    } finally {
+      globalThis.fetch = previousFetch;
+      if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
+      else process.env.OPENAI_API_KEY = previousKey;
+    }
+  }
+
+  it('transcrit automatiquement la note vocale quand OPENAI_API_KEY est configurée', async () => {
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
+    const audioUrl = await fakeUpload('rex.webm', ONE_PX_PNG_BASE64, 'audio/webm');
+
+    const res = await withStubbedOpenAi(
+      new Response(JSON.stringify({ text: 'Tout est conforme, RAS.' }), { status: 200 }),
+      () =>
+        request(app)
+          .post('/chantiers/LD64397/rex')
+          .set('Authorization', `Bearer ${ct.accessToken}`)
+          .send({ audioUrl }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.chantier.rex[0].transcription).toBe('Tout est conforme, RAS.');
+  });
+
+  it("n'empêche pas la création du REX si la transcription automatique échoue", async () => {
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
+    const audioUrl = await fakeUpload('rex.webm', ONE_PX_PNG_BASE64, 'audio/webm');
+
+    const res = await withStubbedOpenAi(new Response('erreur', { status: 500 }), () =>
+      request(app)
+        .post('/chantiers/LD64397/rex')
+        .set('Authorization', `Bearer ${ct.accessToken}`)
+        .send({ audioUrl }),
+    );
 
     expect(res.status).toBe(200);
     expect(res.body.chantier.rex[0].transcription).toBeNull();

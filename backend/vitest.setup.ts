@@ -24,6 +24,11 @@ process.env.JWT_REFRESH_SECRET = 'test-refresh-secret';
 // partir de ce jeton — le mock `put` ci-dessous doit renvoyer des URLs sur ce
 // même hostname pour rester reconnues comme "notre" store en test.
 process.env.BLOB_READ_WRITE_TOKEN = 'vercel_blob_rw_teststoreid_testsecret';
+// Transcription (Whisper) désactivée par défaut en test — sans ça, un
+// OPENAI_API_KEY présent dans le .env local du développeur déclencherait un
+// vrai appel réseau payant à chaque run de la suite REX (voir chantiers.test.ts
+// pour les tests qui la réactivent explicitement, jeton et fetch mockés).
+delete process.env.OPENAI_API_KEY;
 
 // Pas d'appel réseau réel vers Vercel Blob en test — voir imageStorage.ts.
 // Un Map en mémoire tient lieu de stockage : `put` y écrit le contenu reçu et

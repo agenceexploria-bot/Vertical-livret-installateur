@@ -80,9 +80,11 @@ class _RexScreenState extends State<RexScreen> with SingleTickerProviderStateMix
       setState(() {
         _isEncoding = false;
         _audioDataUrl = encoded;
-        // La transcription en temps réel (Whisper non requis pour la V1) est
+        // La transcription en temps réel (best-effort, voir plus bas) est
         // pré-remplie mais reste éditable : l'installateur corrige si besoin
-        // avant l'envoi.
+        // avant l'envoi. Si ce champ reste vide, le backend tente une
+        // transcription automatique sur l'audio envoyé (voir
+        // backend/src/lib/transcription.ts).
         _textController.text = _liveText;
       });
       if (encoded == null) {

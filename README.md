@@ -93,6 +93,7 @@ de chaque variable et où l'obtenir) :
 | `BLOB_READ_WRITE_TOKEN` | Token Vercel Blob (Storage > Create Database > Blob dans un projet Vercel) |
 | `PORT` | Port du serveur local (défaut `3000`) |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | Envoi réel du code à 6 chiffres (2FA inscription) — **obligatoires**, le serveur refuse de démarrer si l'une manque |
+| `OPENAI_API_KEY` | Transcription automatique (Whisper) des notes vocales REX — **optionnelle** : sans elle, la note vocale est envoyée normalement mais reste sans transcription automatique |
 
 Puis initialisez la base de données :
 

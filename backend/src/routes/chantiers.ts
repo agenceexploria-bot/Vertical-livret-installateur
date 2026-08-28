@@ -7,6 +7,7 @@ import { requireAuth, requireRole, AuthedRequest } from '../middleware/auth';
 import { saveBuffer, deleteBlobFile, isOwnBlobUrl } from '../lib/imageStorage';
 import { fetchBlobFile, fusionnerSignatureDansPdf } from '../lib/pvMerge';
 import { isPointComplete } from '../lib/pointControleStatus';
+import { transcribeAudio } from '../lib/transcription';
 import { triggerChantierChanged, triggerChantierDeleted, triggerNotificationCreated } from '../lib/pusher';
 
 export const chantiersRouter = Router();
@@ -374,9 +375,8 @@ chantiersRouter.patch('/:reference/points/:pointId', requireAuth, requireRattach
   res.json({ point: updated });
 });
 
-// La transcription automatique (Whisper) n'est pas requise pour la V1 : un
-// REX peut être une note vocale seule (audio sans texte) ou un texte saisi
-// directement — l'un des deux suffit, mais au moins un est obligatoire.
+// Un REX peut être une note vocale seule (audio sans texte) ou un texte
+// saisi directement — l'un des deux suffit, mais au moins un est obligatoire.
 const rexSchema = z
   .object({
     transcription: z.string().min(1).optional(),
@@ -397,10 +397,17 @@ chantiersRouter.post('/:reference/rex', requireAuth, requireRattachement, async 
     return res.status(400).json({ error: 'URL de fichier invalide' });
   }
 
+  // Si l'installateur n'a pas dicté (ou corrigé) de texte côté app —
+  // reconnaissance vocale en direct indisponible ou silencieuse —, on tente
+  // une transcription automatique côté serveur sur l'audio déjà déposé. Ne
+  // bloque jamais la création du REX (voir transcribeAudio).
+  const transcription =
+    parsed.data.transcription ?? (parsed.data.audioUrl ? await transcribeAudio(parsed.data.audioUrl) : undefined);
+
   await prisma.rex.create({
     data: {
       chantierId: req.chantier!.id,
-      transcription: parsed.data.transcription,
+      transcription,
       audioPath: parsed.data.audioUrl,
     },
   });
