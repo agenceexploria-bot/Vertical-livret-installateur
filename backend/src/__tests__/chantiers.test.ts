@@ -333,10 +333,24 @@ describe('Progression et modules', () => {
 });
 
 describe('POST /chantiers/:reference/pv/reponses (formulaire PV interactif)', () => {
+  // Toutes les questions des sections 1 à 3 doivent être couvertes — le
+  // formulaire interactif exige une réponse à chaque item du gabarit
+  // officiel (voir pvFormulaireDefinition.ts et le refine sur pvReponsesSchema).
   const REPONSES_MINIMALES = {
     identite: { maitreOeuvre: 'SCI Duval', operation: 'Rénovation', lot: 'Lot 4' },
-    receptionInstallation: [{ id: '1.1', reponse: 'oui', observation: null }],
-    documentsRemis: [{ id: '2.1', reponse: 'non', observation: 'À transmettre plus tard' }],
+    receptionInstallation: [
+      { id: '1.1', reponse: 'oui', observation: null },
+      { id: '1.2', reponse: 'oui', observation: null },
+      { id: '1.3', reponse: 'oui', observation: null },
+      { id: '1.4', reponse: 'oui', observation: null },
+    ],
+    documentsRemis: [
+      { id: '2.1', reponse: 'oui', observation: null },
+      { id: '2.2', reponse: 'oui', observation: null },
+      { id: '2.3', reponse: 'oui', observation: null },
+      { id: '2.4', reponse: 'oui', observation: null },
+      { id: '2.5', reponse: 'non', observation: 'À transmettre plus tard' },
+    ],
     servicesSupplementaires: [{ id: '3.1', reponse: 'non', observation: null }],
     natureDePose: ['Monte-charge accompagné'],
     quantite: '1',
@@ -375,6 +389,51 @@ describe('POST /chantiers/:reference/pv/reponses (formulaire PV interactif)', ()
     expect(res.body.chantier.pvSigneur).toBe('M. Weber');
     expect(res.body.chantier.pvFonctionSignataire).toBe('Client');
     expect(res.body.chantier.pvSignatureImagePath).toMatch(/\.pdf$/);
+  }, 60000);
+
+  it('refuse un item de checklist (sections 1-3) envoyé sans réponse (null)', async () => {
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
+    const installateur = await rattacherInstallateur(ct.accessToken);
+
+    const res = await request(app)
+      .post('/chantiers/LD64397/pv/reponses')
+      .set('Authorization', `Bearer ${installateur.accessToken}`)
+      .send({
+        reponses: {
+          ...REPONSES_MINIMALES,
+          receptionInstallation: [
+            { id: '1.1', reponse: null, observation: null },
+            ...REPONSES_MINIMALES.receptionInstallation.slice(1),
+          ],
+        },
+        dateReception: '2026-08-28',
+        nomSignataire: 'M. Weber',
+        fonctionSignataire: 'Client',
+        signatureImage: SIGNATURE_PNG_DATA_URL,
+      });
+    expect(res.status).toBe(400);
+  }, 60000);
+
+  it('refuse une section de checklist incomplète (item manquant plutôt que null)', async () => {
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
+    const installateur = await rattacherInstallateur(ct.accessToken);
+
+    const res = await request(app)
+      .post('/chantiers/LD64397/pv/reponses')
+      .set('Authorization', `Bearer ${installateur.accessToken}`)
+      .send({
+        reponses: {
+          ...REPONSES_MINIMALES,
+          documentsRemis: REPONSES_MINIMALES.documentsRemis.slice(0, -1), // il manque 2.5
+        },
+        dateReception: '2026-08-28',
+        nomSignataire: 'M. Weber',
+        fonctionSignataire: 'Client',
+        signatureImage: SIGNATURE_PNG_DATA_URL,
+      });
+    expect(res.status).toBe(400);
   }, 60000);
 
   it('accepte des champs optionnels envoyés à null (comportement du client Flutter quand ils sont laissés vides)', async () => {

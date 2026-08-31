@@ -2,6 +2,8 @@
 /// libellés et identifiants tels que fournis par Vertical, reproduits à la
 /// lettre. Miroir de backend/src/lib/pvFormulaireDefinition.ts : les deux
 /// listes doivent rester synchronisées si le gabarit évolue.
+// TODO(2026-08-31) : duplication manuelle avec le fichier backend ci-dessus
+// (voir son TODO) — à factoriser au prochain tour de nettoyage.
 class PvChecklistItemDef {
   final String id;
   final String libelle;
@@ -77,6 +79,15 @@ class PvFormReponses {
       : receptionInstallation = pvSection1.map((d) => PvChecklistReponse(id: d.id)).toList(),
         documentsRemis = pvSection2.map((d) => PvChecklistReponse(id: d.id)).toList(),
         servicesSupplementaires = pvSection3.map((d) => PvChecklistReponse(id: d.id)).toList();
+
+  /// Nombre total de questions (sections 1 à 3) restées sans réponse Oui/Non
+  /// — le backend refuse la soumission tant qu'il en reste (voir
+  /// pvReponsesSchema côté serveur), comme sur le PV papier où chaque point
+  /// doit être tranché (au pire "Non" avec observation).
+  int get nombreQuestionsSansReponse =>
+      [...receptionInstallation, ...documentsRemis, ...servicesSupplementaires].where((r) => r.reponse == null).length;
+
+  bool get checklistComplete => nombreQuestionsSansReponse == 0;
 
   Map<String, dynamic> toJson() => {
         'identite': {

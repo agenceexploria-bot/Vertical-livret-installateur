@@ -83,7 +83,24 @@ class _PvFormulaireScreenState extends State<PvFormulaireScreen> {
       !_isSubmitting &&
       !_signatureVide &&
       _nomSignataireCtrl.text.trim().isNotEmpty &&
-      _fonctionSignataireCtrl.text.trim().isNotEmpty;
+      _fonctionSignataireCtrl.text.trim().isNotEmpty &&
+      _reponses.checklistComplete;
+
+  /// Petite pastille rouge accolée au titre d'une étape dont au moins une
+  /// question Oui/Non n'a pas encore de réponse — guide l'installateur vers
+  /// les étapes à compléter avant de pouvoir valider (voir _peutValider et le
+  /// message sous le bouton dans _buildControls).
+  Widget _titreEtape(String label, {required bool incomplete}) {
+    if (!incomplete) return Text(label);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label),
+        const SizedBox(width: 6),
+        Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppColors.rouge, shape: BoxShape.circle)),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -125,22 +142,35 @@ class _PvFormulaireScreenState extends State<PvFormulaireScreen> {
 
   Widget _buildControls(BuildContext context, ControlsDetails details) {
     final estDerniere = _currentStep == 4;
+    final questionsSansReponse = _reponses.nombreQuestionsSansReponse;
     return Padding(
       padding: const EdgeInsets.only(top: 16),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          if (_currentStep > 0)
-            TextButton(onPressed: _isSubmitting ? null : details.onStepCancel, child: const Text('Précédent')),
-          const Spacer(),
-          if (!estDerniere)
-            ElevatedButton(onPressed: details.onStepContinue, child: const Text('Suivant'))
-          else
-            ElevatedButton(
-              onPressed: _peutValider ? _valider : null,
-              child: _isSubmitting
-                  ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Text('Valider le procès-verbal'),
+          Row(
+            children: [
+              if (_currentStep > 0)
+                TextButton(onPressed: _isSubmitting ? null : details.onStepCancel, child: const Text('Précédent')),
+              const Spacer(),
+              if (!estDerniere)
+                ElevatedButton(onPressed: details.onStepContinue, child: const Text('Suivant'))
+              else
+                ElevatedButton(
+                  onPressed: _peutValider ? _valider : null,
+                  child: _isSubmitting
+                      ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Text('Valider le procès-verbal'),
+                ),
+            ],
+          ),
+          if (estDerniere && questionsSansReponse > 0) ...[
+            const SizedBox(height: 6),
+            Text(
+              '$questionsSansReponse question${questionsSansReponse > 1 ? 's' : ''} sans réponse — voir les étapes marquées d\'un point rouge.',
+              style: const TextStyle(fontSize: 11.5, color: AppColors.rouge),
             ),
+          ],
         ],
       ),
     );
@@ -197,7 +227,7 @@ class _PvFormulaireScreenState extends State<PvFormulaireScreen> {
     final (titre, defs) = _sections[sectionIndex];
     final reponses = sectionIndex == 0 ? _reponses.receptionInstallation : _reponses.documentsRemis;
     return Step(
-      title: Text('Section ${sectionIndex + 1}'),
+      title: _titreEtape('Section ${sectionIndex + 1}', incomplete: reponses.any((r) => r.reponse == null)),
       isActive: _currentStep >= sectionIndex + 1,
       state: _currentStep > sectionIndex + 1 ? StepState.complete : StepState.indexed,
       content: Column(
@@ -253,7 +283,7 @@ class _PvFormulaireScreenState extends State<PvFormulaireScreen> {
     final servicesItem = _reponses.servicesSupplementaires.first;
     final def = pvSection3.first;
     return Step(
-      title: const Text('Services'),
+      title: _titreEtape('Services', incomplete: servicesItem.reponse == null),
       isActive: _currentStep >= 3,
       state: _currentStep > 3 ? StepState.complete : StepState.indexed,
       content: Column(

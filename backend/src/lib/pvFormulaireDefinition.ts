@@ -5,6 +5,11 @@
 /// exclusivement sur ces listes pour l'ordre et les libellés affichés, jamais
 /// sur ce que le client a soumis — un item manquant ou mal ordonné côté app
 /// n'invalide donc jamais la mise en page du document final.
+// TODO(2026-08-31) : ce fichier est dupliqué à la main dans
+// lib/data/models/pv_reponses.dart (Flutter) — les deux listes ne sont
+// synchronisées que par convention/commentaire. À factoriser (génération
+// depuis une source commune, ou endpoint qui sert la définition au client)
+// au prochain tour de nettoyage.
 export interface PvChecklistItemDef {
   id: string;
   libelle: string;

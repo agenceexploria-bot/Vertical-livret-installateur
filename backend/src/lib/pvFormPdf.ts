@@ -143,6 +143,10 @@ function checklistRow(w: PdfWriter, def: PvChecklistItemDef, reponse: PvFormChec
   // réserver la place AVANT de dessiner, afin que le libellé et la réponse
   // Oui/Non alignée à droite ne puissent jamais se retrouver sur deux pages
   // différentes après un saut de page automatique.
+  // TODO(2026-08-31) : wrapText() est recalculé une seconde fois à l'identique
+  // dans w.wrapped() juste en dessous (mesure puis dessin) — à factoriser
+  // (ex. wrapped() pourrait accepter les lignes déjà calculées) au prochain
+  // tour de nettoyage.
   const lines = wrapText(`${def.id}  ${def.libelle}`, w.fontRegular, size, labelMaxWidth);
   const rowHeight = Math.max(lines.length * (size + 3), size + 3);
   w.ensureSpace(rowHeight + 4);
@@ -173,10 +177,19 @@ function checklistSection(w: PdfWriter, titre: string, defs: PvChecklistItemDef[
 }
 
 function identiteRow(w: PdfWriter, label: string, value: string) {
-  w.ensureSpace(14);
-  w.page.drawText(label, { x: MARGIN, y: w.y - 9, size: 8.5, font: w.fontBold, color: ACIER });
-  w.page.drawText(value || '—', { x: MARGIN + 130, y: w.y - 9, size: 9.5, font: w.fontRegular, color: ENCRE });
-  w.y -= 14;
+  const size = 9.5;
+  const valueX = MARGIN + 130;
+  const valueMaxWidth = CONTENT_WIDTH - 130;
+  // Une valeur longue (raison sociale, adresse complète...) est repliée sur
+  // plusieurs lignes comme le reste du document — voir wrapText/wrapped —
+  // plutôt que débordée hors de la page en une seule ligne.
+  const lines = wrapText(value || '—', w.fontRegular, size, valueMaxWidth);
+  const rowHeight = Math.max(lines.length * (size + 4), 14);
+  w.ensureSpace(rowHeight);
+  const topY = w.y;
+  w.page.drawText(label, { x: MARGIN, y: topY - 9, size: 8.5, font: w.fontBold, color: ACIER });
+  w.wrapped(value || '—', { size, x: valueX, maxWidth: valueMaxWidth });
+  w.y = Math.min(w.y, topY - rowHeight);
 }
 
 export async function genererPdfPvFormulaire(params: {

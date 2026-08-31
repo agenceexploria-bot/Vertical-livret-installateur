@@ -7,6 +7,7 @@ import { requireAuth, requireRole, AuthedRequest } from '../middleware/auth';
 import { saveBuffer, deleteBlobFile, isOwnBlobUrl } from '../lib/imageStorage';
 import { fetchBlobFile, fusionnerSignatureDansPdf } from '../lib/pvMerge';
 import { genererPdfPvFormulaire, PvFormReponses } from '../lib/pvFormPdf';
+import { PV_SECTION_1, PV_SECTION_2, PV_SECTION_3, PvChecklistItemDef } from '../lib/pvFormulaireDefinition';
 import { isPointComplete } from '../lib/pointControleStatus';
 import { transcribeAudio } from '../lib/transcription';
 import { triggerChantierChanged, triggerChantierDeleted, triggerNotificationCreated } from '../lib/pusher';
@@ -477,6 +478,11 @@ chantiersRouter.post(
       where: { reference: req.params.reference },
       data: {
         pvPdfPath,
+        // Un chantier qui revient sur l'ancien flux (dépôt de gabarit) ne
+        // doit pas garder les réponses d'un formulaire interactif abandonné
+        // — même remise à zéro que DELETE .../pv, qui distingue les deux
+        // flux exactement sur ce champ (voir schema.prisma).
+        pvReponses: null,
         pvSigne: false,
         pvSigneur: null,
         pvFonctionSignataire: null,
@@ -576,27 +582,52 @@ chantiersRouter.post(
   },
 );
 
+// reponse n'est PAS nullable ici : au moment de la validation finale du PV
+// (contrairement à une simple sauvegarde de brouillon, qui n'existe pas dans
+// ce flux — voir POST .../pv/reponses), chaque question de la checklist doit
+// avoir été tranchée. Un point non applicable au chantier se répond "Non"
+// avec observation, comme sur le PV papier — voir aussi le garde-fou de
+// couverture ci-dessous, qui vérifie que chaque id du gabarit officiel a bien
+// une réponse (et pas seulement que celles présentes sont non nulles).
 const pvChecklistReponseSchema = z.object({
   id: z.string().min(1),
-  reponse: z.enum(['oui', 'non']).nullable(),
+  reponse: z.enum(['oui', 'non']),
   observation: z.string().optional().nullable(),
 });
 
-const pvReponsesSchema = z.object({
-  identite: z.object({
-    maitreOeuvre: z.string().optional().nullable(),
-    operation: z.string().optional().nullable(),
-    lot: z.string().optional().nullable(),
-  }),
-  receptionInstallation: z.array(pvChecklistReponseSchema),
-  documentsRemis: z.array(pvChecklistReponseSchema),
-  servicesSupplementaires: z.array(pvChecklistReponseSchema),
-  natureDePose: z.array(z.string()),
-  quantite: z.string().optional().nullable(),
-  reserves: z.string().optional().nullable(),
-  remarques: z.string().optional().nullable(),
-  temoignageClient: z.string().optional().nullable(),
-}) satisfies z.ZodType<PvFormReponses>;
+function checklistCouvreTousLesItems(reponses: { id: string }[], defs: PvChecklistItemDef[]): boolean {
+  const ids = new Set(reponses.map((r) => r.id));
+  return defs.every((d) => ids.has(d.id));
+}
+
+const pvReponsesSchema = z
+  .object({
+    identite: z.object({
+      maitreOeuvre: z.string().optional().nullable(),
+      operation: z.string().optional().nullable(),
+      lot: z.string().optional().nullable(),
+    }),
+    receptionInstallation: z.array(pvChecklistReponseSchema),
+    documentsRemis: z.array(pvChecklistReponseSchema),
+    servicesSupplementaires: z.array(pvChecklistReponseSchema),
+    natureDePose: z.array(z.string()),
+    quantite: z.string().optional().nullable(),
+    reserves: z.string().optional().nullable(),
+    remarques: z.string().optional().nullable(),
+    temoignageClient: z.string().optional().nullable(),
+  })
+  .refine((d) => checklistCouvreTousLesItems(d.receptionInstallation, PV_SECTION_1), {
+    message: 'Toutes les questions de la section "réception de l\'installation" doivent être renseignées',
+    path: ['receptionInstallation'],
+  })
+  .refine((d) => checklistCouvreTousLesItems(d.documentsRemis, PV_SECTION_2), {
+    message: 'Toutes les questions de la section "documents remis" doivent être renseignées',
+    path: ['documentsRemis'],
+  })
+  .refine((d) => checklistCouvreTousLesItems(d.servicesSupplementaires, PV_SECTION_3), {
+    message: 'Toutes les questions de la section "services supplémentaires" doivent être renseignées',
+    path: ['servicesSupplementaires'],
+  }) satisfies z.ZodType<PvFormReponses>;
 
 const pvFormulaireSchema = z.object({
   reponses: pvReponsesSchema,

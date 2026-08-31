@@ -62,6 +62,9 @@ class SignaturePadState extends State<SignaturePad> {
   }
 }
 
+// TODO(2026-08-31) : duplique lib/screens/client/signature_screen.dart's
+// _SignaturePainter (même logique de tracé point-à-point) — à factoriser en
+// un seul CustomPainter partagé au prochain tour de nettoyage.
 class _SignaturePadPainter extends CustomPainter {
   final List<Offset?> points;
   _SignaturePadPainter(this.points);
