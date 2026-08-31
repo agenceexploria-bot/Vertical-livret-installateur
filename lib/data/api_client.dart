@@ -78,8 +78,12 @@ class ApiClient {
   /// client). Renvoie l'URL publique du fichier déposé, à transmettre ensuite
   /// à l'endpoint métier concerné (ex. addDocumentChantier).
   Future<String> uploadFile({required String kind, required String dataUrl, String? filename}) async {
+    debugPrint('ApiClient.uploadFile: kind=$kind filename=$filename dataUrl.length=${dataUrl.length}');
     final match = RegExp(r'^data:([\w-]+/[\w.+-]+);base64,(.+)$').firstMatch(dataUrl);
-    if (match == null) throw ApiException(0, 'Fichier invalide.');
+    if (match == null) {
+      debugPrint('ApiClient.uploadFile: dataUrl mal formée (ne matche pas le regex data:<mime>;base64,<data>)');
+      throw ApiException(0, 'Fichier invalide.');
+    }
     final contentType = match.group(1)!;
     final bytes = base64Decode(match.group(2)!);
     // Le nom d'origine (accents, espaces, tirets cadratins, points médians...)
@@ -88,15 +92,30 @@ class ApiClient {
     // précis — voir [sanitizeBlobFilename].
     final resolvedFilename = sanitizeBlobFilename(filename ?? '$kind.${contentType.split('/').last}');
 
-    final tokenData = await _request('POST', '/uploads/token', body: {
-      'type': 'blob.generate-client-token',
-      'payload': {
-        'pathname': resolvedFilename,
-        'callbackUrl': _uploadsCallbackUrl,
-        'clientPayload': jsonEncode({'kind': kind}),
-        'multipart': false,
-      },
-    });
+    // Toute la construction de la requête (y compris _uploadsCallbackUrl,
+    // qui lit location.origin en web) est couverte par ce try/catch, pas
+    // seulement l'appel réseau lui-même : sans ça, une exception levée AVANT
+    // que _request() ne parte (ex. accès navigateur qui échoue) remonterait
+    // telle quelle jusqu'au dialogue appelant, sans jamais être loggée ni
+    // convertie en message lisible — un échec strictement silencieux, sans
+    // requête réseau ET sans trace exploitable.
+    final Map<String, dynamic> tokenData;
+    try {
+      tokenData = await _request('POST', '/uploads/token', body: {
+        'type': 'blob.generate-client-token',
+        'payload': {
+          'pathname': resolvedFilename,
+          'callbackUrl': _uploadsCallbackUrl,
+          'clientPayload': jsonEncode({'kind': kind}),
+          'multipart': false,
+        },
+      });
+    } on ApiException {
+      rethrow;
+    } catch (e) {
+      debugPrint('ApiClient.uploadFile (préparation du jeton) : $e');
+      throw ApiException(0, 'Erreur réseau : ${e.toString()}');
+    }
     final clientToken = tokenData['clientToken'] as String;
 
     final uri = Uri.parse('https://blob.vercel-storage.com/').replace(queryParameters: {'pathname': resolvedFilename});

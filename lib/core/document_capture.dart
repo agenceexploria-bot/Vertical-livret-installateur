@@ -65,7 +65,12 @@ class DocumentCapture {
         quality: _jpegQuality,
         format: CompressFormat.jpeg,
       );
-    } catch (_) {
+    } catch (e) {
+      // Un échec ici fait disparaître le fichier de la sélection sans aucun
+      // message (voir _fromBytes) — jamais silencieux dans les logs, même
+      // si l'interface elle-même ne peut pas faire mieux qu'ignorer le
+      // fichier à ce stade.
+      debugPrint('DocumentCapture._compressImage: $e');
       return null;
     }
   }
@@ -104,7 +109,14 @@ class DocumentCapture {
 
   static Future<PickedDocument?> _toPickedDocument(PlatformFile picked) async {
     final bytes = picked.bytes;
-    if (bytes == null) return null;
+    if (bytes == null) {
+      // file_picker n'a pas fourni les octets malgré withData: true — le
+      // fichier disparaît alors silencieusement de la sélection (jamais
+      // ajouté à la liste du dialogue) sans qu'aucune erreur ne remonte à
+      // l'utilisateur. Toujours loggé pour rester diagnosticable.
+      debugPrint('DocumentCapture._toPickedDocument: bytes null pour "${picked.name}" (${picked.size} octets annoncés)');
+      return null;
+    }
     return _fromBytes(picked.name, bytes);
   }
 

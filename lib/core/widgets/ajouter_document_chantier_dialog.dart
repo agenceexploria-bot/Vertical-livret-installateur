@@ -94,6 +94,7 @@ class _AjouterDocumentChantierDialogState extends State<AjouterDocumentChantierD
 
     for (final (i, f) in cibles.indexed) {
       if (!mounted) return;
+      debugPrint('AjouterDocumentChantierDialog._envoyer: début envoi "${f.picked.fileName}" (dataUrl: ${f.picked.dataUrl.length} caractères)');
       setState(() => _progression = cibles.length > 1 ? 'Envoi ${i + 1}/${cibles.length}...' : 'Envoi en cours...');
       try {
         await chantierState.addDocumentChantier(
@@ -114,7 +115,12 @@ class _AjouterDocumentChantierDialogState extends State<AjouterDocumentChantierD
           f.status = _EnvoiStatus.echec;
           f.erreur = e.message;
         });
-      } catch (_) {
+      } catch (e, st) {
+        // Contrairement au cas ApiException ci-dessus (message déjà connu et
+        // déjà loggé par ApiClient), une exception qui atterrit ici est
+        // n'importe quoi d'autre — jamais avalée sans trace, sans quoi ce
+        // générique "Échec de l'envoi" est impossible à diagnostiquer.
+        debugPrint('AjouterDocumentChantierDialog._envoyer (${f.picked.fileName}): $e\n$st');
         if (!mounted) return;
         setState(() {
           f.status = _EnvoiStatus.echec;
