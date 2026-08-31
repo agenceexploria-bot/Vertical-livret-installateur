@@ -63,5 +63,25 @@ void main() {
       final result = sanitizeBlobFilename('Plan étage.pdf');
       expect(result, matches(RegExp(r'^plan-etage-\d+-\d+\.pdf$')));
     });
+
+    // Regression prod (build 77aad46, capture console) : le suffixe unique
+    // utilisait Random().nextInt(1 << 32). Sur la VM (donc ici, en
+    // flutter test), 1 << 32 vaut 4294967296 - le test passait. En web
+    // (dart2js/DDC), les operateurs bit a bit sont tronques a 32 bits et
+    // 1 << 32 y vaut 0, donc Random().nextInt(0) levait RangeError pour
+    // TOUT fichier, sur toute plateforme web. flutter test ne peut pas
+    // reproduire la troncature web (VM 64 bits), donc ce test verrouille la
+    // valeur du litteral utilise plutot que le symptome : blobSuffixRandomMax
+    // doit rester un entier decimal exact, jamais le resultat d'un decalage
+    // (<<), pour que sa valeur soit identique sur VM et sur web.
+    test('la borne du suffixe aleatoire est un litteral fixe, jamais un decalage de bits', () {
+      expect(blobSuffixRandomMax, 4294967295);
+    });
+
+    test('la generation du suffixe ne leve jamais, meme en rafale (verrou anti-nextInt(0))', () {
+      for (var i = 0; i < 500; i++) {
+        expect(() => sanitizeBlobFilename('Dossier_conception_MB03.pdf'), returnsNormally);
+      }
+    });
   });
 }

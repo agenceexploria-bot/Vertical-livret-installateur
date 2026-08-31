@@ -16,6 +16,17 @@ const _diacritics = {
 
 final _uniqueSuffixRandom = Random();
 
+/// Borne passée à `Random.nextInt` pour le suffixe unique — DOIT rester un
+/// littéral décimal, jamais `1 << 32`. En Dart web (dart2js/DDC), les
+/// opérateurs bit à bit (`<<`, `>>`, `&`, `|`, `^`, `~`) sont tronqués à 32
+/// bits ; `1 << 32` y vaut alors 0 (constaté en prod : `Random().nextInt(0)`
+/// lève `RangeError`, jamais silencieux). Sur la VM (donc en `flutter
+/// test`), `1 << 32` vaut bien 4294967296 — le bug était invisible en test
+/// et n'apparaissait qu'en build web réel. `0xFFFFFFFF` (4294967295) est un
+/// nombre entier, pas le résultat d'un décalage : sa valeur est identique
+/// sur VM et web.
+const blobSuffixRandomMax = 0xFFFFFFFF;
+
 /// Transforme un nom de fichier utilisateur (accents, espaces, tirets
 /// cadratins, points médians...) en un chemin sûr pour Vercel Blob :
 /// uniquement lettres ASCII, chiffres et tirets, avec un suffixe unique pour
@@ -41,7 +52,7 @@ String sanitizeBlobFilename(String original) {
       .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
       .replaceAll(RegExp(r'^-+|-+$'), '');
   final safeBase = slug.isEmpty ? 'fichier' : slug;
-  final suffix = '${DateTime.now().microsecondsSinceEpoch}-${_uniqueSuffixRandom.nextInt(1 << 32)}';
+  final suffix = '${DateTime.now().microsecondsSinceEpoch}-${_uniqueSuffixRandom.nextInt(blobSuffixRandomMax)}';
 
   return extension.isEmpty ? '$safeBase-$suffix' : '$safeBase-$suffix.$extension';
 }
