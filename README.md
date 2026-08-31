@@ -31,7 +31,7 @@ Production : https://vertical-livret-installateur.vercel.app/
 
 | Domaine | Technologie |
 |---|---|
-| Frontend | **Flutter** (Web PWA + Android/iOS), une seule base de code pour l'app installateur et le back-office |
+| Frontend | **Flutter** (Web PWA + Android natif ; iOS via PWA Safari uniquement, pas de cible native — voir 4.4), une seule base de code pour l'app installateur et le back-office |
 | Cache local / mode hors-ligne | **Drift** (SQLite embarqué) + moteur de synchronisation maison (`lib/data/sync/sync_engine.dart`) |
 | Backend | **Node.js** / **Express** / **TypeScript**, déployé comme fonction serverless unique sur Vercel (`api/index.ts`) |
 | ORM / Base de données | **Prisma** ORM + **PostgreSQL** (hébergé sur **Neon**, serverless) |
@@ -150,9 +150,15 @@ flutter run                 # Mobile — émulateur ou appareil connecté
 >   Safari iOS, réglages du site accessibles depuis le bouton `AA` dans la
 >   barre d'adresse, ou **Réglages iOS > Safari > [site] > Microphone**.
 > - **iOS natif** : ce projet n'a pas de cible iOS native (`ios/` n'existe
->   pas) — la distribution installateur sur iPhone/iPad passe exclusivement
->   par la PWA Safari (voir section 6). Si une app iOS native est ajoutée un
->   jour (`flutter create --platforms=ios .`), il faudra alors déclarer dans
+>   pas) — décision d'architecture assumée, pas un oubli : pas de compte
+>   développeur Apple, pas de revue App Store, un seul code à maintenir. La
+>   distribution installateur sur iPhone/iPad passe exclusivement par la PWA
+>   Safari (voir section 6). **Déclencheur pour reconsidérer** : si les tests
+>   terrain sur iPhone (voir 4.6 ci-dessous) montrent des restrictions
+>   gênantes côté Safari/PWA sur le micro (`getUserMedia` limité,
+>   enregistrement coupé en arrière-plan...), alors la plateforme native sera
+>   créée en connaissance de cause. Si ce jour arrive
+>   (`flutter create --platforms=ios .`), il faudra déclarer dans
 >   `ios/Runner/Info.plist` : `NSMicrophoneUsageDescription` (ex. "Le micro
 >   est utilisé pour dicter votre retour d'expérience (REX).") et
 >   `NSSpeechRecognitionUsageDescription` (reconnaissance vocale en direct,
@@ -165,6 +171,21 @@ flutter analyze                        # Lint/analyse statique Flutter
 cd backend && npx tsc --noEmit -p .    # Typecheck backend
 cd backend && npm test                 # Tests backend (Vitest)
 ```
+
+### 4.6. Vérifications manuelles terrain
+
+Certains comportements ne sont observables que sur un appareil réel, en
+conditions réelles — hors de portée des tests automatisés ci-dessus. À
+vérifier manuellement avant toute mise en production touchant les zones
+concernées :
+
+- **REX vocal sur iPhone (Safari, PWA installée)** : enregistrer une note
+  vocale de **2 minutes ou plus** et vérifier que Safari ne coupe pas
+  l'enregistrement en cours de route (limitations connues de `getUserMedia`
+  en PWA iOS, notamment si l'écran se verrouille ou si l'app passe en
+  arrière-plan). C'est précisément le type de restriction qui ferait
+  basculer la décision de rester en PWA vers une app iOS native — voir la
+  note sur iOS en 4.4 ci-dessus.
 
 ## 5. Déploiement (production)
 
