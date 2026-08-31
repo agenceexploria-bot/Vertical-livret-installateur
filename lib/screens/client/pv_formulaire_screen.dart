@@ -156,11 +156,12 @@ class _PvFormulaireScreenState extends State<PvFormulaireScreen> {
               if (!estDerniere)
                 ElevatedButton(onPressed: details.onStepContinue, child: const Text('Suivant'))
               else
-                ElevatedButton(
+                ElevatedButton.icon(
                   onPressed: _peutValider ? _valider : null,
-                  child: _isSubmitting
+                  icon: _isSubmitting
                       ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Text('Valider le procès-verbal'),
+                      : const Icon(Icons.check_circle_outline, size: 18),
+                  label: const Text('Valider le procès-verbal'),
                 ),
             ],
           ),
