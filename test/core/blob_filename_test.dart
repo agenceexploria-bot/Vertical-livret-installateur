@@ -48,5 +48,20 @@ void main() {
       final result = sanitizeBlobFilename('°°°.pdf');
       expect(result, matches(RegExp(r'^fichier-\d+-\d+\.pdf$')));
     });
+
+    // Nom exact d'un fichier ayant fait échouer l'ajout de documents chantier
+    // en production — tiret cadratin (–, U+2013), apostrophe typographique
+    // ('’', U+2019) et point médian (·, U+00B7). La sanitisation les gérait
+    // déjà correctement (regex générique [^a-z0-9]+) ; ce test verrouille ce
+    // cas précis contre une régression.
+    test('gère le nom exact d\'un fichier ayant fait échouer un envoi (tiret cadratin, apostrophe typographique, point médian)', () {
+      final result = sanitizeBlobFilename('KB03 – Sécurisation de l’accés·Comparatif des solutions.pdf');
+      expect(result, matches(RegExp(r'^kb03-securisation-de-l-acces-comparatif-des-solutions-\d+-\d+\.pdf$')));
+    });
+
+    test('remplace une espace insécable', () {
+      final result = sanitizeBlobFilename('Plan étage.pdf');
+      expect(result, matches(RegExp(r'^plan-etage-\d+-\d+\.pdf$')));
+    });
   });
 }

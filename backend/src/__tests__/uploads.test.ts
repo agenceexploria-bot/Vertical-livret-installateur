@@ -65,7 +65,7 @@ describe('POST /uploads/token', () => {
     expect(payload.maximumSizeInBytes).toBe(10 * 1024 * 1024);
   });
 
-  it('autorise les vidéos pour les documents terrain (installateur)', async () => {
+  it('autorise n\'importe quel type de fichier pour les documents terrain (installateur)', async () => {
     const token = await createInstallateurToken();
 
     const res = await request(app)
@@ -73,15 +73,16 @@ describe('POST /uploads/token', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({
         type: 'blob.generate-client-token',
-        payload: { pathname: 'x.mp4', callbackUrl: 'http://x', clientPayload: JSON.stringify({ kind: 'documentTerrain' }), multipart: false },
+        payload: { pathname: 'x.zip', callbackUrl: 'http://x', clientPayload: JSON.stringify({ kind: 'documentTerrain' }), multipart: false },
       });
 
     expect(res.status).toBe(200);
     const payload = getPayloadFromClientToken(res.body.clientToken as string);
-    expect(payload.allowedContentTypes).toContain('video/mp4');
+    expect(payload.allowedContentTypes).toEqual(['*']);
+    expect(payload.maximumSizeInBytes).toBe(500 * 1024 * 1024);
   });
 
-  it('autorise les vidéos pour les documents chantier (CT/direction/admin)', async () => {
+  it('autorise n\'importe quel type de fichier pour les documents chantier (CT/direction/admin)', async () => {
     const token = await createCtToken();
 
     const res = await request(app)
@@ -89,12 +90,41 @@ describe('POST /uploads/token', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({
         type: 'blob.generate-client-token',
-        payload: { pathname: 'x.mp4', callbackUrl: 'http://x', clientPayload: JSON.stringify({ kind: 'documentChantier' }), multipart: false },
+        payload: { pathname: 'x.docx', callbackUrl: 'http://x', clientPayload: JSON.stringify({ kind: 'documentChantier' }), multipart: false },
       });
 
     expect(res.status).toBe(200);
     const payload = getPayloadFromClientToken(res.body.clientToken as string);
-    expect(payload.allowedContentTypes).toContain('video/mp4');
+    expect(payload.allowedContentTypes).toEqual(['*']);
+    expect(payload.maximumSizeInBytes).toBe(500 * 1024 * 1024);
+  });
+
+  it.each(['exe', 'bat', 'sh', 'msi'])('refuse un exécutable .%s pour les documents chantier (liste noire)', async (extension) => {
+    const token = await createCtToken();
+
+    const res = await request(app)
+      .post('/uploads/token')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        type: 'blob.generate-client-token',
+        payload: { pathname: `installeur.${extension}`, callbackUrl: 'http://x', clientPayload: JSON.stringify({ kind: 'documentChantier' }), multipart: false },
+      });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('refuse un exécutable .exe pour les documents terrain', async () => {
+    const token = await createInstallateurToken();
+
+    const res = await request(app)
+      .post('/uploads/token')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        type: 'blob.generate-client-token',
+        payload: { pathname: 'installeur.exe', callbackUrl: 'http://x', clientPayload: JSON.stringify({ kind: 'documentTerrain' }), multipart: false },
+      });
+
+    expect(res.status).toBe(400);
   });
 
   it('refuse un installateur pour les documents chantier (réservés CT/direction/admin)', async () => {

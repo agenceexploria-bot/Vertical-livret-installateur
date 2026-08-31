@@ -16,11 +16,33 @@ class PickedDocument {
   const PickedDocument({required this.dataUrl, required this.fileName});
 }
 
-const _videoExtensionMimes = {'mp4': 'video/mp4', 'webm': 'video/webm'};
+const _videoExtensionMimes = {'mp4': 'video/mp4', 'webm': 'video/webm', 'mov': 'video/quicktime'};
 
-/// Extensions par défaut acceptées lors de l'import d'un document chantier ou
-/// terrain — photo, PDF ou vidéo (rapport d'inspection filmé, par exemple).
-const documentPickerExtensions = ['jpg', 'jpeg', 'png', 'pdf', 'mp4', 'webm'];
+/// Images passées telles quelles (pas de pipeline de compression JPEG adapté
+/// — GIF perdrait son animation, HEIC/WebP n'ont pas besoin d'être
+/// recompressés en JPEG) : voir [_fromBytes].
+const _rawImageExtensionMimes = {'webp': 'image/webp', 'gif': 'image/gif', 'heic': 'image/heic'};
+
+/// MIME les plus courants pour les types de documents explicitement
+/// supportés (bureautique, texte, archives...) — au-delà, [_fromBytes]
+/// retombe sur `application/octet-stream`, que le backend accepte tout aussi
+/// bien (voir KIND_CONFIG.documentChantier/documentTerrain côté serveur) :
+/// le fichier n'est jamais rejeté faute d'un type reconnu ici.
+const _knownDocumentMimes = {
+  'doc': 'application/msword',
+  'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'xls': 'application/vnd.ms-excel',
+  'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'ppt': 'application/vnd.ms-powerpoint',
+  'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'odt': 'application/vnd.oasis.opendocument.text',
+  'txt': 'text/plain',
+  'csv': 'text/csv',
+  'rtf': 'application/rtf',
+  'zip': 'application/zip',
+  'rar': 'application/vnd.rar',
+  '7z': 'application/x-7z-compressed',
+};
 
 /// Sélectionne un document terrain ou un certificat — photo (prise sur place
 /// ou déjà existante), PDF ou vidéo, au choix de l'utilisateur dans le
@@ -50,8 +72,12 @@ class DocumentCapture {
 
   /// Cœur commun à toutes les sources de fichiers (sélecteur natif, caméra,
   /// glisser-déposer) : à partir d'un nom et d'octets bruts, produit le
-  /// [PickedDocument] correspondant — images recompressées, PDF/vidéo
-  /// envoyés tels quels. `null` si le type de fichier n'est pas reconnu.
+  /// [PickedDocument] correspondant. Seuls le JPEG/PNG passent par la
+  /// recompression (voir [_compressImage]) — tout le reste (PDF, vidéo,
+  /// bureautique, archives, plans CAO...) est envoyé tel quel, avec le MIME
+  /// le plus proche connu ou `application/octet-stream` à défaut. N'importe
+  /// quel type de fichier renseigné est donc accepté ; seule une image
+  /// JPEG/PNG corrompue (`_compressImage` échoue) renvoie `null`.
   static Future<PickedDocument?> _fromBytes(String fileName, Uint8List bytes) async {
     final extension = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : '';
 
@@ -62,10 +88,18 @@ class DocumentCapture {
     if (videoMime != null) {
       return PickedDocument(dataUrl: 'data:$videoMime;base64,${base64Encode(bytes)}', fileName: fileName);
     }
+    if (extension == 'jpg' || extension == 'jpeg' || extension == 'png') {
+      final compressed = await _compressImage(bytes);
+      if (compressed == null) return null;
+      return PickedDocument(dataUrl: 'data:image/jpeg;base64,${base64Encode(compressed)}', fileName: fileName);
+    }
+    final rawImageMime = _rawImageExtensionMimes[extension];
+    if (rawImageMime != null) {
+      return PickedDocument(dataUrl: 'data:$rawImageMime;base64,${base64Encode(bytes)}', fileName: fileName);
+    }
 
-    final compressed = await _compressImage(bytes);
-    if (compressed == null) return null;
-    return PickedDocument(dataUrl: 'data:image/jpeg;base64,${base64Encode(compressed)}', fileName: fileName);
+    final mime = _knownDocumentMimes[extension] ?? 'application/octet-stream';
+    return PickedDocument(dataUrl: 'data:$mime;base64,${base64Encode(bytes)}', fileName: fileName);
   }
 
   static Future<PickedDocument?> _toPickedDocument(PlatformFile picked) async {
@@ -88,9 +122,12 @@ class DocumentCapture {
     return result;
   }
 
-  static Future<PickedDocument?> pickFile({List<String> allowedExtensions = documentPickerExtensions}) async {
+  /// [allowedExtensions] `null` (par défaut) = aucune restriction, n'importe
+  /// quel type de fichier peut être choisi — seul [renseigner_pv_dialog] le
+  /// restreint explicitement au PDF (dépôt du gabarit officiel).
+  static Future<PickedDocument?> pickFile({List<String>? allowedExtensions}) async {
     final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
+      type: allowedExtensions == null ? FileType.any : FileType.custom,
       allowedExtensions: allowedExtensions,
       withData: true,
     );
@@ -101,9 +138,9 @@ class DocumentCapture {
 
   /// Sélection de plusieurs fichiers en une seule fois — le nom de chaque
   /// fichier fait l'affaire par défaut, sans avoir à nommer chacun un par un.
-  static Future<List<PickedDocument>> pickMultipleFiles({List<String> allowedExtensions = documentPickerExtensions}) async {
+  static Future<List<PickedDocument>> pickMultipleFiles({List<String>? allowedExtensions}) async {
     final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
+      type: allowedExtensions == null ? FileType.any : FileType.custom,
       allowedExtensions: allowedExtensions,
       withData: true,
       allowMultiple: true,
@@ -123,7 +160,7 @@ class DocumentCapture {
   /// existant) — utilisé sur le terrain (documents terrain, certificats),
   /// là où [pickFile] seul obligeait à passer par la galerie même pour
   /// capturer quelque chose à l'instant.
-  static Future<PickedDocument?> pickWithCameraOption(BuildContext context, {List<String> allowedExtensions = documentPickerExtensions}) async {
+  static Future<PickedDocument?> pickWithCameraOption(BuildContext context, {List<String>? allowedExtensions}) async {
     final choice = await showModalBottomSheet<_DocumentSheetChoice>(
       context: context,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),

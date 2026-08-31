@@ -113,6 +113,17 @@ class ApiClient {
           return 'Ce fichier est trop volumineux.';
         case 'content_type_not_allowed':
           return 'Ce type de fichier n\'est pas autorisé ici.';
+        case 'client_token_expired':
+          // Le jeton d'upload est valable peu de temps — un envoi trop lent
+          // (gros fichier, réseau lent) peut expirer avant la fin du dépôt.
+          // Un nouveau clic sur "Réessayer" redemande un jeton frais (voir
+          // uploadFile, qui refait tout le cycle à chaque appel).
+          return 'L\'envoi a pris trop de temps et le lien a expiré. Réessayez.';
+        case 'forbidden':
+          return 'Accès refusé pour cet envoi. Réessayez.';
+        case 'store_not_found':
+        case 'store_suspended':
+          return 'Le service de stockage est momentanément indisponible. Réessayez dans quelques instants.';
         default:
           return 'Impossible d\'envoyer le fichier. Réessayez.';
       }

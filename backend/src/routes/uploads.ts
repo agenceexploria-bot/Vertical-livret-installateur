@@ -5,6 +5,13 @@ import { AuthedRequest } from '../middleware/auth';
 
 export const uploadsRouter = Router();
 
+// Seule protection appliquée aux kinds en liste noire (voir
+// documentChantier/documentTerrain ci-dessous) : le reste du fichier — type,
+// taille, rôle — est décidé par KIND_CONFIG comme pour les autres kinds.
+// Vérifiée sur l'extension du pathname (voir onBeforeGenerateToken), qui est
+// tout ce qu'on connaît côté serveur avant l'upload effectif.
+const DANGEROUS_EXTENSIONS = ['exe', 'bat', 'sh', 'msi'];
+
 // Types, tailles ET rôles autorisés par nature de pièce jointe — décidés
 // côté serveur uniquement (jamais à partir de ce que le client déclare, à
 // part le choix du `kind` lui-même), pour qu'un client ne puisse pas
@@ -23,9 +30,15 @@ const KIND_CONFIG: Record<string, { allowedContentTypes: string[]; maximumSizeIn
   // webm malgré l'ancien nom de fichier) ; audio/mp4 : iOS le cas échéant
   // (Opus dans un conteneur M4A côté AVFoundation).
   rexAudio: { allowedContentTypes: ['audio/webm', 'audio/ogg', 'audio/mp4'], maximumSizeInBytes: 50 * 1024 * 1024 },
+  // '*' = n'importe quel Content-Type (documents terrain/chantier peuvent
+  // être des photos, vidéos, fichiers bureautique, archives, plans CAO...).
+  // Seuls les exécutables dangereux sont exclus, via DANGEROUS_EXTENSIONS
+  // ci-dessus — liste noire plutôt que blanche, contrairement aux autres
+  // kinds de ce fichier qui restent volontairement restreints (avatar,
+  // photo de contrôle, gabarit PV officiel...).
   documentTerrain: {
-    allowedContentTypes: ['application/pdf', 'image/jpeg', 'image/png', 'video/mp4', 'video/webm'],
-    maximumSizeInBytes: 100 * 1024 * 1024,
+    allowedContentTypes: ['*'],
+    maximumSizeInBytes: 500 * 1024 * 1024,
   },
   pvDocument: {
     allowedContentTypes: ['application/pdf'],
@@ -33,8 +46,8 @@ const KIND_CONFIG: Record<string, { allowedContentTypes: string[]; maximumSizeIn
     allowedRoles: ['coordinateurTravaux', 'direction', 'admin'],
   },
   documentChantier: {
-    allowedContentTypes: ['application/pdf', 'image/jpeg', 'image/png', 'video/mp4', 'video/webm'],
-    maximumSizeInBytes: 100 * 1024 * 1024,
+    allowedContentTypes: ['*'],
+    maximumSizeInBytes: 500 * 1024 * 1024,
     allowedRoles: ['coordinateurTravaux', 'direction', 'admin'],
   },
 };
@@ -73,12 +86,16 @@ uploadsRouter.post('/token', async (req: AuthedRequest, res) => {
     const jsonResponse = await handleUpload({
       body,
       request: req,
-      onBeforeGenerateToken: async (_pathname, clientPayload) => {
+      onBeforeGenerateToken: async (pathname, clientPayload) => {
         const { kind } = JSON.parse(clientPayload ?? '{}') as { kind?: string };
         const config = kind ? KIND_CONFIG[kind] : undefined;
         if (!config) throw new Error('Type de pièce jointe inconnu');
         if (config.allowedRoles && !config.allowedRoles.includes(role ?? '')) {
           throw new Error('Rôle non autorisé pour ce type de pièce jointe');
+        }
+        const extension = pathname.split('.').pop()?.toLowerCase();
+        if (extension && DANGEROUS_EXTENSIONS.includes(extension)) {
+          throw new Error('Ce type de fichier n\'est pas autorisé pour des raisons de sécurité');
         }
         return {
           allowedContentTypes: config.allowedContentTypes,
