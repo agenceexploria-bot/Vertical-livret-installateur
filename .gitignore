@@ -30,3 +30,6 @@ local.properties
 
 devtools_options.yaml
 /package-lock.json
+
+.vercel
+.env*

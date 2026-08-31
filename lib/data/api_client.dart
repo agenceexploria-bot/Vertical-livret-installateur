@@ -1,7 +1,8 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show kIsWeb, kReleaseMode;
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb, kReleaseMode;
 import 'package:http/http.dart' as http;
 import '../core/blob_filename.dart';
+import '../core/platform/page_origin.dart';
 
 class ApiException implements Exception {
   final int statusCode;
@@ -30,6 +31,22 @@ class ApiClient {
   static String get baseUrl {
     if (kIsWeb && kReleaseMode) return '/api';
     return kIsWeb ? 'http://localhost:3000' : 'http://$_devMachineLanIp:3000';
+  }
+
+  /// URL de rappel transmise à Vercel Blob (voir uploadFile) — contrairement
+  /// à [baseUrl], qui reste volontairement relatif en web/prod (le navigateur
+  /// le résout tout seul contre l'origine de la page pour NOS propres
+  /// appels), cette valeur est une DONNÉE envoyée à l'infrastructure de
+  /// Vercel Blob : leur service, pas notre navigateur, doit savoir où
+  /// appeler, donc elle doit toujours être absolue. En mobile/dev, [baseUrl]
+  /// est déjà absolu ; en web/prod, on le préfixe avec l'origine réelle de
+  /// la page (voir currentPageOrigin, qui lit `location.origin`).
+  static String get _uploadsCallbackUrl {
+    if (kIsWeb && kReleaseMode) {
+      final origin = currentPageOrigin;
+      if (origin != null) return '$origin$baseUrl/uploads/token';
+    }
+    return '$baseUrl/uploads/token';
   }
 
   String? _accessToken;
@@ -75,7 +92,7 @@ class ApiClient {
       'type': 'blob.generate-client-token',
       'payload': {
         'pathname': resolvedFilename,
-        'callbackUrl': '$baseUrl/uploads/token',
+        'callbackUrl': _uploadsCallbackUrl,
         'clientPayload': jsonEncode({'kind': kind}),
         'multipart': false,
       },
@@ -90,11 +107,16 @@ class ApiClient {
         'x-api-version': '9',
         'x-content-type': contentType,
       }, body: bytes);
-    } catch (_) {
-      throw ApiException(0, 'Erreur réseau. Vérifiez votre connexion.');
+    } catch (e) {
+      // Ne jamais avaler la vraie cause : au prochain échec, la console
+      // (accessible via les devtools navigateur en web) donne le détail
+      // exact au lieu d'un message générique impossible à diagnostiquer.
+      debugPrint('ApiClient.uploadFile (PUT Blob) : $e');
+      throw ApiException(0, 'Erreur réseau : ${e.toString()}');
     }
     if (response.statusCode >= 400) {
-      throw ApiException(response.statusCode, _extractBlobError(response.body));
+      debugPrint('ApiClient.uploadFile (PUT Blob) : HTTP ${response.statusCode} — ${response.body}');
+      throw ApiException(response.statusCode, _extractBlobError(response.statusCode, response.body));
     }
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     return data['url'] as String;
@@ -102,8 +124,11 @@ class ApiClient {
 
   /// Messages lisibles pour les erreurs renvoyées par Vercel Blob lors du
   /// dépôt direct (forme `{ error: { code, message } }`, distincte de celle
-  /// de notre propre API — voir [_extractError]).
-  String _extractBlobError(String body) {
+  /// de notre propre API — voir [_extractError]). Le statut/corps bruts sont
+  /// toujours loggés par l'appelant (voir ci-dessus) avant d'appeler cette
+  /// fonction : jamais de cause avalée, même quand le code n'est pas reconnu
+  /// ci-dessous.
+  String _extractBlobError(int statusCode, String body) {
     try {
       final decoded = jsonDecode(body);
       final error = decoded is Map ? decoded['error'] : null;
@@ -123,12 +148,15 @@ class ApiClient {
           return 'Accès refusé pour cet envoi. Réessayez.';
         case 'store_not_found':
         case 'store_suspended':
-          return 'Le service de stockage est momentanément indisponible. Réessayez dans quelques instants.';
+          return 'Stockage indisponible (erreur $statusCode). Réessayez dans quelques instants.';
         default:
-          return 'Impossible d\'envoyer le fichier. Réessayez.';
+          // Code non reconnu ci-dessus : on l'affiche quand même plutôt que
+          // de renvoyer un message purement générique — voir le log complet
+          // (statut + corps) déjà émis par l'appelant pour le détail intégral.
+          return 'Échec de l\'envoi (erreur $statusCode${code != null ? ' — $code' : ''}). Réessayez.';
       }
     } catch (_) {
-      return 'Erreur réseau. Vérifiez votre connexion.';
+      return 'Échec de l\'envoi (erreur $statusCode). Réessayez.';
     }
   }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import '../../../core/build_info.dart';
 import '../../../core/theme.dart';
 import '../../../core/widgets/user_avatar.dart';
 import '../../../core/widgets/vertical_logo.dart';
@@ -130,6 +131,17 @@ class BoShell extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 28),
                 child: child,
               ),
+            ),
+          ),
+          // Discret, mais toujours là : sans ça, impossible de confirmer
+          // quelle version est réellement chargée face à un problème de
+          // cache PWA (voir README).
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Text(
+              BuildInfo.label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 10, color: AppColors.acierClair),
             ),
           ),
         ],

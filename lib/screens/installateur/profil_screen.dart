@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/avatar_capture.dart';
+import '../../core/build_info.dart';
 import '../../core/document_capture.dart';
 import '../../core/platform/mobile_detector.dart';
 import '../../core/theme.dart';
@@ -69,11 +70,11 @@ class ProfilScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 24),
-            const Center(
+            Center(
               child: Text(
-                'Vertical Monte-Charges — v1.0.0\nLes certificats sont confidentiels.',
+                'Vertical Monte-Charges — ${BuildInfo.label}\nLes certificats sont confidentiels.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 11, color: AppColors.acierClair),
+                style: const TextStyle(fontSize: 11, color: AppColors.acierClair),
               ),
             ),
           ],
@@ -113,11 +114,11 @@ class ProfilScreen extends StatelessWidget {
                   _buildHabilitationsCardDesktop(context, user),
                 ],
                 const SizedBox(height: 32),
-                const Center(
+                Center(
                   child: Text(
-                    'Vertical Monte-Charges — v1.0.0 · Les certificats sont confidentiels.',
+                    'Vertical Monte-Charges — ${BuildInfo.label} · Les certificats sont confidentiels.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 12, color: AppColors.acierClair),
+                    style: const TextStyle(fontSize: 12, color: AppColors.acierClair),
                   ),
                 ),
               ],

@@ -172,6 +172,24 @@ cd backend && npx tsc --noEmit -p .    # Typecheck backend
 cd backend && npm test                 # Tests backend (Vitest)
 ```
 
+> **Dette technique connue — angle mort TypeScript côté build Vercel** :
+> `npx tsc --noEmit -p backend` (ci-dessus, et le même gate dans
+> `deploy.yml`) ne couvre PAS la façon dont Vercel compile réellement
+> `api/index.ts` en production. Ce fichier vit à la racine du dépôt, hors de
+> `backend/node_modules` (voir son commentaire) — Vercel, ne trouvant pas de
+> `typescript` accessible depuis cet emplacement, bascule sur SON PROPRE
+> compilateur TypeScript intégré pour bundler la fonction serverless. Ça a
+> été repéré via `vercel inspect --logs` : des erreurs de type bien réelles
+> sur `backend/src/routes/chantiers.ts` (schéma du PV interactif) apparaissent
+> dans les logs de build Vercel alors que notre propre `tsc --noEmit` est
+> parfaitement propre. Le build n'échoue pas pour autant (la fonction est
+> bundlée quand même, ces diagnostics ne sont pas bloquants côté Vercel), mais
+> ça signifie que notre garde-fou de typage n'a aucune visibilité sur ce que
+> Vercel voit vraiment. À investiguer séparément — piste probable :
+> réorganiser pour que `api/index.ts` résolve `typescript` depuis
+> `backend/node_modules` (ex. le déplacer dans `backend/` ou lui donner son
+> propre `tsconfig.json`/`node_modules`).
+
 ### 4.6. Vérifications manuelles terrain
 
 Certains comportements ne sont observables que sur un appareil réel, en

@@ -43,7 +43,11 @@ jobs:
       - name: Injecte le SHA du commit dans le cache PWA
         run: sed -i "s/const CACHE_VERSION = 'dev';/const CACHE_VERSION = '${{ github.sha }}';/" web/pwa_cache_worker.js
 
-      - run: flutter build web --release
+      # Alimente le libellé de version affiché dans l'UI (voir
+      # lib/core/build_info.dart, bo_shell.dart, profil_screen.dart) — jamais
+      # codé en dur : c'est ce qui permet de confirmer la version réellement
+      # chargée face à un problème de cache PWA.
+      - run: flutter build web --release --dart-define=APP_COMMIT_SHA=${{ github.sha }}
 
       - name: Déploiement Vercel
         env:
