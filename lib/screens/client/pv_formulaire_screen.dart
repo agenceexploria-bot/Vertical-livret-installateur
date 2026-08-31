@@ -86,6 +86,25 @@ class _PvFormulaireScreenState extends State<PvFormulaireScreen> {
       _fonctionSignataireCtrl.text.trim().isNotEmpty &&
       _reponses.checklistComplete;
 
+  /// Raison précise pour laquelle [_peutValider] est faux — affichée juste
+  /// au-dessus du bouton de validation (voir _buildFooterValidation) pour
+  /// que l'installateur sache toujours quoi faire pour débloquer la suite,
+  /// plutôt qu'un bouton grisé sans explication. `null` si tout est en ordre
+  /// (le bouton est alors actif). Une seule raison à la fois, dans l'ordre
+  /// où l'installateur les rencontre en remontant le formulaire.
+  String? get _raisonBlocage {
+    final s1 = _reponses.receptionInstallation.where((r) => r.reponse == null).length;
+    if (s1 > 0) return '$s1 question${s1 > 1 ? 's' : ''} sans réponse (section 1)';
+    final s2 = _reponses.documentsRemis.where((r) => r.reponse == null).length;
+    if (s2 > 0) return '$s2 question${s2 > 1 ? 's' : ''} sans réponse (section 2)';
+    final s3 = _reponses.servicesSupplementaires.where((r) => r.reponse == null).length;
+    if (s3 > 0) return '$s3 question${s3 > 1 ? 's' : ''} sans réponse (section 3 — Services)';
+    if (_signatureVide) return 'Signature du client manquante';
+    if (_nomSignataireCtrl.text.trim().isEmpty) return 'Nom du signataire requis';
+    if (_fonctionSignataireCtrl.text.trim().isEmpty) return 'Fonction du signataire requise';
+    return null;
+  }
+
   /// Petite pastille rouge accolée au titre d'une étape dont au moins une
   /// question Oui/Non n'a pas encore de réponse — guide l'installateur vers
   /// les étapes à compléter avant de pouvoir valider (voir _peutValider et le
@@ -123,57 +142,100 @@ class _PvFormulaireScreenState extends State<PvFormulaireScreen> {
       ),
       child: chantier == null
           ? const Center(child: Text('Chantier introuvable'))
-          : Stepper(
-              currentStep: _currentStep,
-              onStepTapped: _isSubmitting ? null : (step) => setState(() => _currentStep = step),
-              onStepContinue: _stepSuivant,
-              onStepCancel: _stepPrecedent,
-              controlsBuilder: (context, details) => _buildControls(context, details),
-              steps: [
-                _stepIdentite(chantier),
-                _stepSection(0),
-                _stepSection(1),
-                _stepServicesEtTextes(),
-                _stepSignature(chantier),
-              ],
-            ),
+          : _currentStep == 4
+              // L'étape Signature n'est PAS un Step du Stepper ci-dessous —
+              // voir _buildSignatureStep pour pourquoi (un Step.content est
+              // rendu dans une colonne à hauteur non bornée, ce qui rend
+              // impossible tout footer réellement fixe pour cette étape).
+              ? _buildSignatureStep(chantier)
+              : SingleChildScrollView(
+                  // Le Stepper n'est PAS scrollable par lui-même (voir sa
+                  // documentation) : sans cet ancêtre scrollable, un contenu
+                  // d'étape trop long pour l'écran pousse le bouton
+                  // "Suivant" hors de la zone visible, sans aucun moyen d'y
+                  // accéder — cause plausible du bouton "invisible" signalé
+                  // en production.
+                  child: Stepper(
+                    currentStep: _currentStep,
+                    onStepTapped: _isSubmitting ? null : (step) => setState(() => _currentStep = step),
+                    onStepContinue: _stepSuivant,
+                    onStepCancel: _stepPrecedent,
+                    controlsBuilder: (context, details) => _buildControls(context, details),
+                    steps: [
+                      _stepIdentite(chantier),
+                      _stepSection(0),
+                      _stepSection(1),
+                      _stepServicesEtTextes(),
+                    ],
+                  ),
+                ),
     );
   }
 
   Widget _buildControls(BuildContext context, ControlsDetails details) {
-    final estDerniere = _currentStep == 4;
-    final questionsSansReponse = _reponses.nombreQuestionsSansReponse;
     return Padding(
       padding: const EdgeInsets.only(top: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
+      child: Row(
         children: [
-          Row(
-            children: [
-              if (_currentStep > 0)
-                TextButton(onPressed: _isSubmitting ? null : details.onStepCancel, child: const Text('Précédent')),
-              const Spacer(),
-              if (!estDerniere)
-                ElevatedButton(onPressed: details.onStepContinue, child: const Text('Suivant'))
-              else
-                ElevatedButton.icon(
-                  onPressed: _peutValider ? _valider : null,
-                  icon: _isSubmitting
-                      ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Icon(Icons.check_circle_outline, size: 18),
-                  label: const Text('Valider le procès-verbal'),
-                ),
-            ],
-          ),
-          if (estDerniere && questionsSansReponse > 0) ...[
-            const SizedBox(height: 6),
-            Text(
-              '$questionsSansReponse question${questionsSansReponse > 1 ? 's' : ''} sans réponse — voir les étapes marquées d\'un point rouge.',
-              style: const TextStyle(fontSize: 11.5, color: AppColors.rouge),
-            ),
-          ],
+          if (_currentStep > 0)
+            TextButton(onPressed: _isSubmitting ? null : details.onStepCancel, child: const Text('Précédent')),
+          const Spacer(),
+          ElevatedButton(onPressed: details.onStepContinue, child: const Text('Suivant')),
         ],
       ),
+    );
+  }
+
+  /// Étape Signature, hors du Stepper : Column → contenu scrollable
+  /// (Expanded + SingleChildScrollView) → footer FIXE (Précédent/Valider),
+  /// jamais poussé hors écran quel que soit le contenu au-dessus ou la
+  /// taille de l'écran — voir aussi _raisonBlocage pour le texte d'aide.
+  Widget _buildSignatureStep(Chantier chantier) {
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: _signatureStepContent(chantier),
+          ),
+        ),
+        SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+            child: _buildFooterValidation(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFooterValidation() {
+    final raison = _raisonBlocage;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (raison != null) ...[
+          Text(raison, textAlign: TextAlign.center, style: const TextStyle(fontSize: 12, color: AppColors.rouge)),
+          const SizedBox(height: 8),
+        ],
+        Row(
+          children: [
+            TextButton(onPressed: _isSubmitting ? null : _stepPrecedent, child: const Text('Précédent')),
+            const Spacer(),
+            // Toujours rendu, jamais masqué — seul son état actif/grisé
+            // change (voir _peutValider) : l'installateur voit toujours le
+            // bout de son parcours.
+            ElevatedButton.icon(
+              onPressed: _peutValider ? _valider : null,
+              icon: _isSubmitting
+                  ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.check_circle_outline, size: 18),
+              label: const Text('Valider le procès-verbal'),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -350,14 +412,12 @@ class _PvFormulaireScreenState extends State<PvFormulaireScreen> {
     );
   }
 
-  Step _stepSignature(Chantier chantier) {
-    return Step(
-      title: const Text('Signature'),
-      isActive: _currentStep >= 4,
-      state: StepState.indexed,
-      content: Column(
+  Widget _signatureStepContent(Chantier chantier) {
+    return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const Text('Signature', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: AppColors.encre)),
+          const SizedBox(height: 12),
           ListTile(
             contentPadding: EdgeInsets.zero,
             title: const Text('Date de réception'),
@@ -396,8 +456,7 @@ class _PvFormulaireScreenState extends State<PvFormulaireScreen> {
             ),
           ),
         ],
-      ),
-    );
+      );
   }
 
   Future<void> _choisirDate() async {
