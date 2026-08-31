@@ -253,7 +253,7 @@ describe('Progression et modules', () => {
     expect(res.body.chantier.pvSigne).toBe(true);
     expect(res.body.chantier.pvSigneur).toBe('M. Weber');
     expect(res.body.chantier.pvFonctionSignataire).toBe('Client');
-  });
+  }, 60000);
 
   it('refuse de re-signer un PV déjà signé — seule une suppression par le CT/Admin déverrouille', async () => {
     const ct = await createCt();

@@ -13,6 +13,18 @@ const OPENAI_TRANSCRIPTION_URL = 'https://api.openai.com/v1/audio/transcriptions
 // KIND_CONFIG.rexAudio dans routes/uploads.ts).
 const MAX_TRANSCRIBABLE_BYTES = 25 * 1024 * 1024;
 
+// Le conteneur réel dépend de la plateforme qui a enregistré la note vocale
+// (voir lib/core/voice_recorder.dart) : webm/opus sur le Web, ogg/opus sur
+// Android — jamais forcément webm. Whisper se base sur l'extension du nom de
+// fichier fourni pour choisir son démuxeur ; un mauvais type ici peut faire
+// échouer ou dégrader la transcription (voir KIND_CONFIG.rexAudio).
+const EXTENSION_TO_MIME: Record<string, string> = {
+  webm: 'audio/webm',
+  ogg: 'audio/ogg',
+  m4a: 'audio/mp4',
+  mp4: 'audio/mp4',
+};
+
 export async function transcribeAudio(audioUrl: string): Promise<string | null> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return null;
@@ -23,9 +35,15 @@ export async function transcribeAudio(audioUrl: string): Promise<string | null> 
     const audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
     if (audioBuffer.byteLength === 0 || audioBuffer.byteLength > MAX_TRANSCRIBABLE_BYTES) return null;
 
+    const extension = new URL(audioUrl).pathname.split('.').pop()?.toLowerCase() ?? 'webm';
+    const mimeType = EXTENSION_TO_MIME[extension] ?? 'audio/webm';
+
     const form = new FormData();
-    form.append('file', new Blob([audioBuffer], { type: 'audio/webm' }), 'rex.webm');
+    form.append('file', new Blob([audioBuffer], { type: mimeType }), `rex.${extension}`);
     form.append('model', 'whisper-1');
+    // Sans ce paramètre, Whisper détecte la langue automatiquement et peut se
+    // tromper (notamment sur un audio court ou bruité) — le REX est toujours
+    // en français, donc jamais utile de laisser la détection deviner.
     form.append('language', 'fr');
 
     // Le REX est déjà enregistré avant cet appel (voir routes/chantiers.ts),

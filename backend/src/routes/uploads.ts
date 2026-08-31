@@ -18,7 +18,11 @@ const KIND_CONFIG: Record<string, { allowedContentTypes: string[]; maximumSizeIn
   avatar: { allowedContentTypes: ['image/jpeg', 'image/png'], maximumSizeInBytes: 10 * 1024 * 1024 },
   habilitation: { allowedContentTypes: ['application/pdf', 'image/jpeg', 'image/png'], maximumSizeInBytes: 25 * 1024 * 1024 },
   pointPhoto: { allowedContentTypes: ['image/jpeg', 'image/png'], maximumSizeInBytes: 25 * 1024 * 1024 },
-  rexAudio: { allowedContentTypes: ['audio/webm'], maximumSizeInBytes: 50 * 1024 * 1024 },
+  // audio/webm : Web (MediaRecorder du navigateur) ; audio/ogg : Android
+  // (encodeur Opus natif, conteneur OGG — voir record_android, jamais du
+  // webm malgré l'ancien nom de fichier) ; audio/mp4 : iOS le cas échéant
+  // (Opus dans un conteneur M4A côté AVFoundation).
+  rexAudio: { allowedContentTypes: ['audio/webm', 'audio/ogg', 'audio/mp4'], maximumSizeInBytes: 50 * 1024 * 1024 },
   documentTerrain: {
     allowedContentTypes: ['application/pdf', 'image/jpeg', 'image/png', 'video/mp4', 'video/webm'],
     maximumSizeInBytes: 100 * 1024 * 1024,

@@ -134,6 +134,30 @@ flutter run                 # Mobile — émulateur ou appareil connecté
 > de votre machine (Windows : `ipconfig`, carte Wi-Fi, ligne "Adresse IPv4"),
 > téléphone et PC sur le même réseau Wi-Fi.
 
+> **Activer le micro sur un appareil réel (note vocale REX)** : la
+> permission micro n'est jamais accordée automatiquement, même quand
+> `AndroidManifest.xml` la déclare — le système demande confirmation à
+> l'exécution, à la première pression sur le bouton micro de l'écran REX.
+> - **Android (`flutter run`, build natif)** : une pop-up système apparaît au
+>   premier enregistrement. Si elle a été refusée par erreur (ou refusée
+>   "ne plus demander"), l'app affiche un bouton **Réglages** qui ouvre
+>   directement la page de permissions de l'app — sinon : **Paramètres du
+>   téléphone > Applications > Vertical > Autorisations > Microphone**.
+> - **PWA (Chrome/Safari, installateurs en production)** : c'est le
+>   navigateur qui demande la permission (pas l'app), au premier
+>   enregistrement également. Si refusée : sur Chrome, icône de cadenas/ⓘ
+>   dans la barre d'adresse > Autorisations du site > Microphone ; sur
+>   Safari iOS, réglages du site accessibles depuis le bouton `AA` dans la
+>   barre d'adresse, ou **Réglages iOS > Safari > [site] > Microphone**.
+> - **iOS natif** : ce projet n'a pas de cible iOS native (`ios/` n'existe
+>   pas) — la distribution installateur sur iPhone/iPad passe exclusivement
+>   par la PWA Safari (voir section 6). Si une app iOS native est ajoutée un
+>   jour (`flutter create --platforms=ios .`), il faudra alors déclarer dans
+>   `ios/Runner/Info.plist` : `NSMicrophoneUsageDescription` (ex. "Le micro
+>   est utilisé pour dicter votre retour d'expérience (REX).") et
+>   `NSSpeechRecognitionUsageDescription` (reconnaissance vocale en direct,
+>   voir `speech_to_text` dans `rex_screen.dart`).
+
 ### 4.5. Tests & vérifications
 
 ```bash

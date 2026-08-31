@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'dart:async';
@@ -95,11 +96,16 @@ class _RexScreenState extends State<RexScreen> with SingleTickerProviderStateMix
       return;
     }
 
-    final started = await _recorder.start();
+    final result = await _recorder.start();
     if (!mounted) return;
-    if (!started) {
+    if (result != VoiceRecorderStartResult.started) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Micro indisponible — vérifiez l\'autorisation d\'accès.')),
+        result == VoiceRecorderStartResult.permissionPermanentlyDenied
+            ? SnackBar(
+                content: const Text('Micro refusé. Activez-le dans les réglages du téléphone.'),
+                action: SnackBarAction(label: 'Réglages', onPressed: openAppSettings),
+              )
+            : const SnackBar(content: Text('Micro indisponible — vérifiez l\'autorisation d\'accès.')),
       );
       return;
     }
@@ -129,6 +135,11 @@ class _RexScreenState extends State<RexScreen> with SingleTickerProviderStateMix
             partialResults: true,
             listenFor: const Duration(minutes: 5),
             pauseFor: const Duration(seconds: 10),
+            // Sans ça, la reconnaissance suit la langue système de
+            // l'appareil — correcte par défaut sur un téléphone configuré en
+            // français, mais fausse dès que ce n'est pas le cas alors que
+            // l'app (et le témoignage client) sont toujours en français.
+            localeId: 'fr_FR',
           ),
         );
       } catch (e) {
