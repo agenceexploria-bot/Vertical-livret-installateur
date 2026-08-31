@@ -28,8 +28,12 @@ export async function transcribeAudio(audioUrl: string): Promise<string | null> 
     form.append('model', 'whisper-1');
     form.append('language', 'fr');
 
+    // Le REX est déjà enregistré avant cet appel (voir routes/chantiers.ts),
+    // mais celui-ci reste dans le chemin de la requête HTTP — un délai trop
+    // généreux risquerait de dépasser le temps d'exécution maximum d'une
+    // fonction serverless Vercel (10 s par défaut sur le plan Hobby).
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20_000);
+    const timeout = setTimeout(() => controller.abort(), 8_000);
     let response: Response;
     try {
       response = await fetch(OPENAI_TRANSCRIPTION_URL, {

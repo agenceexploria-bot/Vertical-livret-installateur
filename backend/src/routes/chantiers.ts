@@ -6,6 +6,7 @@ import { serializeChantier } from '../serializers';
 import { requireAuth, requireRole, AuthedRequest } from '../middleware/auth';
 import { saveBuffer, deleteBlobFile, isOwnBlobUrl } from '../lib/imageStorage';
 import { fetchBlobFile, fusionnerSignatureDansPdf } from '../lib/pvMerge';
+import { genererPdfPvFormulaire, PvFormReponses } from '../lib/pvFormPdf';
 import { isPointComplete } from '../lib/pointControleStatus';
 import { transcribeAudio } from '../lib/transcription';
 import { triggerChantierChanged, triggerChantierDeleted, triggerNotificationCreated } from '../lib/pusher';
@@ -397,20 +398,30 @@ chantiersRouter.post('/:reference/rex', requireAuth, requireRattachement, async 
     return res.status(400).json({ error: 'URL de fichier invalide' });
   }
 
-  // Si l'installateur n'a pas dicté (ou corrigé) de texte côté app —
-  // reconnaissance vocale en direct indisponible ou silencieuse —, on tente
-  // une transcription automatique côté serveur sur l'audio déjà déposé. Ne
-  // bloque jamais la création du REX (voir transcribeAudio).
-  const transcription =
-    parsed.data.transcription ?? (parsed.data.audioUrl ? await transcribeAudio(parsed.data.audioUrl) : undefined);
-
-  await prisma.rex.create({
+  // Le REX est créé tout de suite, avant la transcription automatique — si
+  // cette dernière traîne au point de dépasser le temps d'exécution alloué à
+  // la fonction serverless (Whisper peut être lent), le REX (texte et/ou
+  // audio) est déjà enregistré plutôt que perdu avec toute la requête.
+  const rex = await prisma.rex.create({
     data: {
       chantierId: req.chantier!.id,
-      transcription,
+      transcription: parsed.data.transcription,
       audioPath: parsed.data.audioUrl,
     },
   });
+
+  // Si l'installateur n'a pas dicté (ou corrigé) de texte côté app —
+  // reconnaissance vocale en direct indisponible ou silencieuse —, on tente
+  // une transcription automatique côté serveur sur l'audio déjà déposé, et on
+  // met à jour l'entrée déjà créée. Ne bloque jamais la création du REX (voir
+  // transcribeAudio) : un échec ou un dépassement de délai laisse
+  // simplement le REX sans transcription, comme avant l'ajout de Whisper.
+  if (!parsed.data.transcription && parsed.data.audioUrl) {
+    const transcription = await transcribeAudio(parsed.data.audioUrl);
+    if (transcription) {
+      await prisma.rex.update({ where: { id: rex.id }, data: { transcription } });
+    }
+  }
 
   const chantier = await prisma.chantier.findUnique({
     where: { reference: req.params.reference },
@@ -565,10 +576,114 @@ chantiersRouter.post(
   },
 );
 
+const pvChecklistReponseSchema = z.object({
+  id: z.string().min(1),
+  reponse: z.enum(['oui', 'non']).nullable(),
+  observation: z.string().optional().nullable(),
+});
+
+const pvReponsesSchema = z.object({
+  identite: z.object({
+    maitreOeuvre: z.string().optional().nullable(),
+    operation: z.string().optional().nullable(),
+    lot: z.string().optional().nullable(),
+  }),
+  receptionInstallation: z.array(pvChecklistReponseSchema),
+  documentsRemis: z.array(pvChecklistReponseSchema),
+  servicesSupplementaires: z.array(pvChecklistReponseSchema),
+  natureDePose: z.array(z.string()),
+  quantite: z.string().optional().nullable(),
+  reserves: z.string().optional().nullable(),
+  remarques: z.string().optional().nullable(),
+  temoignageClient: z.string().optional().nullable(),
+}) satisfies z.ZodType<PvFormReponses>;
+
+const pvFormulaireSchema = z.object({
+  reponses: pvReponsesSchema,
+  dateReception: z.string().min(1),
+  nomSignataire: z.string().min(1),
+  fonctionSignataire: z.string().min(1),
+  signatureImage: z.string().min(1, "L'image de la signature est requise"),
+});
+
+// Nouveau flux (formulaire PV interactif, voir pvFormPdf.ts) : contrairement
+// à .../pv/signature (qui superpose la signature sur un gabarit PDF déjà
+// déposé), ici il n'y a pas de gabarit — le backend génère le PDF final de
+// toutes pièces à partir des réponses du formulaire + la signature. Réservé
+// aux chantiers qui n'utilisent PAS l'ancien flux (pvPdfPath == null) ; même
+// verrou qu'ailleurs, un PV déjà signé ne se re-signe pas.
+chantiersRouter.post(
+  '/:reference/pv/reponses',
+  requireAuth,
+  requireRole('installateur'),
+  requireRattachement,
+  async (req, res) => {
+    const parsed = pvFormulaireSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+    if (!isPngDataUrl(parsed.data.signatureImage)) {
+      return res.status(400).json({ error: 'La signature doit être une image PNG' });
+    }
+    const dateReception = new Date(parsed.data.dateReception);
+    if (Number.isNaN(dateReception.getTime())) {
+      return res.status(400).json({ error: 'Date de réception invalide' });
+    }
+
+    const existing = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
+    if (!existing) return res.status(404).json({ error: 'Chantier introuvable' });
+    if (existing.pvPdfPath) {
+      return res.status(400).json({ error: 'Ce chantier utilise le dépôt de gabarit PDF — voir la signature classique du PV' });
+    }
+    if (existing.pvSigne) {
+      return res.status(400).json({ error: 'Ce PV est déjà signé — seul le CT/Admin peut le réinitialiser en le supprimant' });
+    }
+
+    let pdfBytes: Buffer;
+    try {
+      const signatureBytes = Buffer.from(parsed.data.signatureImage.split(',')[1] ?? '', 'base64');
+      pdfBytes = await genererPdfPvFormulaire({
+        chantier: {
+          reference: existing.reference,
+          client: existing.client,
+          adresse: existing.adresse,
+          referenceAffaire: existing.referenceAffaire,
+          contactNom: existing.contactNom,
+        },
+        reponses: parsed.data.reponses,
+        dateReception,
+        nomSignataire: parsed.data.nomSignataire,
+        fonctionSignataire: parsed.data.fonctionSignataire,
+        signaturePngBytes: signatureBytes,
+      });
+    } catch (err) {
+      console.error('Génération du PDF du PV interactif échouée:', err);
+      return res.status(502).json({ error: 'Impossible de générer le PDF du PV, réessayez.' });
+    }
+
+    if (existing.pvSignatureImagePath) await deleteBlobFile(existing.pvSignatureImagePath);
+    const pvSignatureImagePath = await saveBuffer(pdfBytes, `pv-signe-${existing.id}`, 'application/pdf');
+
+    const chantier = await prisma.chantier.update({
+      where: { reference: req.params.reference },
+      data: {
+        pvReponses: JSON.stringify(parsed.data.reponses),
+        pvSigne: true,
+        pvSigneur: parsed.data.nomSignataire,
+        pvFonctionSignataire: parsed.data.fonctionSignataire,
+        pvSigneAt: new Date(),
+        pvSignatureImagePath,
+      },
+      include: CHANTIER_INCLUDE,
+    });
+    await triggerChantierChanged(chantier.reference);
+    res.json({ chantier: serializeChantier(chantier) });
+  },
+);
+
 // Supprime définitivement le PV d'un chantier (gabarit ET signature
-// éventuelle) — réservé au CT/Admin, comme pour le REX. Contrairement à un
-// remplacement du gabarit (POST .../pv/document, qui invalide juste la
-// signature), la suppression efface tout, y compris les fichiers sur Vercel Blob.
+// éventuelle, quel que soit le flux utilisé) — réservé au CT/Admin, comme
+// pour le REX. Contrairement à un remplacement du gabarit (POST
+// .../pv/document, qui invalide juste la signature), la suppression efface
+// tout, y compris les fichiers sur Vercel Blob.
 chantiersRouter.delete('/:reference/pv', requireAuth, requireRole('coordinateurTravaux', 'admin'), async (req, res) => {
   const existing = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
   if (!existing) return res.status(404).json({ error: 'Chantier introuvable' });
@@ -583,6 +698,7 @@ chantiersRouter.delete('/:reference/pv', requireAuth, requireRole('coordinateurT
     where: { reference: req.params.reference },
     data: {
       pvPdfPath: null,
+      pvReponses: null,
       pvSigne: false,
       pvSigneur: null,
       pvFonctionSignataire: null,

@@ -3,6 +3,7 @@ import '../data/models/chantier.dart';
 import '../data/models/document_chantier.dart';
 import '../data/models/document_terrain.dart';
 import '../data/models/point_controle.dart';
+import '../data/models/pv_reponses.dart';
 import '../data/models/user.dart';
 import '../data/repositories/chantier_repository.dart';
 
@@ -268,6 +269,27 @@ class ChantierState extends ChangeNotifier {
       y: y,
       width: width,
       height: height,
+    );
+    _replaceInList(updated);
+  }
+
+  /// Validation du formulaire PV interactif (voir pv_formulaire_screen.dart) —
+  /// le backend génère le PDF final à partir de [reponses] et de la signature.
+  Future<void> submitPvFormulaire(
+    String reference, {
+    required PvFormReponses reponses,
+    required DateTime dateReception,
+    required String nomSignataire,
+    required String fonctionSignataire,
+    required String signatureImage,
+  }) async {
+    final updated = await _repository.submitPvFormulaire(
+      reference,
+      reponses: reponses,
+      dateReception: dateReception,
+      nomSignataire: nomSignataire,
+      fonctionSignataire: fonctionSignataire,
+      signatureImage: signatureImage,
     );
     _replaceInList(updated);
   }

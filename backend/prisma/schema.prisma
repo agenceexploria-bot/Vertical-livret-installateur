@@ -105,12 +105,19 @@ model Chantier {
   niveaux           Int
   referenceAffaire  String
   syncStatus        String   @default("nouveau")
-  // PV de réception : le back-office dépose un gabarit PDF (pvPdfPath), qui
-  // n'est PAS encore validé — l'installateur le consulte, fait signer le
-  // client et renseigne son nom/sa fonction ; ce n'est qu'à ce moment que
-  // pvSigne passe à true et que le PDF final (signature intégrée) est
-  // enregistré dans pvSignatureImagePath. Voir refonte du workflow PV.
+  // PV de réception, deux flux possibles :
+  // - Historique : le back-office dépose un gabarit PDF (pvPdfPath), non
+  //   encore validé, que l'installateur fait signer directement dessus (voir
+  //   POST .../pv/signature).
+  // - Depuis la refonte : formulaire interactif basé sur le gabarit officiel
+  //   Vertical, réponses enregistrées en JSON dans pvReponses (voir POST
+  //   .../pv/reponses et backend/src/lib/pvFormPdf.ts) — pvPdfPath reste
+  //   `null` dans ce cas, c'est ce qui distingue les deux flux côté app.
+  // Dans les deux cas, ce n'est qu'à la signature que pvSigne passe à true et
+  // que le PDF final (signature intégrée) est enregistré dans
+  // pvSignatureImagePath.
   pvPdfPath            String?
+  pvReponses           String?   // JSON-encodé (formulaire interactif, voir pvFormPdf.ts)
   pvSigne              Boolean  @default(false)
   pvSigneur            String?
   pvFonctionSignataire String?

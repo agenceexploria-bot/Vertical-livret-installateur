@@ -21,6 +21,7 @@ import '../screens/installateur/modules/auto_controle_screen.dart';
 import '../screens/installateur/modules/rex_screen.dart';
 import '../screens/installateur/modules/docs_terrain_screen.dart';
 import '../screens/client/signature_screen.dart';
+import '../screens/client/pv_formulaire_screen.dart';
 import '../screens/client/confirmation_screen.dart';
 import '../screens/coordinateur_travaux/ct_home_screen.dart';
 import '../screens/coordinateur_travaux/ct_validation_screen.dart';
@@ -236,6 +237,10 @@ class AppRouter {
           ],
         ),
         GoRoute(path: '/signature', builder: (context, state) => const SignatureScreen()),
+        // Formulaire PV interactif (gabarit officiel Vertical) — remplace la
+        // signature directe sur PDF pour tout chantier sans gabarit déjà
+        // déposé (voir la bascule dans chantier_details_screen.dart).
+        GoRoute(path: '/pv-formulaire', builder: (context, state) => const PvFormulaireScreen()),
         GoRoute(path: '/confirmation', builder: (context, state) => const ConfirmationScreen()),
         GoRoute(path: '/profil', builder: (context, state) => const ProfilScreen()),
 

@@ -4,6 +4,7 @@ import '../models/user.dart';
 import '../models/chantier.dart';
 import '../models/point_controle.dart';
 import '../models/document_terrain.dart';
+import '../models/pv_reponses.dart';
 
 class ChantierRepository {
   final ApiClient _api;
@@ -234,6 +235,27 @@ class ChantierRepository {
       y: y,
       width: width,
       height: height,
+    );
+    return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
+  }
+
+  /// Validation du formulaire PV interactif — toujours en ligne, comme
+  /// [signPv] (la génération du PDF se fait côté serveur).
+  Future<Chantier> submitPvFormulaire(
+    String reference, {
+    required PvFormReponses reponses,
+    required DateTime dateReception,
+    required String nomSignataire,
+    required String fonctionSignataire,
+    required String signatureImage,
+  }) async {
+    final data = await _api.postPvReponses(
+      reference,
+      reponses: reponses.toJson(),
+      dateReception: dateReception.toIso8601String().split('T').first,
+      nomSignataire: nomSignataire,
+      fonctionSignataire: fonctionSignataire,
+      signatureImage: signatureImage,
     );
     return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
   }

@@ -510,6 +510,28 @@ class ApiClient {
     });
   }
 
+  /// Validation du formulaire PV interactif par l'installateur — contrairement
+  /// à [signPv] (signature sur un gabarit PDF déjà déposé), il n'y a pas de
+  /// gabarit ici : le backend génère le PDF final de toutes pièces à partir
+  /// de [reponses] et de la signature (voir backend/src/lib/pvFormPdf.ts).
+  /// [dateReception] au format `AAAA-MM-JJ`.
+  Future<Map<String, dynamic>> postPvReponses(
+    String reference, {
+    required Map<String, dynamic> reponses,
+    required String dateReception,
+    required String nomSignataire,
+    required String fonctionSignataire,
+    required String signatureImage,
+  }) {
+    return _request('POST', '/chantiers/$reference/pv/reponses', body: {
+      'reponses': reponses,
+      'dateReception': dateReception,
+      'nomSignataire': nomSignataire,
+      'fonctionSignataire': fonctionSignataire,
+      'signatureImage': signatureImage,
+    });
+  }
+
   /// Supprime définitivement le PV d'un chantier (CT/Admin) — gabarit et
   /// signature éventuelle.
   Future<Map<String, dynamic>> deletePv(String reference) =>

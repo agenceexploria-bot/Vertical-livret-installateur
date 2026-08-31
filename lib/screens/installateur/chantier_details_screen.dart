@@ -66,16 +66,20 @@ class ChantierDetailsScreen extends StatelessWidget {
       _ModuleItem(
         index: 6,
         titre: 'Procès-verbal de réception',
+        // pvPdfPath == null signale le nouveau flux (formulaire interactif,
+        // aucun gabarit à attendre du back-office) — voir la refonte du PV.
         sousTitre: chantier.pvSigne
             ? 'Signé par ${chantier.pvSigneur ?? 'le client'}'
             : chantier.pvEnAttenteSignature
                 ? 'À faire signer par le client'
                 : chantier.canSignPV
-                    ? 'En attente du PV (back-office)'
+                    ? 'À faire signer par le client'
                     : 'Verrouillé — terminer l\'auto-contrôle',
         icon: Icons.draw_outlined,
         isLocked: !chantier.pvSigne && !chantier.canSignPV && !chantier.pvEnAttenteSignature,
-        onTap: () => context.push(chantier.pvSigne ? '/confirmation' : '/signature'),
+        onTap: () => context.push(chantier.pvSigne
+            ? '/confirmation'
+            : chantier.pvPdfPath != null ? '/signature' : '/pv-formulaire'),
       ),
       _ModuleItem(
         index: 7,

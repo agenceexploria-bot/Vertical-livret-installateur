@@ -9,6 +9,7 @@ import { resetDb, signup as doSignup } from './helpers';
 
 const ONE_PX_PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+const SIGNATURE_PNG_DATA_URL = `data:image/png;base64,${ONE_PX_PNG_BASE64}`;
 
 const app = createApp();
 
@@ -21,6 +22,17 @@ async function fakeUpload(filename: string, base64: string, contentType: string)
   const uniqueFilename = `${Date.now()}-${Math.round(Math.random() * 1e6)}-${filename}`;
   const { url } = await put(uniqueFilename, Buffer.from(base64, 'base64'), { access: 'public', contentType });
   return url;
+}
+
+// Un vrai PDF valide est nécessaire depuis que la signature fusionne le
+// gabarit côté serveur avec pdf-lib (voir pvMerge.ts) — contrairement à
+// l'ancien flux, où le fichier reçu par /pv/signature n'était jamais
+// réellement ouvert/parsé côté backend (déjà fusionné côté app).
+async function minimalPdfFileUrl(): Promise<string> {
+  const doc = await PDFDocument.create();
+  doc.addPage([595, 842]);
+  const bytes = await doc.save();
+  return fakeUpload('gabarit.pdf', Buffer.from(bytes).toString('base64'), 'application/pdf');
 }
 
 async function createCt() {
@@ -200,20 +212,8 @@ describe('Progression et modules', () => {
     expect(patch.body.point.photoPath).toBe(photoUrl);
   });
 
-  // Un vrai PDF valide est nécessaire depuis que la signature fusionne le
-  // gabarit côté serveur avec pdf-lib (voir pvMerge.ts) — contrairement à
-  // l'ancien flux, où le fichier reçu par /pv/signature n'était jamais
-  // réellement ouvert/parsé côté backend (déjà fusionné côté app).
-  async function minimalPdfFileUrl(): Promise<string> {
-    const doc = await PDFDocument.create();
-    doc.addPage([595, 842]);
-    const bytes = await doc.save();
-    return fakeUpload('gabarit.pdf', Buffer.from(bytes).toString('base64'), 'application/pdf');
-  }
-
-  const SIGNATURE_PNG_DATA_URL = `data:image/png;base64,${ONE_PX_PNG_BASE64}`;
   // Emplacement quelconque, valide pour une page A4 (595 x 842 pts) — voir
-  // minimalPdfFileUrl ci-dessus.
+  // minimalPdfFileUrl (échelle module, tout en haut du fichier).
   const SIGNATURE_PLACEMENT = { pageNumber: 1, x: 350, y: 80, width: 180, height: 70 };
 
   it('le CT dépose le gabarit PV — ne le valide pas', async () => {
@@ -330,6 +330,138 @@ describe('Progression et modules', () => {
     const imagePath = res.body.chantier.pvSignatureImagePath as string;
     expect(imagePath).toMatch(/^https:\/\/teststoreid\.public\.blob\.vercel-storage\.com\/test\/pv-signe-.+\.pdf$/);
   }, 30000);
+});
+
+describe('POST /chantiers/:reference/pv/reponses (formulaire PV interactif)', () => {
+  const REPONSES_MINIMALES = {
+    identite: { maitreOeuvre: 'SCI Duval', operation: 'Rénovation', lot: 'Lot 4' },
+    receptionInstallation: [{ id: '1.1', reponse: 'oui', observation: null }],
+    documentsRemis: [{ id: '2.1', reponse: 'non', observation: 'À transmettre plus tard' }],
+    servicesSupplementaires: [{ id: '3.1', reponse: 'non', observation: null }],
+    natureDePose: ['Monte-charge accompagné'],
+    quantite: '1',
+    reserves: 'Grincement rail gauche',
+    remarques: 'RAS en dehors des réserves.',
+    temoignageClient: 'Équipe professionnelle.',
+  };
+
+  async function rattacherInstallateur(ctToken: string) {
+    const installateur = await createInstallateur({ isActive: true });
+    await request(app)
+      .post('/chantiers/LD64397/rattacher')
+      .set('Authorization', `Bearer ${ctToken}`)
+      .send({ userId: installateur.user.id });
+    return installateur;
+  }
+
+  it('génère le PDF, verrouille le PV et enregistre les réponses', async () => {
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
+    const installateur = await rattacherInstallateur(ct.accessToken);
+
+    const res = await request(app)
+      .post('/chantiers/LD64397/pv/reponses')
+      .set('Authorization', `Bearer ${installateur.accessToken}`)
+      .send({
+        reponses: REPONSES_MINIMALES,
+        dateReception: '2026-08-28',
+        nomSignataire: 'M. Weber',
+        fonctionSignataire: 'Client',
+        signatureImage: SIGNATURE_PNG_DATA_URL,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.chantier.pvSigne).toBe(true);
+    expect(res.body.chantier.pvSigneur).toBe('M. Weber');
+    expect(res.body.chantier.pvFonctionSignataire).toBe('Client');
+    expect(res.body.chantier.pvSignatureImagePath).toMatch(/\.pdf$/);
+  }, 60000);
+
+  it('accepte des champs optionnels envoyés à null (comportement du client Flutter quand ils sont laissés vides)', async () => {
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
+    const installateur = await rattacherInstallateur(ct.accessToken);
+
+    const res = await request(app)
+      .post('/chantiers/LD64397/pv/reponses')
+      .set('Authorization', `Bearer ${installateur.accessToken}`)
+      .send({
+        reponses: {
+          ...REPONSES_MINIMALES,
+          identite: { maitreOeuvre: null, operation: null, lot: null },
+          quantite: null,
+          reserves: null,
+          remarques: null,
+          temoignageClient: null,
+        },
+        dateReception: '2026-08-28',
+        nomSignataire: 'M. Weber',
+        fonctionSignataire: 'Client',
+        signatureImage: SIGNATURE_PNG_DATA_URL,
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.chantier.pvSigne).toBe(true);
+  }, 60000);
+
+  it('refuse si le chantier utilise déjà le gabarit PDF (ancien flux)', async () => {
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
+    const installateur = await rattacherInstallateur(ct.accessToken);
+    await request(app)
+      .post('/chantiers/LD64397/pv/document')
+      .set('Authorization', `Bearer ${ct.accessToken}`)
+      .send({ fileUrl: await minimalPdfFileUrl() });
+
+    const res = await request(app)
+      .post('/chantiers/LD64397/pv/reponses')
+      .set('Authorization', `Bearer ${installateur.accessToken}`)
+      .send({
+        reponses: REPONSES_MINIMALES,
+        dateReception: '2026-08-28',
+        nomSignataire: 'M. Weber',
+        fonctionSignataire: 'Client',
+        signatureImage: SIGNATURE_PNG_DATA_URL,
+      });
+    expect(res.status).toBe(400);
+  }, 60000);
+
+  it('refuse de re-signer un PV déjà validé via le formulaire', async () => {
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
+    const installateur = await rattacherInstallateur(ct.accessToken);
+    const body = {
+      reponses: REPONSES_MINIMALES,
+      dateReception: '2026-08-28',
+      nomSignataire: 'M. Weber',
+      fonctionSignataire: 'Client',
+      signatureImage: SIGNATURE_PNG_DATA_URL,
+    };
+    await request(app).post('/chantiers/LD64397/pv/reponses').set('Authorization', `Bearer ${installateur.accessToken}`).send(body);
+
+    const second = await request(app)
+      .post('/chantiers/LD64397/pv/reponses')
+      .set('Authorization', `Bearer ${installateur.accessToken}`)
+      .send(body);
+    expect(second.status).toBe(400);
+  }, 60000);
+
+  it('rejette un rôle non installateur', async () => {
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
+
+    const res = await request(app)
+      .post('/chantiers/LD64397/pv/reponses')
+      .set('Authorization', `Bearer ${ct.accessToken}`)
+      .send({
+        reponses: REPONSES_MINIMALES,
+        dateReception: '2026-08-28',
+        nomSignataire: 'M. Weber',
+        fonctionSignataire: 'Client',
+        signatureImage: SIGNATURE_PNG_DATA_URL,
+      });
+    expect(res.status).toBe(403);
+  });
 });
 
 describe('POST /chantiers/:reference/rex', () => {
