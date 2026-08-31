@@ -13,6 +13,20 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
+/// Assemble le callbackUrl transmis à Vercel Blob (voir
+/// ApiClient.uploadFile) à partir d'une origine déjà résolue — pure,
+/// zéro interop JS, donc testable en `flutter test` normal sans avoir besoin
+/// de web ni de kReleaseMode (voir la note "dette technique" du README :
+/// toute logique dans une branche kReleaseMode doit être extraite ainsi).
+/// [origin] `null` = mode dégradé, callbackUrl reste relatif comme avant le
+/// commit qui a introduit currentPageOrigin — acceptable : le webhook Vercel
+/// Blob qui en dépend n'est de toute façon pas exploité par notre code (voir
+/// onUploadCompleted, no-op, côté backend/src/routes/uploads.ts).
+String buildUploadsCallbackUrl({required String baseUrl, required String? origin}) {
+  if (origin != null && origin.isNotEmpty) return '$origin$baseUrl/uploads/token';
+  return '$baseUrl/uploads/token';
+}
+
 class ApiClient {
   /// IP locale du PC de dev sur le Wi-Fi — un téléphone physique ne peut pas
   /// résoudre "localhost" vers le backend qui tourne sur l'ordinateur de dev,
@@ -33,20 +47,48 @@ class ApiClient {
     return kIsWeb ? 'http://localhost:3000' : 'http://$_devMachineLanIp:3000';
   }
 
+  /// Résout l'origine de la page en cascade, sans jamais lever — chaque
+  /// tentative est isolée dans son propre try/catch, la fonction ne peut
+  /// donc STRUCTURELLEMENT jamais faire échouer l'appelant, quel que soit
+  /// l'environnement :
+  /// 1. currentPageOrigin (package:web, `location.origin`) — le plus direct.
+  /// 2. Uri.base (natif `dart:core`, zéro interop JS) — un filet de sécurité
+  ///    différent de (1) : si le paquet package:web ou son binding a un
+  ///    souci, Uri.base est une voie d'accès totalement indépendante à la
+  ///    même information. Sur le Web, Uri.base reflète l'URL de la page
+  ///    (équivalent de location.href) ; sur les autres plateformes, son
+  ///    schéma est `file` et n'a pas d'authority, donc écarté ci-dessous.
+  /// 3. `null` — mode dégradé, voir [buildUploadsCallbackUrl].
+  static String? _resolvePageOrigin() {
+    try {
+      final origin = currentPageOrigin;
+      if (origin != null && origin.isNotEmpty) return origin;
+    } catch (e) {
+      debugPrint('ApiClient._resolvePageOrigin: currentPageOrigin a levé — $e');
+    }
+    try {
+      final base = Uri.base;
+      if (base.scheme.isNotEmpty && base.authority.isNotEmpty) {
+        return '${base.scheme}://${base.authority}';
+      }
+    } catch (e) {
+      debugPrint('ApiClient._resolvePageOrigin: Uri.base a levé — $e');
+    }
+    debugPrint('ApiClient._resolvePageOrigin: aucune origine résolue — callbackUrl restera relatif (mode dégradé)');
+    return null;
+  }
+
   /// URL de rappel transmise à Vercel Blob (voir uploadFile) — contrairement
   /// à [baseUrl], qui reste volontairement relatif en web/prod (le navigateur
   /// le résout tout seul contre l'origine de la page pour NOS propres
   /// appels), cette valeur est une DONNÉE envoyée à l'infrastructure de
   /// Vercel Blob : leur service, pas notre navigateur, doit savoir où
-  /// appeler, donc elle doit toujours être absolue. En mobile/dev, [baseUrl]
-  /// est déjà absolu ; en web/prod, on le préfixe avec l'origine réelle de
-  /// la page (voir currentPageOrigin, qui lit `location.origin`).
+  /// appeler, donc elle doit idéalement être absolue — voir
+  /// [buildUploadsCallbackUrl] (partie pure/testable) et [_resolvePageOrigin]
+  /// (résolution en cascade, ne lève jamais).
   static String get _uploadsCallbackUrl {
-    if (kIsWeb && kReleaseMode) {
-      final origin = currentPageOrigin;
-      if (origin != null) return '$origin$baseUrl/uploads/token';
-    }
-    return '$baseUrl/uploads/token';
+    final origin = (kIsWeb && kReleaseMode) ? _resolvePageOrigin() : null;
+    return buildUploadsCallbackUrl(baseUrl: baseUrl, origin: origin);
   }
 
   String? _accessToken;

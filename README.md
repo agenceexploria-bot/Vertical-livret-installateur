@@ -190,6 +190,21 @@ cd backend && npm test                 # Tests backend (Vitest)
 > `backend/node_modules` (ex. le déplacer dans `backend/` ou lui donner son
 > propre `tsconfig.json`/`node_modules`).
 
+> **Règle d'architecture — logique dans une branche `kReleaseMode`** :
+> `kReleaseMode` (et `kIsWeb && kReleaseMode`) vaut toujours `false` dans
+> `flutter test`, y compris `--platform chrome` — une branche conditionnée
+> dessus n'est donc couverte par **aucun** test automatisé de ce projet,
+> quelle que soit la plateforme de test. Découvert en traquant un bug
+> d'upload en production où le calcul de `callbackUrl` (voir
+> `ApiClient._uploadsCallbackUrl`) vivait entièrement dans une telle branche,
+> sans qu'aucun test ne puisse jamais l'exercer. **Règle** : toute nouvelle
+> logique non triviale à l'intérieur d'une branche `kReleaseMode` doit être
+> extraite en fonction pure prenant ses entrées en paramètres (ex.
+> `buildUploadsCallbackUrl(baseUrl:, origin:)`), pour rester testable en
+> `flutter test` normal — seule la résolution des paramètres eux-mêmes (ici
+> `origin`, via interop web) reste dans la branche, et doit alors être
+> défensive (try/catch en cascade, jamais de valeur qui casse l'appelant).
+
 ### 4.6. Vérifications manuelles terrain
 
 Certains comportements ne sont observables que sur un appareil réel, en
