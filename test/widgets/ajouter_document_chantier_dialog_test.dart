@@ -45,6 +45,34 @@ void main() {
     });
   });
 
+  group('reassignerPremierEnvoyable', () {
+    test('après le retrait du premier fichier, le second devient isFirst (le nom personnalisé s\'y applique)', () {
+      final a = FichierAEnvoyer(fileName: 'a.pdf', bytes: Uint8List.fromList([1]));
+      final b = FichierAEnvoyer(fileName: 'b.pdf', bytes: Uint8List.fromList([2]));
+      final fichiers = [a, b];
+      reassignerPremierEnvoyable(fichiers);
+      expect(a.isFirst, isTrue);
+      expect(b.isFirst, isFalse);
+
+      fichiers.remove(a);
+      reassignerPremierEnvoyable(fichiers);
+      expect(b.isFirst, isTrue, reason: 'b est maintenant le premier fichier envoyable restant');
+    });
+
+    test('ignore les fichiers illisibles, réassigne au premier fichier réellement envoyable', () {
+      final illisible = FichierAEnvoyer(fileName: 'x.pdf', bytes: null, status: EnvoiStatus.echec);
+      final b = FichierAEnvoyer(fileName: 'b.pdf', bytes: Uint8List.fromList([2]));
+      final fichiers = [illisible, b];
+      reassignerPremierEnvoyable(fichiers);
+      expect(illisible.isFirst, isFalse, reason: 'jamais envoyé, ne doit jamais porter le nom personnalisé');
+      expect(b.isFirst, isTrue);
+    });
+
+    test('liste vide : ne plante pas', () {
+      expect(() => reassignerPremierEnvoyable([]), returnsNormally);
+    });
+  });
+
   group('lireDepuisDrop', () {
     test('produit un fichier lisible à partir d\'un XFile déposé', () async {
       final xfile = XFile.fromData(Uint8List.fromList([1, 2, 3]), path: 'notice.docx');

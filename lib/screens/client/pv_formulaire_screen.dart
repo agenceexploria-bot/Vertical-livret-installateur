@@ -50,7 +50,6 @@ class _PvFormulaireScreenState extends State<PvFormulaireScreen> {
   final _nomSignataireCtrl = TextEditingController();
   final _fonctionSignataireCtrl = TextEditingController();
   late final Map<String, TextEditingController> _observationCtrls;
-  final _signatureKey = GlobalKey<SignaturePadState>();
 
   /// Index (0-4) de la section actuellement dépliée — `null` si toutes sont
   /// repliées. Une seule ouverte à la fois (voir _accordionSection) ; fermer
@@ -58,8 +57,17 @@ class _PvFormulaireScreenState extends State<PvFormulaireScreen> {
   int? _openSection = 0;
 
   DateTime _dateReception = DateTime.now();
-  bool _signatureVide = true;
+
+  /// Tracé de signature détenu ICI, pas dans le State de [SignaturePad]
+  /// (widget contrôlé, voir signature_pad.dart) — sans ça, replier la
+  /// section Signature démonterait le pavé et perdrait le tracé
+  /// silencieusement, avec un faux "signature manquante" à la validation
+  /// même après une signature valide (bug corrigé le 2026-09-01).
+  List<Offset?> _signaturePoints = [];
+  Size? _signatureBoxSize;
   bool _isSubmitting = false;
+
+  bool get _signatureVide => signaturePointsEmpty(_signaturePoints);
 
   static const _checklistSections = [
     (pvSection1Titre, pvSection1),
@@ -504,13 +512,19 @@ class _PvFormulaireScreenState extends State<PvFormulaireScreen> {
         Container(
           height: 160,
           decoration: BoxDecoration(border: Border.all(color: AppColors.lignes), borderRadius: BorderRadius.circular(8)),
-          child: SignaturePad(key: _signatureKey, onChanged: (vide) => setState(() => _signatureVide = vide)),
+          child: SignaturePad(
+            points: _signaturePoints,
+            onPointsChanged: (points, boxSize) => setState(() {
+              _signaturePoints = points;
+              if (!boxSize.isEmpty) _signatureBoxSize = boxSize;
+            }),
+          ),
         ),
         const SizedBox(height: 4),
         Align(
           alignment: Alignment.centerRight,
           child: TextButton.icon(
-            onPressed: _isSubmitting ? null : () => setState(() => _signatureKey.currentState?.clear()),
+            onPressed: _isSubmitting ? null : () => setState(() => _signaturePoints = []),
             icon: const Icon(Icons.delete_outline, size: 16),
             label: const Text('Effacer la signature'),
           ),
@@ -533,7 +547,7 @@ class _PvFormulaireScreenState extends State<PvFormulaireScreen> {
     if (!_peutValider) return;
     setState(() => _isSubmitting = true);
     try {
-      final signatureBytes = await _signatureKey.currentState?.capturePng();
+      final signatureBytes = await renderSignaturePng(_signaturePoints, _signatureBoxSize ?? const Size(300, 160));
       if (signatureBytes == null) throw Exception('Signature manquante.');
       final signatureDataUrl = 'data:image/png;base64,${base64Encode(signatureBytes)}';
 

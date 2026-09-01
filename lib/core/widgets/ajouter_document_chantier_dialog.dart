@@ -62,9 +62,11 @@ String mimeForFilename(String fileName) {
 /// perdu l'accès au fichier entre la sélection et la lecture, par exemple) :
 /// même dans ce cas, le fichier reste dans la liste avec [status] = echec et
 /// [erreur] renseigné, jamais retiré silencieusement (voir [lireDepuisPicker]
-/// / [lireDepuisDrop]). [isFirst] fige quel fichier reçoit le nom saisi
-/// dans le champ optionnel, y compris après un retry où l'ordre des statuts
-/// a changé.
+/// / [lireDepuisDrop]). [isFirst] désigne quel fichier reçoit le nom saisi
+/// dans le champ optionnel — réassigné dynamiquement au premier fichier
+/// lisible restant à chaque ajout ou retrait (voir
+/// [reassignerPremierEnvoyable]), pour que ce nom ne se perde jamais
+/// silencieusement si le fichier qui le portait disparaît de la liste.
 class FichierAEnvoyer {
   final String fileName;
   final Uint8List? bytes;
@@ -101,6 +103,25 @@ Future<FichierAEnvoyer> lireDepuisDrop(XFile file) async {
   } catch (e) {
     debugPrint('AjouterDocumentChantierDialog.lireDepuisDrop: échec de lecture de "${file.name}" — $e');
     return FichierAEnvoyer(fileName: file.name, bytes: null, status: EnvoiStatus.echec, erreur: 'Lecture du fichier impossible');
+  }
+}
+
+/// Réassigne isFirst au premier fichier ENVOYABLE (lisible) de [fichiers],
+/// et l'enlève de tous les autres — à appeler après tout ajout ou retrait.
+/// Sans ça, si le fichier qui portait ce drapeau est retiré par
+/// l'utilisateur, ou s'avère illisible dès la sélection (voir
+/// [lireDepuisPicker]/[lireDepuisDrop]), plus aucun fichier ne le porte : le
+/// nom personnalisé saisi dans le dialogue ne s'appliquerait alors plus à
+/// aucun document envoyé, silencieusement.
+void reassignerPremierEnvoyable(List<FichierAEnvoyer> fichiers) {
+  for (final f in fichiers) {
+    f.isFirst = false;
+  }
+  for (final f in fichiers) {
+    if (f.lisible) {
+      f.isFirst = true;
+      return;
+    }
   }
 }
 
@@ -150,8 +171,8 @@ class _AjouterDocumentChantierDialogState extends State<AjouterDocumentChantierD
     if (nouveaux.isEmpty || !mounted) return;
     debugPrint('AjouterDocumentChantierDialog._ajouterEntrees: ${nouveaux.length} fichier(s) — ${nouveaux.map((f) => f.fileName).join(', ')}');
     setState(() {
-      if (_fichiers.isEmpty) nouveaux.first.isFirst = true;
       _fichiers.addAll(nouveaux);
+      reassignerPremierEnvoyable(_fichiers);
     });
   }
 
@@ -273,7 +294,10 @@ class _AjouterDocumentChantierDialogState extends State<AjouterDocumentChantierD
                 fichiers: _fichiers,
                 isSubmitting: _isSubmitting,
                 onRetry: (f) => _envoyer([f]),
-                onRetirer: (f) => setState(() => _fichiers.remove(f)),
+                onRetirer: (f) => setState(() {
+                  _fichiers.remove(f);
+                  reassignerPremierEnvoyable(_fichiers);
+                }),
               ),
             ],
             if (_progression != null) ...[

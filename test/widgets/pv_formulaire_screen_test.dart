@@ -212,6 +212,55 @@ void main() {
     },
   );
 
+  testWidgets(
+    'le tracé de signature survit à la fermeture puis réouverture de sa section (pas de perte au démontage)',
+    (tester) async {
+      await _pumpEcran(tester);
+
+      await _repondreOuiATout(tester); // section 1, déjà ouverte
+      await tester.tap(find.text('Section 2 — Documents remis au client'));
+      await tester.pumpAndSettle();
+      await _repondreOuiATout(tester);
+      await tester.tap(find.text('Section 3 — Services et nature de pose'));
+      await tester.pumpAndSettle();
+      await _repondreOuiATout(tester);
+
+      await tester.tap(find.text('Signature'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.widgetWithText(TextField, 'Nom du signataire (client)'), 'M. Weber');
+      await tester.enterText(find.widgetWithText(TextField, 'Fonction du signataire'), 'Client');
+
+      var signatureFinder = find.byType(SignaturePad);
+      await tester.dragFrom(tester.getCenter(signatureFinder), const Offset(40, 0));
+      await tester.pumpAndSettle();
+
+      var bouton = tester.widget<ElevatedButton>(find.widgetWithText(ElevatedButton, 'Valider le procès-verbal'));
+      expect(bouton.onPressed, isNotNull, reason: 'signé, tout complété : le bouton doit être actif');
+
+      // Ouvrir une autre section referme la Signature (une seule ouverte à
+      // la fois) — le pavé, qui n'est monté que `if (isOpen)`, disparaît.
+      await tester.tap(find.text('Section 1 — Réception de l\'installation'));
+      await tester.pumpAndSettle();
+      expect(find.byType(SignaturePad), findsNothing, reason: 'la section Signature est repliée, le pavé est démonté');
+
+      // Le bouton doit rester actif même pendant que la section est fermée
+      // (le tracé vit dans l'état du parent, pas dans le widget démonté).
+      bouton = tester.widget<ElevatedButton>(find.widgetWithText(ElevatedButton, 'Valider le procès-verbal'));
+      expect(bouton.onPressed, isNotNull, reason: 'la signature ne doit pas être perdue tant que la section est fermée');
+
+      await tester.tap(find.text('Signature'));
+      await tester.pumpAndSettle();
+
+      signatureFinder = find.byType(SignaturePad);
+      expect(signatureFinder, findsOneWidget);
+      final padWidget = tester.widget<SignaturePad>(signatureFinder);
+      expect(padWidget.points.any((p) => p != null), isTrue, reason: 'le tracé doit être intact après le démontage/remontage');
+
+      bouton = tester.widget<ElevatedButton>(find.widgetWithText(ElevatedButton, 'Valider le procès-verbal'));
+      expect(bouton.onPressed, isNotNull, reason: 'toujours actif après réouverture : la signature n\'a pas été perdue');
+    },
+  );
+
   testWidgets('un chantier déjà signé redirige sans afficher le formulaire', (tester) async {
     await _pumpEcran(tester, pvSigne: true);
     // La redirection passe par go_router (context.go), absent de ce test —
