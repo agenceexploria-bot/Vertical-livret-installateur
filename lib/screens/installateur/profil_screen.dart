@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -513,7 +513,15 @@ class _AddCertificatDialogState extends State<_AddCertificatDialog> {
   }
 
   Future<void> _choisirFichier() async {
-    final picked = await DocumentCapture.pickWithCameraOption(context);
+    // Restreint aux types réellement acceptés côté serveur pour ce kind
+    // (voir KIND_CONFIG.habilitation, backend/src/routes/uploads.ts) — sans
+    // ça, "Choisir un fichier" laissait sélectionner n'importe quoi (HEIC
+    // d'un iPhone, webm, docx...), rejeté silencieusement bien plus tard par
+    // Vercel Blob (403 "not allowed"), lui-même avalé par le repli hors-ligne
+    // de AuthRepository.addHabilitation : le certificat semblait accepté
+    // sans jamais être réellement enregistré.
+    final picked = await DocumentCapture.pickWithCameraOption(context, allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png']);
+    debugPrint('AjouterCertificatDialog._choisirFichier: ${picked == null ? 'aucun fichier sélectionné' : '"${picked.fileName}" sélectionné'}');
     if (picked == null) return;
     setState(() {
       _file = picked.dataUrl;
@@ -523,18 +531,22 @@ class _AddCertificatDialogState extends State<_AddCertificatDialog> {
 
   Future<void> _envoyer() async {
     setState(() => _isSubmitting = true);
+    debugPrint('AjouterCertificatDialog._envoyer: début envoi "$_fileLabel"');
     try {
       await context.read<AuthState>().addHabilitation(
             titre: _titreController.text.trim(),
             dateExpiration: _dateExpiration!,
             file: _file!,
           );
+      debugPrint('AjouterCertificatDialog._envoyer: succès');
       if (!mounted) return;
       Navigator.of(context).pop();
     } on ApiException catch (e) {
+      debugPrint('AjouterCertificatDialog._envoyer: échec — ApiException(${e.statusCode}): ${e.message}');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
-    } catch (_) {
+    } catch (e) {
+      debugPrint('AjouterCertificatDialog._envoyer: échec — $e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Échec de l\'envoi du certificat — réessayez.')),

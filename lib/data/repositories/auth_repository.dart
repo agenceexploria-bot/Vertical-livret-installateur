@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show debugPrint;
 import '../../core/jwt.dart';
 import '../api_client.dart';
 import '../local/app_database.dart';
@@ -115,12 +116,36 @@ class AuthRepository {
   /// [file] : certificat réel (PDF ou image), en data URL base64. Mis en
   /// file d'attente hors-ligne comme les autres pièces jointes terrain si le
   /// réseau échoue — rejoué par le SyncEngine au retour du réseau.
+  /// File d'attente hors-ligne réservée aux VRAIES coupures réseau
+  /// (ApiException(0, ...), voir ApiClient._request — ou une exception qui
+  /// n'a même pas atteint le serveur). Un ApiException avec un vrai code
+  /// HTTP (400, 403...) signifie que le serveur A RÉPONDU et a rejeté la
+  /// requête (ex. type de fichier refusé par KIND_CONFIG.habilitation,
+  /// voir uploads.ts) — un retry hors-ligne échouerait exactement pareil,
+  /// indéfiniment, tout en laissant croire (AuthState.addHabilitation est
+  /// optimiste) que le certificat a été enregistré. Cette distinction
+  /// remonte l'erreur réelle à l'appelant plutôt que de la maquiller
+  /// silencieusement en simple délai réseau.
   Future<void> addHabilitation({required String titre, required DateTime dateExpiration, required String file}) async {
     final dateExpirationIso = dateExpiration.toIso8601String();
     try {
       final fileUrl = await _api.uploadFile(kind: 'habilitation', dataUrl: file);
+      debugPrint('AuthRepository.addHabilitation: fichier déposé — $fileUrl');
       await _api.addHabilitation(titre: titre, dateExpiration: dateExpirationIso, fileUrl: fileUrl);
-    } catch (_) {
+      debugPrint('AuthRepository.addHabilitation: certificat enregistré côté serveur');
+    } on ApiException catch (e) {
+      if (e.statusCode != 0) {
+        debugPrint('AuthRepository.addHabilitation: rejet serveur (jamais rejouable hors-ligne) — ApiException(${e.statusCode}): ${e.message}');
+        rethrow;
+      }
+      debugPrint('AuthRepository.addHabilitation: pas de réseau — mise en file d\'attente hors-ligne');
+      await _db.enqueueOperation(
+        type: 'addHabilitation',
+        chantierReference: 'profil',
+        payload: {'titre': titre, 'dateExpiration': dateExpirationIso, 'file': file},
+      );
+    } catch (e) {
+      debugPrint('AuthRepository.addHabilitation: échec inattendu — $e — mise en file d\'attente hors-ligne');
       await _db.enqueueOperation(
         type: 'addHabilitation',
         chantierReference: 'profil',
