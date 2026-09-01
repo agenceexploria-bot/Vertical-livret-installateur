@@ -410,6 +410,7 @@ chantiersRouter.post('/:reference/rex', requireAuth, requireRattachement, async 
       audioPath: parsed.data.audioUrl,
     },
   });
+  console.log(`POST /rex: REX ${rex.id} créé pour ${req.params.reference} — audioUrl=${parsed.data.audioUrl ?? 'aucun'} transcriptionClient=${parsed.data.transcription ? 'oui' : 'non'}`);
 
   // Si l'installateur n'a pas dicté (ou corrigé) de texte côté app —
   // reconnaissance vocale en direct indisponible ou silencieuse —, on tente
@@ -421,6 +422,9 @@ chantiersRouter.post('/:reference/rex', requireAuth, requireRattachement, async 
     const transcription = await transcribeAudio(parsed.data.audioUrl);
     if (transcription) {
       await prisma.rex.update({ where: { id: rex.id }, data: { transcription } });
+      console.log(`POST /rex: REX ${rex.id} mis à jour avec la transcription Whisper`);
+    } else {
+      console.log(`POST /rex: REX ${rex.id} reste sans transcription (voir logs transcribeAudio ci-dessus)`);
     }
   }
 

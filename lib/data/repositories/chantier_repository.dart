@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show debugPrint;
 import '../api_client.dart';
 import '../local/app_database.dart';
 import '../models/user.dart';
@@ -181,8 +182,12 @@ class ChantierRepository {
   Future<Chantier> submitRex(String reference, {String? transcription, String? audio}) async {
     try {
       final audioUrl = audio != null ? await _api.uploadFile(kind: 'rexAudio', dataUrl: audio) : null;
+      debugPrint('ChantierRepository.submitRex: audioUrl=$audioUrl transcriptionLocale=${transcription != null}');
       final data = await _api.postRex(reference, transcription: transcription, audioUrl: audioUrl);
-      return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
+      final chantier = Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
+      final dernierRex = chantier.rex.isNotEmpty ? chantier.rex.first : null;
+      debugPrint('ChantierRepository.submitRex: réponse serveur — dernier REX transcription=${dernierRex?.transcription}');
+      return chantier;
     } catch (_) {
       await _db.enqueueOperation(
         type: 'submitRex',

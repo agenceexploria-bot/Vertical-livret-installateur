@@ -169,6 +169,7 @@ class VoiceRecorder {
 
   Future<String?> stopAndEncode() async {
     final pathOrBlobUrl = await _recorder.stop();
+    debugPrint('VoiceRecorder.stopAndEncode: _recorder.stop() -> $pathOrBlobUrl ($_uploadMimeType)');
     if (pathOrBlobUrl == null) return null;
     try {
       if (kIsWeb) {
@@ -178,9 +179,15 @@ class VoiceRecorder {
         // (voir start()) — jamais figé à webm, qu'un navigateur Safari/iOS
         // n'a de toute façon jamais produit.
         final response = await http.get(Uri.parse(pathOrBlobUrl));
+        // Un blob de quelques dizaines d'octets (ou 0) sur un enregistrement
+        // de plusieurs secondes trahit une capture vide (conteneur audio/mp4
+        // sans données) plutôt qu'un problème d'upload ou de transcription
+        // plus loin dans la chaîne — voir README 4.6.
+        debugPrint('VoiceRecorder.stopAndEncode: blob web ${response.bodyBytes.length} octets');
         return 'data:$_uploadMimeType;base64,${base64Encode(response.bodyBytes)}';
       }
       final bytes = await file_io.readVoiceRecorderFile(pathOrBlobUrl);
+      debugPrint('VoiceRecorder.stopAndEncode: fichier natif ${bytes.length} octets');
       return 'data:$_uploadMimeType;base64,${base64Encode(bytes)}';
     } catch (e) {
       debugPrint('VoiceRecorder.stopAndEncode: $e');

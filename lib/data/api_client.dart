@@ -180,7 +180,9 @@ class ApiClient {
       throw ApiException(response.statusCode, _extractBlobError(response.statusCode, response.body));
     }
     final data = jsonDecode(response.body) as Map<String, dynamic>;
-    return data['url'] as String;
+    final url = data['url'] as String;
+    debugPrint('ApiClient.uploadFile: succès — $url (${bytes.length} octets, contentType=$contentType)');
+    return url;
   }
 
   /// Messages lisibles pour les erreurs renvoyées par Vercel Blob lors du

@@ -27,16 +27,31 @@ const EXTENSION_TO_MIME: Record<string, string> = {
 
 export async function transcribeAudio(audioUrl: string): Promise<string | null> {
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return null;
+  if (!apiKey) {
+    console.log('transcribeAudio: OPENAI_API_KEY absent, transcription désactivée');
+    return null;
+  }
 
   try {
     const audioResponse = await fetch(audioUrl);
-    if (!audioResponse.ok) return null;
+    if (!audioResponse.ok) {
+      console.log(`transcribeAudio: téléchargement de l'audio échoué — HTTP ${audioResponse.status} sur ${audioUrl}`);
+      return null;
+    }
     const audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
-    if (audioBuffer.byteLength === 0 || audioBuffer.byteLength > MAX_TRANSCRIBABLE_BYTES) return null;
+    console.log(`transcribeAudio: audio téléchargé — ${audioBuffer.byteLength} octets depuis ${audioUrl}`);
+    if (audioBuffer.byteLength === 0) {
+      console.log('transcribeAudio: fichier audio vide (0 octet) — capture côté client probablement en cause');
+      return null;
+    }
+    if (audioBuffer.byteLength > MAX_TRANSCRIBABLE_BYTES) {
+      console.log(`transcribeAudio: fichier trop volumineux pour Whisper (${audioBuffer.byteLength} > ${MAX_TRANSCRIBABLE_BYTES})`);
+      return null;
+    }
 
     const extension = new URL(audioUrl).pathname.split('.').pop()?.toLowerCase() ?? 'webm';
     const mimeType = EXTENSION_TO_MIME[extension] ?? 'audio/webm';
+    console.log(`transcribeAudio: extension=${extension} mimeType envoyé à Whisper=${mimeType}`);
 
     const form = new FormData();
     form.append('file', new Blob([audioBuffer], { type: mimeType }), `rex.${extension}`);
@@ -63,15 +78,27 @@ export async function transcribeAudio(audioUrl: string): Promise<string | null> 
     } finally {
       clearTimeout(timeout);
     }
-    if (!response.ok) return null;
+    if (!response.ok) {
+      // Jamais avalé sans trace : un fichier au mauvais format, un
+      // Content-Type rejeté ou une clé invalide donnent chacun un message
+      // différent dans le corps — impossible à diagnostiquer sans lui.
+      const body = await response.text().catch(() => '<corps illisible>');
+      console.log(`transcribeAudio: Whisper a refusé la requête — HTTP ${response.status} — ${body}`);
+      return null;
+    }
 
     const data = (await response.json()) as { text?: string };
     const text = data.text?.trim();
+    console.log(`transcribeAudio: réponse Whisper reçue — ${text ? `${text.length} caractères` : 'texte vide'}`);
     return text && text.length > 0 ? text : null;
-  } catch {
-    // Réseau indisponible, timeout, clé invalide... — jamais bloquant pour la
+  } catch (error) {
+    // Réseau indisponible, clé invalide... — jamais bloquant pour la
     // création du REX, qui reste possible avec l'audio seul (voir
-    // routes/chantiers.ts).
+    // routes/chantiers.ts). L'abandon du contrôleur ci-dessus (dépassement
+    // des 8 s) atterrit aussi ici, sous la forme d'une AbortError — distingué
+    // du reste pour ne pas le confondre avec un vrai échec réseau/API.
+    const isTimeout = error instanceof Error && error.name === 'AbortError';
+    console.log(`transcribeAudio: échec — ${isTimeout ? 'délai de 8s dépassé (timeout)' : String(error)}`);
     return null;
   }
 }
