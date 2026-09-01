@@ -21,7 +21,7 @@ const DANGEROUS_EXTENSIONS = ['exe', 'bat', 'sh', 'msi'];
 // habilitation, ou déposées par l'installateur lui-même sur le terrain) ;
 // pvDocument/documentChantier sont réservés au même périmètre que leurs
 // routes d'attachement (voir routes/chantiers.ts).
-const KIND_CONFIG: Record<string, { allowedContentTypes: string[]; maximumSizeInBytes: number; allowedRoles?: string[] }> = {
+const KIND_CONFIG: Record<string, { allowedContentTypes?: string[]; maximumSizeInBytes: number; allowedRoles?: string[] }> = {
   avatar: { allowedContentTypes: ['image/jpeg', 'image/png'], maximumSizeInBytes: 10 * 1024 * 1024 },
   habilitation: { allowedContentTypes: ['application/pdf', 'image/jpeg', 'image/png'], maximumSizeInBytes: 25 * 1024 * 1024 },
   pointPhoto: { allowedContentTypes: ['image/jpeg', 'image/png'], maximumSizeInBytes: 25 * 1024 * 1024 },
@@ -30,14 +30,22 @@ const KIND_CONFIG: Record<string, { allowedContentTypes: string[]; maximumSizeIn
   // webm malgré l'ancien nom de fichier) ; audio/mp4 : iOS le cas échéant
   // (Opus dans un conteneur M4A côté AVFoundation).
   rexAudio: { allowedContentTypes: ['audio/webm', 'audio/ogg', 'audio/mp4'], maximumSizeInBytes: 50 * 1024 * 1024 },
-  // '*' = n'importe quel Content-Type (documents terrain/chantier peuvent
-  // être des photos, vidéos, fichiers bureautique, archives, plans CAO...).
-  // Seuls les exécutables dangereux sont exclus, via DANGEROUS_EXTENSIONS
-  // ci-dessus — liste noire plutôt que blanche, contrairement aux autres
-  // kinds de ce fichier qui restent volontairement restreints (avatar,
-  // photo de contrôle, gabarit PV officiel...).
+  // allowedContentTypes OMIS (clé absente) = n'importe quel Content-Type
+  // (documents terrain/chantier peuvent être des photos, vidéos, fichiers
+  // bureautique, archives, plans CAO...). ANCIEN BUG : ce kind portait
+  // `allowedContentTypes: ['*']` — mais côté @vercel/blob, ce tableau
+  // n'accepte que des types MIME exacts ou des wildcards type/sous-type
+  // (ex. 'image/*') ; un simple '*' n'est PAS un glob reconnu et est
+  // comparé littéralement au Content-Type réel de chaque fichier, donc TOUT
+  // était rejeté (ex. "pdf is not allowed" pour un vrai PDF) — la faille de
+  // sécurité qu'on croyait ouvrir avec `['*']` n'a donc jamais laissé
+  // passer le moindre fichier. Omettre la clé est la façon documentée de ne
+  // poser aucune restriction de type ; seuls les exécutables dangereux
+  // restent bloqués via DANGEROUS_EXTENSIONS ci-dessus — liste noire plutôt
+  // que blanche, contrairement aux autres kinds de ce fichier qui restent
+  // volontairement restreints (avatar, photo de contrôle, gabarit PV
+  // officiel...).
   documentTerrain: {
-    allowedContentTypes: ['*'],
     maximumSizeInBytes: 500 * 1024 * 1024,
   },
   pvDocument: {
@@ -46,7 +54,6 @@ const KIND_CONFIG: Record<string, { allowedContentTypes: string[]; maximumSizeIn
     allowedRoles: ['coordinateurTravaux', 'direction', 'admin'],
   },
   documentChantier: {
-    allowedContentTypes: ['*'],
     maximumSizeInBytes: 500 * 1024 * 1024,
     allowedRoles: ['coordinateurTravaux', 'direction', 'admin'],
   },
@@ -98,7 +105,7 @@ uploadsRouter.post('/token', async (req: AuthedRequest, res) => {
           throw new Error('Ce type de fichier n\'est pas autorisé pour des raisons de sécurité');
         }
         return {
-          allowedContentTypes: config.allowedContentTypes,
+          ...(config.allowedContentTypes ? { allowedContentTypes: config.allowedContentTypes } : {}),
           maximumSizeInBytes: config.maximumSizeInBytes,
           addRandomSuffix: true,
         };

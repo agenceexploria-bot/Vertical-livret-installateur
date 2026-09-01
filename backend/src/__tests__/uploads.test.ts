@@ -65,7 +65,15 @@ describe('POST /uploads/token', () => {
     expect(payload.maximumSizeInBytes).toBe(10 * 1024 * 1024);
   });
 
-  it('autorise n\'importe quel type de fichier pour les documents terrain (installateur)', async () => {
+  // allowedContentTypes absent du jeton décodé = @vercel/blob n'applique
+  // AUCUNE restriction de type sur le PUT réel vers Blob — voir la note
+  // dans routes/uploads.ts : `['*']` (l'ancienne valeur) n'est pas un glob
+  // reconnu par @vercel/blob et était comparé littéralement au Content-Type
+  // de chaque fichier, donc rejetait tout, PDF y compris ("pdf is not
+  // allowed"). C'est le seul moyen déterministe de vérifier cette
+  // permissivité en test : Vercel Blob (qui applique la restriction
+  // réellement) n'est pas joignable dans cet environnement.
+  it('n\'impose aucune restriction de type pour les documents terrain (installateur) — un PDF passerait', async () => {
     const token = await createInstallateurToken();
 
     const res = await request(app)
@@ -73,16 +81,19 @@ describe('POST /uploads/token', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({
         type: 'blob.generate-client-token',
-        payload: { pathname: 'x.zip', callbackUrl: 'http://x', clientPayload: JSON.stringify({ kind: 'documentTerrain' }), multipart: false },
+        payload: { pathname: 'x.pdf', callbackUrl: 'http://x', clientPayload: JSON.stringify({ kind: 'documentTerrain' }), multipart: false },
       });
 
     expect(res.status).toBe(200);
     const payload = getPayloadFromClientToken(res.body.clientToken as string);
-    expect(payload.allowedContentTypes).toEqual(['*']);
+    expect(payload.allowedContentTypes).toBeUndefined();
     expect(payload.maximumSizeInBytes).toBe(500 * 1024 * 1024);
   });
 
-  it('autorise n\'importe quel type de fichier pour les documents chantier (CT/direction/admin)', async () => {
+  it.each([
+    ['x.pdf', 'application/pdf'],
+    ['x.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+  ])('n\'impose aucune restriction de type pour les documents chantier (CT/direction/admin) — %s (%s) passerait', async (pathname) => {
     const token = await createCtToken();
 
     const res = await request(app)
@@ -90,12 +101,12 @@ describe('POST /uploads/token', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({
         type: 'blob.generate-client-token',
-        payload: { pathname: 'x.docx', callbackUrl: 'http://x', clientPayload: JSON.stringify({ kind: 'documentChantier' }), multipart: false },
+        payload: { pathname, callbackUrl: 'http://x', clientPayload: JSON.stringify({ kind: 'documentChantier' }), multipart: false },
       });
 
     expect(res.status).toBe(200);
     const payload = getPayloadFromClientToken(res.body.clientToken as string);
-    expect(payload.allowedContentTypes).toEqual(['*']);
+    expect(payload.allowedContentTypes).toBeUndefined();
     expect(payload.maximumSizeInBytes).toBe(500 * 1024 * 1024);
   });
 
