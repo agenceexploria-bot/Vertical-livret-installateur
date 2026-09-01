@@ -7,9 +7,18 @@ const EXTENSION_BY_MIME: Record<string, string> = {
 /// Hostname du store Blob de l'application, dérivé de BLOB_READ_WRITE_TOKEN
 /// (format `vercel_blob_rw_<storeId>_<secret>` — voir @vercel/blob, qui sert
 /// ses fichiers sur `https://<storeId>.public.blob.vercel-storage.com`).
+/// `storeId` peut contenir des majuscules (voir BLOB_STORE_ID côté Vercel,
+/// ex. `TA6DWgjnlXI8K52T`) — toLowerCase() ici est OBLIGATOIRE : `new
+/// URL(...).hostname` (voir isOwnBlobUrl) est TOUJOURS renvoyé en minuscules
+/// par la spec WHATWG URL, quelle que soit la casse de l'URL d'origine. Sans
+/// cette normalisation, la comparaison stricte échouait pour TOUT fichier
+/// réellement déposé sur un store dont l'id contient une majuscule — 400
+/// "URL de fichier invalide" systématique, jamais atteint jusqu'ici car les
+/// deux bugs précédents de cette chaîne d'upload (RangeError, puis 403 sur
+/// le type MIME) empêchaient l'upload d'arriver jusqu'à cette validation.
 function ownBlobHostname(): string | null {
   const storeId = process.env.BLOB_READ_WRITE_TOKEN?.split('_')[3];
-  return storeId ? `${storeId}.public.blob.vercel-storage.com` : null;
+  return storeId ? `${storeId.toLowerCase()}.public.blob.vercel-storage.com` : null;
 }
 
 /// Vérifie qu'une URL de fichier fournie par le client (après un upload
