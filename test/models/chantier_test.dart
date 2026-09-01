@@ -55,7 +55,6 @@ void main() {
     test('is 0 when there are no points', () {
       final chantier = Chantier.fromJson(_baseJson());
       expect(chantier.progressionReception, 0);
-      expect(chantier.canSignPV, isFalse);
     });
 
     test('reflects the ratio of complete points', () {
@@ -66,21 +65,6 @@ void main() {
         ],
       ));
       expect(chantier.progressionReception, 0.5);
-    });
-
-    test('canSignPV is true only when auto-contrôle is 100% complete', () {
-      final complete = Chantier.fromJson(_baseJson(
-        autoControle: [_point('a1', status: 'conforme', photoPath: 'p.jpg')],
-      ));
-      expect(complete.canSignPV, isTrue);
-
-      final incomplete = Chantier.fromJson(_baseJson(
-        autoControle: [
-          _point('a1', status: 'conforme', photoPath: 'p.jpg'),
-          _point('a2'),
-        ],
-      ));
-      expect(incomplete.canSignPV, isFalse);
     });
   });
 

@@ -121,11 +121,6 @@ class Chantier {
       ? 0
       : autoControle.where((p) => p.isComplete).length / autoControle.length;
 
-  /// Le module PV se débloque soit parce que le back-office a déjà déposé le
-  /// gabarit (pvPdfPath, vérifié séparément par l'appelant), soit dès que
-  /// l'auto-contrôle atteint 90%.
-  bool get canSignPV => progressionAutoControle >= 0.9;
-
   /// Le back-office a déposé un gabarit, mais le client ne l'a pas encore
   /// signé — l'installateur peut le consulter et le faire signer.
   bool get pvEnAttenteSignature => pvPdfPath != null && !pvSigne;

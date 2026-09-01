@@ -66,17 +66,14 @@ class ChantierDetailsScreen extends StatelessWidget {
       _ModuleItem(
         index: 6,
         titre: 'Procès-verbal de réception',
+        // Accessible en permanence, dès le premier jour du chantier, quel
+        // que soit l'avancement de l'auto-contrôle (décision métier confirmée
+        // 2026-09-01) — seul un PV déjà signé change ce libellé/la
+        // destination (voir onTap ci-dessous, /confirmation en lecture seule).
+        sousTitre: chantier.pvSigne ? 'Signé par ${chantier.pvSigneur ?? 'le client'}' : 'À faire signer par le client',
+        icon: Icons.draw_outlined,
         // pvPdfPath == null signale le nouveau flux (formulaire interactif,
         // aucun gabarit à attendre du back-office) — voir la refonte du PV.
-        sousTitre: chantier.pvSigne
-            ? 'Signé par ${chantier.pvSigneur ?? 'le client'}'
-            : chantier.pvEnAttenteSignature
-                ? 'À faire signer par le client'
-                : chantier.canSignPV
-                    ? 'À faire signer par le client'
-                    : 'Verrouillé — terminer l\'auto-contrôle',
-        icon: Icons.draw_outlined,
-        isLocked: !chantier.pvSigne && !chantier.canSignPV && !chantier.pvEnAttenteSignature,
         onTap: () => context.push(chantier.pvSigne
             ? '/confirmation'
             : chantier.pvPdfPath != null ? '/signature' : '/pv-formulaire'),
@@ -131,7 +128,6 @@ class _ModuleItem {
   final String titre;
   final String sousTitre;
   final IconData icon;
-  final bool isLocked;
   final VoidCallback? onTap;
 
   _ModuleItem({
@@ -139,7 +135,6 @@ class _ModuleItem {
     required this.titre,
     required this.sousTitre,
     required this.icon,
-    this.isLocked = false,
     this.onTap,
   });
 }
@@ -152,65 +147,57 @@ class _ModuleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppCard(
-      onTap: item.isLocked ? null : item.onTap,
+      onTap: item.onTap,
       padding: EdgeInsets.zero,
-      child: Opacity(
-        opacity: item.isLocked ? 0.5 : 1.0,
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                width: 48,
-                decoration: const BoxDecoration(
-                  color: AppColors.fond,
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(9),
-                    bottomLeft: Radius.circular(9),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              width: 48,
+              decoration: const BoxDecoration(
+                color: AppColors.fond,
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(9),
+                  bottomLeft: Radius.circular(9),
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  item.index.toString(),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.acier,
                   ),
                 ),
-                child: Center(
-                  child: Text(
-                    item.index.toString(),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.acier,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      item.titre,
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
-                  ),
+                    const SizedBox(height: 2),
+                    Text(
+                      item.sousTitre,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.acier),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        item.titre,
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        item.sousTitre,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: item.isLocked ? AppColors.rouge : AppColors.acier,
-                            ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Icon(
-                  item.isLocked ? Icons.lock_outline : Icons.chevron_right,
-                  color: AppColors.acierClair,
-                ),
-              ),
-            ],
-          ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Icon(Icons.chevron_right, color: AppColors.acierClair),
+            ),
+          ],
         ),
       ),
     );
