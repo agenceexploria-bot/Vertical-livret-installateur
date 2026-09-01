@@ -168,7 +168,29 @@ class VoiceRecorder {
   }
 
   Future<String?> stopAndEncode() async {
-    final pathOrBlobUrl = await _recorder.stop();
+    String? pathOrBlobUrl;
+    try {
+      // record_web (voir MediaRecorderDelegate.stop()) attend l'évènement
+      // natif `onstop` du MediaRecorder pour compléter ce Future — s'il ne
+      // se déclenche jamais (flakiness connue de l'implémentation
+      // MediaRecorder de Safari/WebKit, en particulier sur un arrêt trop
+      // rapproché du démarrage), l'attente ne se résout JAMAIS : ni
+      // exception, ni log, le seul symptôme visible est un blocage
+      // silencieux — exactement "Préparation de la note vocale..." figé à
+      // l'écran (voir rex_screen.dart, _isEncoding). Ce timeout est le seul
+      // filet de sécurité possible côté appelant : `record_web` n'expose
+      // aucun moyen d'annuler cette attente lui-même.
+      pathOrBlobUrl = await _recorder.stop().timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          debugPrint('VoiceRecorder.stopAndEncode: _recorder.stop() n\'a jamais répondu après 5s (évènement "onstop" du MediaRecorder jamais déclenché ?) — abandon');
+          return null;
+        },
+      );
+    } catch (e) {
+      debugPrint('VoiceRecorder.stopAndEncode: _recorder.stop() a levé — $e');
+      return null;
+    }
     debugPrint('VoiceRecorder.stopAndEncode: _recorder.stop() -> $pathOrBlobUrl ($_uploadMimeType)');
     if (pathOrBlobUrl == null) return null;
     try {
