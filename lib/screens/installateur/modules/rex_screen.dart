@@ -99,14 +99,28 @@ class _RexScreenState extends State<RexScreen> with SingleTickerProviderStateMix
     final result = await _recorder.start();
     if (!mounted) return;
     if (result != VoiceRecorderStartResult.started) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        result == VoiceRecorderStartResult.permissionPermanentlyDenied
-            ? SnackBar(
-                content: const Text('Micro refusé. Activez-le dans les réglages du téléphone.'),
-                action: SnackBarAction(label: 'Réglages', onPressed: openAppSettings),
-              )
-            : const SnackBar(content: Text('Micro indisponible — vérifiez l\'autorisation d\'accès.')),
-      );
+      final SnackBar snackBar;
+      switch (result) {
+        case VoiceRecorderStartResult.permissionPermanentlyDenied:
+          snackBar = SnackBar(
+            content: const Text('Micro refusé. Activez-le dans les réglages du téléphone.'),
+            action: SnackBarAction(label: 'Réglages', onPressed: openAppSettings),
+          );
+        case VoiceRecorderStartResult.unsupported:
+          // Jamais un bouton mort ni un échec silencieux : ce navigateur ne
+          // sait tout simplement pas enregistrer d'audio (voir
+          // pickSupportedAudioMimeType) — bascule vers la saisie texte,
+          // seule option qui reste réellement utilisable ici.
+          snackBar = const SnackBar(
+            content: Text('L\'enregistrement audio n\'est pas supporté sur cette version d\'iOS — utilisez la saisie texte du REX.'),
+          );
+          setState(() => _mode = _RexMode.texte);
+        case VoiceRecorderStartResult.permissionDenied:
+        case VoiceRecorderStartResult.error:
+        case VoiceRecorderStartResult.started:
+          snackBar = const SnackBar(content: Text('Micro indisponible — vérifiez l\'autorisation d\'accès.'));
+      }
+      ScaffoldMessenger.of(context).showSnackBar(snackBar);
       return;
     }
     setState(() {

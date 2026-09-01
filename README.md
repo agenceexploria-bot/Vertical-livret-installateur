@@ -164,6 +164,17 @@ flutter run                 # Mobile — émulateur ou appareil connecté
 >   `NSSpeechRecognitionUsageDescription` (reconnaissance vocale en direct,
 >   voir `speech_to_text` dans `rex_screen.dart`).
 
+> **Codec audio en PWA — détection de capacité, pas de plateforme** :
+> Safari/iOS ne supporte, via `MediaRecorder`, que `audio/mp4`/`audio/aac`
+> (HE-AAC), jamais `webm`/`opus` (le reste des navigateurs) — voir
+> `pickSupportedAudioMimeType` dans `lib/core/voice_recorder.dart`, qui
+> teste `MediaRecorder.isTypeSupported` dans cet ordre : `audio/mp4`,
+> `audio/aac`, `audio/webm;codecs=opus`, `audio/webm`, `audio/ogg`. Si
+> **aucun** de ces types n'est supporté (Safari iOS antérieur à 14.3, seul
+> cas réaliste), l'écran REX affiche un message explicite et bascule sur la
+> saisie texte plutôt que de laisser un enregistrement échouer
+> silencieusement.
+
 ### 4.5. Tests & vérifications
 
 ```bash
