@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme.dart';
+import '../../core/widgets/app_card.dart';
 import '../../core/widgets/dashboard_stat_card.dart';
 import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/status_badge.dart';
@@ -17,7 +18,6 @@ import 'widgets/bo_shell.dart';
 import 'widgets/bo_panel.dart';
 import 'widgets/bo_responsive_table.dart';
 import 'widgets/bo_table_row.dart';
-import 'widgets/pv_signature_panel.dart';
 
 /// Espace Coordinateur travaux — gestion des chantiers (création, suivi, PV
 /// signés pour facturation), validation des installateurs, et — depuis la
@@ -30,12 +30,20 @@ class BoCtChantiersScreen extends StatefulWidget {
   State<BoCtChantiersScreen> createState() => _BoCtChantiersScreenState();
 }
 
-enum _TableauSegment { enCours, termines }
+enum _TableauSegment { enCours, termines, tous }
+
+/// Un installateur rattaché n'a pas encore ouvert son livret pour ce
+/// chantier (vérification de la veille, EX-22) — la seule partie de
+/// l'ancien panneau "À traiter" qui concerne un chantier précis (une
+/// inscription à valider ne l'est pas, voir bo_comptes_screen.dart, déjà
+/// l'écran approprié pour ça).
+bool _aLivretNonOuvert(Chantier c) => c.installateursRattaches.any((u) => !c.livretsOuverts.contains(u.id));
 
 class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
   final _searchController = TextEditingController();
   String _search = '';
   _TableauSegment _segment = _TableauSegment.enCours;
+  bool _aTraiterOnly = false;
 
   @override
   void dispose() {
@@ -46,47 +54,43 @@ class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
   @override
   Widget build(BuildContext context) {
     final chantierState = context.watch<ChantierState>();
-    final chantiers = chantierState.chantiers;
+    final tous = chantierState.chantiers;
     final enCours = chantierState.chantiersEnCoursList;
     final termines = chantierState.chantiersTerminesList;
-    final tableauChantiers = _segment == _TableauSegment.enCours ? enCours : termines;
+    final segmentList = switch (_segment) {
+      _TableauSegment.enCours => enCours,
+      _TableauSegment.termines => termines,
+      _TableauSegment.tous => tous,
+    };
+    // Compté sur l'ensemble des chantiers (pas seulement le segment actif) :
+    // le badge du chip reste stable quel que soit le filtre principal
+    // sélectionné, plutôt que de changer de sens selon l'onglet.
+    final aTraiterCount = tous.where(_aLivretNonOuvert).length;
+    final afterATraiter = _aTraiterOnly ? segmentList.where(_aLivretNonOuvert).toList() : segmentList;
 
     final query = _search.trim().toLowerCase();
     final filteredChantiers = query.isEmpty
-        ? tableauChantiers
-        : tableauChantiers.where((c) => c.reference.toLowerCase().contains(query) || c.client.toLowerCase().contains(query)).toList();
+        ? afterATraiter
+        : afterATraiter.where((c) => c.reference.toLowerCase().contains(query) || c.client.toLowerCase().contains(query)).toList();
 
     return BoShell(
       activeNav: 'chantiers',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildStatsGrid(context, chantiers),
-          const SizedBox(height: 24),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isWide = constraints.maxWidth > 800;
-              final table = _buildTable(context, filteredChantiers, query.isNotEmpty, enCoursCount: enCours.length, terminesCount: termines.length);
-              final sidePanel = _buildSidePanel(context);
-
-              if (!isWide) {
-                return Column(children: [table, const SizedBox(height: 20), sidePanel]);
-              }
-
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(flex: 16, child: table),
-                  const SizedBox(width: 24),
-                  Expanded(flex: 10, child: sidePanel),
-                ],
-              );
-            },
+          _buildStatsGrid(context, tous),
+          const SizedBox(height: 20),
+          _buildFiltersRow(
+            context,
+            enCoursCount: enCours.length,
+            terminesCount: termines.length,
+            tousCount: tous.length,
+            aTraiterCount: aTraiterCount,
           ),
-          const SizedBox(height: 24),
-          _buildPvSignes(context, chantiers),
           const SizedBox(height: 16),
-          _buildAnomalies(chantiers),
+          _buildTable(context, filteredChantiers, query.isNotEmpty),
+          const SizedBox(height: 20),
+          _buildAnomalies(tous),
           const SizedBox(height: 16),
           _buildHabilitations(context),
         ],
@@ -96,7 +100,11 @@ class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
 
   /// Vue d'ensemble en un coup d'œil, au-dessus du détail — les compteurs
   /// urgents (anomalies, éléments à traiter) sont mis en évidence par un
-  /// point orange (voir [DashboardStatCard.urgent]).
+  /// point orange (voir [DashboardStatCard.urgent]). [Wrap] plutôt qu'une
+  /// grille à ratio fixe : chaque carte garde une hauteur fixe raisonnable
+  /// quel que soit le nombre de colonnes (2 sur mobile étroit, jusqu'à 4 en
+  /// large), sans jamais dépendre d'un childAspectRatio qui écraserait le
+  /// contenu à une largeur donnée.
   Widget _buildStatsGrid(BuildContext context, List<Chantier> chantiers) {
     final comptesState = context.watch<ComptesState>();
     final enCours = chantiers.where((c) => !c.pvSigne).length;
@@ -105,40 +113,110 @@ class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
         .expand((c) => [...c.receptionMarchandises, ...c.autoControle])
         .where((p) => p.status == PointStatus.nonConforme)
         .length;
-    final aTraiter = comptesState.installateurs.where((u) => !u.isActive).length +
-        chantiers.expand((c) => c.installateursRattaches.where((u) => !c.livretsOuverts.contains(u.id))).length;
+    final aTraiter = comptesState.installateurs.where((u) => !u.isActive).length + chantiers.where(_aLivretNonOuvert).length;
+
+    final cards = [
+      DashboardStatCard(icon: Icons.construction_outlined, value: '$enCours', label: 'Chantiers en cours', color: AppColors.acier),
+      DashboardStatCard(icon: Icons.verified_outlined, value: '$pvSignes', label: 'PV signés', color: AppColors.vert),
+      DashboardStatCard(
+        icon: Icons.warning_amber_rounded,
+        value: '$anomalies',
+        label: 'Anomalies signalées',
+        color: AppColors.rouge,
+        urgent: anomalies > 0,
+      ),
+      DashboardStatCard(
+        icon: Icons.pending_actions_outlined,
+        value: '$aTraiter',
+        label: 'Éléments à traiter',
+        color: AppColors.orange,
+        urgent: aTraiter > 0,
+      ),
+    ];
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns = constraints.maxWidth > 900 ? 4 : (constraints.maxWidth > 560 ? 2 : 1);
-        final cards = [
-          DashboardStatCard(icon: Icons.construction_outlined, value: '$enCours', label: 'Chantiers en cours', color: AppColors.acier),
-          DashboardStatCard(icon: Icons.verified_outlined, value: '$pvSignes', label: 'PV signés', color: AppColors.vert),
-          DashboardStatCard(
-            icon: Icons.warning_amber_rounded,
-            value: '$anomalies',
-            label: 'Anomalies signalées',
-            color: AppColors.rouge,
-            urgent: anomalies > 0,
-          ),
-          DashboardStatCard(
-            icon: Icons.pending_actions_outlined,
-            value: '$aTraiter',
-            label: 'Éléments à traiter',
-            color: AppColors.orange,
-            urgent: aTraiter > 0,
-          ),
-        ];
-        return GridView.count(
-          crossAxisCount: columns,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 16,
-          crossAxisSpacing: 16,
-          childAspectRatio: 2.6,
-          children: cards,
+        final columns = constraints.maxWidth > 900 ? 4 : (constraints.maxWidth > 480 ? 2 : 1);
+        const spacing = 16.0;
+        final cardWidth = (constraints.maxWidth - spacing * (columns - 1)) / columns;
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: [for (final card in cards) SizedBox(width: cardWidth, height: 88, child: card)],
         );
       },
+    );
+  }
+
+  /// Filtre principal (En cours / Terminés / Tous, mutuellement exclusifs)
+  /// + filtre additionnel (À traiter, cumulable) + recherche + action —
+  /// [Wrap] pour que chaque élément retombe sur sa propre ligne dès que la
+  /// largeur manque, plutôt qu'un débordement horizontal (voir l'ancien
+  /// Row rigide, remplacé).
+  Widget _buildFiltersRow(
+    BuildContext context, {
+    required int enCoursCount,
+    required int terminesCount,
+    required int tousCount,
+    required int aTraiterCount,
+  }) {
+    const chipTextStyle = TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600);
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        ChoiceChip(
+          label: Text('En cours ($enCoursCount)', style: chipTextStyle),
+          visualDensity: VisualDensity.compact,
+          selected: _segment == _TableauSegment.enCours,
+          onSelected: (_) => setState(() => _segment = _TableauSegment.enCours),
+        ),
+        ChoiceChip(
+          label: Text('Terminés ($terminesCount)', style: chipTextStyle),
+          visualDensity: VisualDensity.compact,
+          selected: _segment == _TableauSegment.termines,
+          onSelected: (_) => setState(() => _segment = _TableauSegment.termines),
+        ),
+        ChoiceChip(
+          label: Text('Tous ($tousCount)', style: chipTextStyle),
+          visualDensity: VisualDensity.compact,
+          selected: _segment == _TableauSegment.tous,
+          onSelected: (_) => setState(() => _segment = _TableauSegment.tous),
+        ),
+        FilterChip(
+          label: Text('À traiter ($aTraiterCount)', style: chipTextStyle),
+          visualDensity: VisualDensity.compact,
+          avatar: aTraiterCount > 0 ? const Icon(Icons.pending_actions_outlined, size: 16) : null,
+          selected: _aTraiterOnly,
+          selectedColor: AppColors.orange.withValues(alpha: 0.18),
+          checkmarkColor: AppColors.orange,
+          onSelected: (value) => setState(() => _aTraiterOnly = value),
+        ),
+        SizedBox(
+          width: 220,
+          height: 36,
+          child: TextField(
+            controller: _searchController,
+            onChanged: (value) => setState(() => _search = value),
+            decoration: const InputDecoration(
+              hintText: 'Réf. ERP ou client...',
+              prefixIcon: Icon(Icons.search, size: 18),
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            ),
+          ),
+        ),
+        SizedBox(
+          height: 36,
+          child: ElevatedButton.icon(
+            onPressed: () => context.push('/backoffice/ct/chantiers/nouveau'),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Nouveau chantier', style: TextStyle(fontSize: 13)),
+            style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 16)),
+          ),
+        ),
+      ],
     );
   }
 
@@ -154,82 +232,70 @@ class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
     return ('—', StatusType.factuel);
   }
 
-  Widget _buildTable(BuildContext context, List<Chantier> chantiers, bool isSearching, {required int enCoursCount, required int terminesCount}) {
-    final isTermines = _segment == _TableauSegment.termines;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(isTermines ? 'Chantiers terminés' : 'Chantiers en cours', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(width: 16),
-            SegmentedButton<_TableauSegment>(
-              segments: [
-                ButtonSegment(value: _TableauSegment.enCours, label: Text('En cours ($enCoursCount)')),
-                ButtonSegment(value: _TableauSegment.termines, label: Text('Terminés ($terminesCount)')),
-              ],
-              selected: {_segment},
-              onSelectionChanged: (selection) => setState(() => _segment = selection.first),
-            ),
-            const Spacer(),
-            SizedBox(
-              width: 220,
-              child: TextField(
-                controller: _searchController,
-                onChanged: (value) => setState(() => _search = value),
-                decoration: const InputDecoration(
-                  hintText: 'Réf. ERP ou client...',
-                  prefixIcon: Icon(Icons.search, size: 20),
-                  isDense: true,
-                  contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            ElevatedButton.icon(
-              onPressed: () => context.push('/backoffice/ct/chantiers/nouveau'),
-              icon: const Icon(Icons.add, size: 20),
-              label: const Text('Nouveau chantier'),
-              style: ElevatedButton.styleFrom(minimumSize: const Size(0, 46), padding: const EdgeInsets.symmetric(horizontal: 20)),
-            ),
-          ],
+  /// Un seul tableau/liste, quel que soit le filtre actif — voir
+  /// [_buildFiltersRow] pour le choix du segment, ici seulement l'affichage
+  /// du résultat déjà filtré. En dessous de [_cardBreakpoint], remplace les
+  /// colonnes (qui devraient sinon défiler horizontalement, voir
+  /// BoResponsiveTable) par une liste de cartes compactes verticales —
+  /// aucune largeur minimale à respecter, donc aucun débordement possible.
+  static const _cardBreakpoint = 700.0;
+
+  Widget _buildTable(BuildContext context, List<Chantier> chantiers, bool isSearching) {
+    final emptyIcon = _aTraiterOnly
+        ? Icons.check_circle_outline
+        : _segment == _TableauSegment.termines
+            ? Icons.check_circle_outline
+            : Icons.construction_outlined;
+    final emptyMessage = isSearching
+        ? 'Aucun résultat pour « ${_search.trim()} ».'
+        : _aTraiterOnly
+            ? 'Rien à traiter pour ce filtre.'
+            : switch (_segment) {
+                _TableauSegment.enCours => 'Aucun chantier en cours pour l\'instant.',
+                _TableauSegment.termines => 'Aucun chantier terminé pour l\'instant.',
+                _TableauSegment.tous => 'Aucun chantier pour l\'instant.',
+              };
+    final canCreer = !isSearching && !_aTraiterOnly && _segment != _TableauSegment.termines;
+
+    if (chantiers.isEmpty) {
+      return BoPanel(
+        child: EmptyState(
+          icon: emptyIcon,
+          message: emptyMessage,
+          actionLabel: canCreer ? 'Créer un nouveau chantier' : null,
+          onAction: canCreer ? () => context.push('/backoffice/ct/chantiers/nouveau') : null,
         ),
-        const SizedBox(height: 16),
-        if (chantiers.isEmpty)
-          BoPanel(
-            child: EmptyState(
-              icon: isTermines ? Icons.check_circle_outline : Icons.construction_outlined,
-              message: isSearching
-                  ? 'Aucun résultat pour « ${_search.trim()} ».'
-                  : isTermines
-                      ? 'Aucun chantier terminé pour l\'instant.'
-                      : 'Aucun chantier en cours pour l\'instant.',
-              actionLabel: isSearching || isTermines ? null : 'Créer un nouveau chantier',
-              onAction: isSearching || isTermines ? null : () => context.push('/backoffice/ct/chantiers/nouveau'),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < _cardBreakpoint) {
+          return Column(
+            children: [for (final c in chantiers) _buildCompactCard(context, c)],
+          );
+        }
+        return BoResponsiveTable(
+          minWidth: 600,
+          child: Container(
+            decoration: BoxDecoration(
+              color: AppColors.blanc,
+              border: Border.all(color: AppColors.lignes),
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(color: AppColors.encre.withValues(alpha: 0.04), blurRadius: 16, offset: const Offset(0, 6)),
+              ],
             ),
-          )
-        else
-          BoResponsiveTable(
-            minWidth: 600,
-            child: Container(
-              decoration: BoxDecoration(
-                color: AppColors.blanc,
-                border: Border.all(color: AppColors.lignes),
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: [
-                  BoxShadow(color: AppColors.encre.withValues(alpha: 0.04), blurRadius: 16, offset: const Offset(0, 6)),
-                ],
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                children: [
-                  _headerRow(),
-                  for (final (i, c) in chantiers.indexed) _dataRow(context, c, i),
-                ],
-              ),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                _headerRow(),
+                for (final (i, c) in chantiers.indexed) _dataRow(context, c, i),
+              ],
             ),
           ),
-      ],
+        );
+      },
     );
   }
 
@@ -269,116 +335,45 @@ class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
     );
   }
 
-  Widget _buildSidePanel(BuildContext context) {
-    final comptesState = context.watch<ComptesState>();
-    final chantiers = context.watch<ChantierState>().chantiers;
-
-    final pendingAccounts = comptesState.installateurs.where((u) => !u.isActive).toList();
-    final unopenedLivrets = <(Chantier, String)>[];
-    for (final c in chantiers) {
-      for (final u in c.installateursRattaches) {
-        if (!c.livretsOuverts.contains(u.id)) unopenedLivrets.add((c, u.fullName));
-      }
-    }
-
-    final items = <Widget>[
-      for (final u in pendingAccounts) _notif(StatusType.enCours, 'Inscription à valider : ', u.fullName),
-      for (final (c, nom) in unopenedLivrets) _notif(StatusType.nonConforme, '${c.reference} : ', '$nom n\'a pas ouvert son livret'),
-    ];
-
-    // Fond légèrement teinté dès qu'il y a des éléments à traiter — pour que
-    // ce panneau attire l'œil en priorité, comme demandé pour les actions
-    // urgentes du CT.
-    return Container(
-      decoration: items.isNotEmpty
-          ? BoxDecoration(borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.orange.withValues(alpha: 0.35)))
-          : null,
-      child: BoPanel(
-        title: 'À traiter (${items.length})',
-        child: items.isEmpty
-            ? const Text('Rien à signaler.', style: TextStyle(fontSize: 12.5, color: AppColors.acierClair))
-            : Column(children: items),
-      ),
-    );
-  }
-
-  Widget _notif(StatusType type, String prefix, String bold) {
-    final color = type == StatusType.nonConforme
-        ? AppColors.rouge
-        : type == StatusType.enCours
-            ? AppColors.orange
-            : AppColors.acierClair;
-    return BoTableRow(
-      padding: const EdgeInsets.symmetric(vertical: 9),
-      border: const Border(bottom: BorderSide(color: Color(0xFFEEF1F3))),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: RichText(
-              text: TextSpan(
-                style: const TextStyle(fontSize: 12, color: AppColors.acier),
-                children: [
-                  TextSpan(text: prefix),
-                  TextSpan(text: bold, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.encre)),
-                ],
-              ),
+  /// Équivalent de [_dataRow] pour les écrans étroits — même informations,
+  /// empilées verticalement plutôt qu'en colonnes qui n'ont plus la place
+  /// de respirer sous [_cardBreakpoint].
+  Widget _buildCompactCard(BuildContext context, Chantier c) {
+    final livret = _livretBadge(c);
+    final pv = _pvBadge(c);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: AppCard(
+        padding: const EdgeInsets.all(14),
+        onTap: () => context.push('/backoffice/ct/chantiers/${c.reference}'),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${c.reference} — ${c.client}',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const Icon(Icons.chevron_right, size: 18, color: AppColors.acierClair),
+              ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPvSignes(BuildContext context, List<Chantier> chantiers) {
-    final signes = chantiers.where((c) => c.pvSigne).toList();
-    return BoPanel(
-      title: 'PV signés (${signes.length})',
-      child: signes.isEmpty
-          ? const Text('Aucun PV signé pour l\'instant.', style: TextStyle(fontSize: 12.5, color: AppColors.acierClair))
-          : Column(children: [for (final c in signes) _pvRow(context, c)]),
-    );
-  }
-
-  Widget _pvRow(BuildContext context, Chantier c) {
-    return BoTableRow(
-      padding: const EdgeInsets.symmetric(vertical: 9),
-      border: const Border(bottom: BorderSide(color: Color(0xFFEEF1F3))),
-      onTap: () => showDialog(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: Text('${c.reference} — ${c.client}'),
-          content: SizedBox(
-            width: 360,
-            child: PvSignaturePanel(
-              signataire: c.pvSigneur,
-              fonction: c.pvFonctionSignataire,
-              signeAt: c.pvSigneAt,
-              signatureImagePath: c.pvSignatureImagePath,
+            const SizedBox(height: 4),
+            Text('Pose du ${DateFormat('dd/MM').format(c.dateDebut)}', style: const TextStyle(fontSize: 12, color: AppColors.acier)),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                StatusBadge(label: livret.$1, type: livret.$2),
+                StatusBadge(label: pv.$1, type: pv.$2),
+              ],
             ),
-          ),
-          actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Fermer'))],
+          ],
         ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text('${c.reference} · ${c.client}', style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
-          ),
-          Text(
-            c.pvSigneAt != null
-                ? 'Signé par ${c.pvSigneur ?? 'le client'} · ${DateFormat('dd/MM HH:mm').format(c.pvSigneAt!)}'
-                : '—',
-            style: const TextStyle(fontSize: 11.5, color: AppColors.acierClair),
-          ),
-          const SizedBox(width: 8),
-          const Icon(Icons.chevron_right, size: 18, color: AppColors.acierClair),
-        ],
       ),
     );
   }
