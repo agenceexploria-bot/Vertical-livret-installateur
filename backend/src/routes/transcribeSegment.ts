@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { z } from 'zod';
 import { requireAuth, AuthedRequest } from '../middleware/auth';
 import { transcribeBytes } from '../lib/transcription';
@@ -20,7 +20,12 @@ const segmentRateLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: () => process.env.NODE_ENV === 'test',
-  keyGenerator: (req: AuthedRequest) => req.auth?.userId ?? req.ip ?? 'unknown',
+  // ipKeyGenerator (et non req.ip brut) : express-rate-limit l'exige pour
+  // normaliser une adresse IPv6 (sinon plusieurs représentations de la même
+  // adresse contourneraient la limite) — sans ce garde-fou explicite, la
+  // construction du limiteur lève une ValidationError (ERR_ERL_KEY_GEN_IPV6)
+  // au premier chargement du module, avant même la première requête.
+  keyGenerator: (req: AuthedRequest) => req.auth?.userId ?? ipKeyGenerator(req.ip ?? '0.0.0.0'),
 });
 
 const segmentSchema = z.object({ audio: z.string() });
