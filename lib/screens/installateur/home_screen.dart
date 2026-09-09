@@ -21,7 +21,9 @@ class InstallateurHomeScreen extends StatefulWidget {
   State<InstallateurHomeScreen> createState() => _InstallateurHomeScreenState();
 }
 
-class _InstallateurHomeScreenState extends State<InstallateurHomeScreen> {
+class _InstallateurHomeScreenState extends State<InstallateurHomeScreen> with SingleTickerProviderStateMixin {
+  late final TabController _tabController = TabController(length: 2, vsync: this)..addListener(() => setState(() {}));
+
   @override
   void initState() {
     super.initState();
@@ -34,12 +36,21 @@ class _InstallateurHomeScreenState extends State<InstallateurHomeScreen> {
   }
 
   @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final networkState = context.watch<NetworkState>();
     final chantierState = context.watch<ChantierState>();
     final authState = context.watch<AuthState>();
     final user = authState.currentUser;
     final offlineExpiry = authState.offlineExpiry;
+    final enCours = chantierState.chantiersEnCoursList;
+    final termines = chantierState.chantiersTerminesList;
+    final activeList = _tabController.index == 0 ? enCours : termines;
 
     return ResponsiveLayout(
       appBar: GlassAppBar(
@@ -77,20 +88,59 @@ class _InstallateurHomeScreenState extends State<InstallateurHomeScreen> {
             pendingCount: networkState.pendingCount,
             offlineUntil: offlineExpiry != null ? DateFormat('dd/MM').format(offlineExpiry) : '--',
           ),
+          if (chantierState.chantiers.isNotEmpty)
+            Container(
+              color: AppColors.blanc,
+              child: TabBar(
+                controller: _tabController,
+                labelColor: AppColors.orange,
+                unselectedLabelColor: AppColors.acier,
+                indicatorColor: AppColors.orange,
+                labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                tabs: [
+                  Tab(text: 'En cours (${enCours.length})'),
+                  Tab(text: 'Terminés (${termines.length})'),
+                ],
+              ),
+            ),
           Expanded(
             child: chantierState.isLoading
                 ? const Center(child: CircularProgressIndicator(color: AppColors.orange))
                 : chantierState.chantiers.isEmpty
                     ? _buildEmptyState(context)
-                    : ListView.separated(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: chantierState.chantiers.length,
-                        separatorBuilder: (context, index) => const SizedBox(height: 12),
-                        itemBuilder: (context, index) {
-                          final chantier = chantierState.chantiers[index];
-                          return _ChantierCard(chantier: chantier);
-                        },
-                      ),
+                    : activeList.isEmpty
+                        ? _buildEmptyTabState(context, isTermines: _tabController.index == 1)
+                        : ListView.separated(
+                            padding: const EdgeInsets.all(16),
+                            itemCount: activeList.length,
+                            separatorBuilder: (context, index) => const SizedBox(height: 12),
+                            itemBuilder: (context, index) {
+                              final chantier = activeList[index];
+                              return _ChantierCard(chantier: chantier);
+                            },
+                          ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyTabState(BuildContext context, {required bool isTermines}) {
+    return Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            isTermines ? Icons.check_circle_outline : Icons.construction_outlined,
+            size: 48,
+            color: AppColors.acierClair,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            isTermines ? 'Aucun chantier terminé pour l\'instant' : 'Aucun chantier en cours',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleMedium,
           ),
         ],
       ),
@@ -155,7 +205,11 @@ class _ChantierCard extends StatelessWidget {
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 12),
-          if (chantier.syncStatus == ChantierSyncStatus.charge)
+          // Terminé (PV signé) prime sur le statut de chargement du livret,
+          // devenu secondaire une fois le chantier bouclé.
+          if (chantier.pvSigne)
+            const StatusIndicator(label: 'Terminé — PV signé', type: StatusType.conforme)
+          else if (chantier.syncStatus == ChantierSyncStatus.charge)
             const StatusIndicator(
               label: 'Livret chargé — prêt hors-ligne',
               type: StatusType.conforme,

@@ -7,6 +7,23 @@ import '../data/models/pv_reponses.dart';
 import '../data/models/user.dart';
 import '../data/repositories/chantier_repository.dart';
 
+/// "Terminé" est dérivé de [Chantier.pvSigne] — jamais un statut saisi à la
+/// main : le PV signé (réception faite, chantier bouclé) est la seule
+/// source de vérité, donc un chantier reclasse automatiquement s'il se
+/// désigne (voir [ChantierState.deletePv], qui remet pvSigne à `false`).
+/// Pure — testable sans ChantierState ni ses dépendances (repository,
+/// réseau...), voir aussi [chantiersTermines].
+List<Chantier> chantiersEnCours(List<Chantier> chantiers) => chantiers.where((c) => !c.pvSigne).toList();
+
+/// Triés par date de signature décroissante (la plus récente en premier) —
+/// contrairement à [chantiersEnCours], qui conserve l'ordre existant de la
+/// liste (comportement actuel, non modifié par cette fonctionnalité).
+List<Chantier> chantiersTermines(List<Chantier> chantiers) {
+  final termines = chantiers.where((c) => c.pvSigne).toList();
+  termines.sort((a, b) => (b.pvSigneAt ?? DateTime(0)).compareTo(a.pvSigneAt ?? DateTime(0)));
+  return termines;
+}
+
 class ChantierState extends ChangeNotifier {
   final ChantierRepository _repository;
   List<Chantier> _chantiers = [];
@@ -18,6 +35,11 @@ class ChantierState extends ChangeNotifier {
   List<Chantier> get chantiers => _chantiers;
   Chantier? get currentChantier => _currentChantier;
   bool get isLoading => _isLoading;
+
+  /// Vues dérivées de [chantiers] — voir [chantiersEnCours]/[chantiersTermines]
+  /// (fonctions pures, plus haut) pour la logique de filtrage/tri elle-même.
+  List<Chantier> get chantiersEnCoursList => chantiersEnCours(_chantiers);
+  List<Chantier> get chantiersTerminesList => chantiersTermines(_chantiers);
 
   /// Stale-while-revalidate : si le cache Drift a déjà des chantiers, ils
   /// s'affichent immédiatement (pas de spinner) pendant que le réseau

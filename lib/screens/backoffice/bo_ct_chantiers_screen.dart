@@ -30,9 +30,12 @@ class BoCtChantiersScreen extends StatefulWidget {
   State<BoCtChantiersScreen> createState() => _BoCtChantiersScreenState();
 }
 
+enum _TableauSegment { enCours, termines }
+
 class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
   final _searchController = TextEditingController();
   String _search = '';
+  _TableauSegment _segment = _TableauSegment.enCours;
 
   @override
   void dispose() {
@@ -42,12 +45,16 @@ class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final chantiers = context.watch<ChantierState>().chantiers;
+    final chantierState = context.watch<ChantierState>();
+    final chantiers = chantierState.chantiers;
+    final enCours = chantierState.chantiersEnCoursList;
+    final termines = chantierState.chantiersTerminesList;
+    final tableauChantiers = _segment == _TableauSegment.enCours ? enCours : termines;
 
     final query = _search.trim().toLowerCase();
     final filteredChantiers = query.isEmpty
-        ? chantiers
-        : chantiers.where((c) => c.reference.toLowerCase().contains(query) || c.client.toLowerCase().contains(query)).toList();
+        ? tableauChantiers
+        : tableauChantiers.where((c) => c.reference.toLowerCase().contains(query) || c.client.toLowerCase().contains(query)).toList();
 
     return BoShell(
       activeNav: 'chantiers',
@@ -59,7 +66,7 @@ class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
           LayoutBuilder(
             builder: (context, constraints) {
               final isWide = constraints.maxWidth > 800;
-              final table = _buildTable(context, filteredChantiers, query.isNotEmpty);
+              final table = _buildTable(context, filteredChantiers, query.isNotEmpty, enCoursCount: enCours.length, terminesCount: termines.length);
               final sidePanel = _buildSidePanel(context);
 
               if (!isWide) {
@@ -147,13 +154,23 @@ class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
     return ('—', StatusType.factuel);
   }
 
-  Widget _buildTable(BuildContext context, List<Chantier> chantiers, bool isSearching) {
+  Widget _buildTable(BuildContext context, List<Chantier> chantiers, bool isSearching, {required int enCoursCount, required int terminesCount}) {
+    final isTermines = _segment == _TableauSegment.termines;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Text('Chantiers en cours', style: Theme.of(context).textTheme.titleMedium),
+            Text(isTermines ? 'Chantiers terminés' : 'Chantiers en cours', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(width: 16),
+            SegmentedButton<_TableauSegment>(
+              segments: [
+                ButtonSegment(value: _TableauSegment.enCours, label: Text('En cours ($enCoursCount)')),
+                ButtonSegment(value: _TableauSegment.termines, label: Text('Terminés ($terminesCount)')),
+              ],
+              selected: {_segment},
+              onSelectionChanged: (selection) => setState(() => _segment = selection.first),
+            ),
             const Spacer(),
             SizedBox(
               width: 220,
@@ -181,10 +198,14 @@ class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
         if (chantiers.isEmpty)
           BoPanel(
             child: EmptyState(
-              icon: Icons.construction_outlined,
-              message: isSearching ? 'Aucun résultat pour « ${_search.trim()} ».' : 'Aucun chantier en cours pour l\'instant.',
-              actionLabel: isSearching ? null : 'Créer un nouveau chantier',
-              onAction: isSearching ? null : () => context.push('/backoffice/ct/chantiers/nouveau'),
+              icon: isTermines ? Icons.check_circle_outline : Icons.construction_outlined,
+              message: isSearching
+                  ? 'Aucun résultat pour « ${_search.trim()} ».'
+                  : isTermines
+                      ? 'Aucun chantier terminé pour l\'instant.'
+                      : 'Aucun chantier en cours pour l\'instant.',
+              actionLabel: isSearching || isTermines ? null : 'Créer un nouveau chantier',
+              onAction: isSearching || isTermines ? null : () => context.push('/backoffice/ct/chantiers/nouveau'),
             ),
           )
         else
