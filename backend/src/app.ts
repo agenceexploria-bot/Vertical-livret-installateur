@@ -9,6 +9,7 @@ import { notificationsRouter } from './routes/notifications';
 import { pusherRouter } from './routes/pusherAuth';
 import { uploadsRouter } from './routes/uploads';
 import { checklistTemplatesRouter } from './routes/checklistTemplates';
+import { transcribeSegmentRouter } from './routes/transcribeSegment';
 
 // Frontend et backend sont servis sur la même origine en production (voir
 // vercel.json) : ce CORS ne sert qu'au dev local (Flutter Web sur un port
@@ -46,6 +47,7 @@ export function createApp() {
   app.use('/pusher', pusherRouter);
   app.use('/uploads', uploadsRouter);
   app.use('/checklist-templates', checklistTemplatesRouter);
+  app.use('/transcribe-segment', transcribeSegmentRouter);
 
   // Filet de sécurité : la plupart des handlers n'ont pas leur propre
   // try/catch (revue de sécurité) — sans `express-async-errors` (importé en

@@ -82,4 +82,28 @@ void main() {
       expect(webAudioCodecFor(null), isNull);
     });
   });
+
+  group('appendLiveSegmentText', () {
+    test('premier segment : remplace le texte vide', () {
+      expect(appendLiveSegmentText('', 'Tout est conforme.'), 'Tout est conforme.');
+    });
+
+    test('segment suivant : accumulé à la suite, séparé par un espace', () {
+      expect(appendLiveSegmentText('Tout est conforme.', 'RAS sur les fins de course.'),
+          'Tout est conforme. RAS sur les fins de course.');
+    });
+
+    test('segment null (échec) : le texte déjà affiché reste intact — l\'enregistrement n\'est jamais interrompu', () {
+      expect(appendLiveSegmentText('Tout est conforme.', null), 'Tout est conforme.');
+    });
+
+    test('segment vide ou blanc (aucune parole détectée) : ignoré, texte déjà affiché intact', () {
+      expect(appendLiveSegmentText('Tout est conforme.', '   '), 'Tout est conforme.');
+      expect(appendLiveSegmentText('Tout est conforme.', ''), 'Tout est conforme.');
+    });
+
+    test('espaces superflus du segment reçu retirés avant accumulation', () {
+      expect(appendLiveSegmentText('Tout est conforme.', '  RAS.  '), 'Tout est conforme. RAS.');
+    });
+  });
 }

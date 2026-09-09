@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -5,8 +6,23 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 import 'platform/blob_reader.dart';
+import 'platform/mobile_detector.dart';
+import 'platform/web_dual_recorder.dart';
 import 'platform/web_media_recorder.dart';
 import 'voice_recorder_file_io.dart' if (dart.library.html) 'voice_recorder_file_web.dart' as file_io;
+
+/// Accumule le texte d'un nouveau segment transcrit en direct à la suite du
+/// texte déjà affiché — pure, testable indépendamment de l'UI/du navigateur
+/// (voir rex_screen.dart, RexScreen._handleLiveSegment). [newSegment]
+/// `null`/vide (segment échoué, ou aucune parole détectée dedans) est
+/// ignoré : le texte déjà affiché reste intact, un segment raté ne doit
+/// jamais faire régresser ce que l'installateur voit déjà à l'écran.
+String appendLiveSegmentText(String existing, String? newSegment) {
+  final trimmed = newSegment?.trim() ?? '';
+  if (trimmed.isEmpty) return existing;
+  if (existing.isEmpty) return trimmed;
+  return '$existing $trimmed';
+}
 
 /// Résultat de [VoiceRecorder.stopAndEncode] : soit la note vocale encodée
 /// ([dataUrl]), soit la raison précise de l'échec ([error]) — jamais les
@@ -107,6 +123,20 @@ class VoiceRecorder {
   // stopAndEncode) — écrasée en cas de démarrage Web par le codec réellement
   // choisi (voir start()).
   String _uploadMimeType = 'audio/ogg';
+  String _extension = 'ogg';
+
+  // Web mobile uniquement (voir start()) — un second MediaRecorder sur le
+  // MÊME flux micro que l'enregistrement principal, dédié à la
+  // transcription en direct par segments (voir web_dual_recorder_web.dart).
+  // `null` en dehors de ce cas, ou si ce second enregistreur n'a jamais pu
+  // démarrer (dégradation gracieuse — voir [liveTranscriptionAvailable]).
+  WebRecordingSession? _webSession;
+
+  /// `true` uniquement pendant un enregistrement Web mobile dont le second
+  /// enregistreur (transcription en direct) a démarré avec succès — jamais
+  /// vrai sur desktop (Web Speech API déjà suffisante, voir rex_screen.dart)
+  /// ni en natif (non implémenté ici).
+  bool get liveTranscriptionAvailable => _webSession?.segmentsEnabled ?? false;
 
   /// Trace de chaque étape franchie par le cycle start → stopAndEncode le
   /// plus récent — remise à zéro à chaque [start()]. Consultable sans
@@ -121,7 +151,11 @@ class VoiceRecorder {
     debugPrint('VoiceRecorder: $message');
   }
 
-  Future<VoiceRecorderStartResult> start() async {
+  /// [onLiveSegment] : appelé (Web mobile uniquement) avec les octets d'un
+  /// segment d'environ 5s dès qu'il est disponible — voir
+  /// RexScreen._handleLiveSegment, qui l'envoie à la transcription en
+  /// direct. Jamais appelé sur desktop (Web Speech API) ni en natif.
+  Future<VoiceRecorderStartResult> start({void Function(Uint8List bytes, String mimeType, String extension)? onLiveSegment}) async {
     stepLog.clear();
     // Sur Android 6+ et iOS, la déclaration dans le manifest/Info.plist ne
     // suffit pas : la permission doit être (re)demandée à l'exécution avant
@@ -177,8 +211,19 @@ class VoiceRecorder {
       }
       encoder = codec.encoder;
       _uploadMimeType = codec.uploadMimeType;
+      _extension = codec.extension;
       _path = 'rex-${DateTime.now().millisecondsSinceEpoch}.${codec.extension}';
       _log('format retenu : $mimeType (upload en $_uploadMimeType)');
+
+      // Web MOBILE uniquement (Android/iOS via navigateur) : la Web Speech
+      // API du desktop n'existe pas ici (voir rex_screen.dart) — un second
+      // MediaRecorder sur le MÊME flux micro transcrit par segments de ~5s
+      // pour donner à l'installateur un retour en direct, comme sur
+      // desktop. Desktop reste sur le chemin `record` historique ci-dessous,
+      // déjà éprouvé, jamais touché par ce nouveau code.
+      if (isMobileDevice()) {
+        return _startMobileWebRecording(mimeType!, onLiveSegment);
+      }
     } else {
       // Contrairement au Web, `record` écrit ici un vrai fichier sur mobile
       // : il faut un chemin absolu vers un répertoire accessible en
@@ -216,7 +261,59 @@ class VoiceRecorder {
     }
   }
 
+  Future<VoiceRecorderStartResult> _startMobileWebRecording(
+    String mimeType,
+    void Function(Uint8List bytes, String mimeType, String extension)? onLiveSegment,
+  ) async {
+    try {
+      _webSession = await WebRecordingSession.start(
+        mimeType: mimeType,
+        onSegment: (bytes) => onLiveSegment?.call(bytes, _uploadMimeType, _extension),
+        // Dégradation gracieuse : le second enregistreur est désactivé,
+        // l'enregistrement principal continue sans lui — jamais d'erreur
+        // visible pour l'installateur (voir liveTranscriptionAvailable et
+        // web_dual_recorder_web.dart).
+        onSegmentUnavailable: (e) => _log('transcription en direct indisponible pour ce segment — $e'),
+      );
+      _log(_webSession!.segmentsEnabled
+          ? 'enregistrement démarré (Web mobile, transcription en direct active)'
+          : 'enregistrement démarré (Web mobile, transcription en direct indisponible — repli sur la transcription à l\'arrivée)');
+      return VoiceRecorderStartResult.started;
+    } catch (e) {
+      final message = e.toString();
+      if (message.contains('NotAllowedError') || message.contains('Permission denied')) {
+        _log('permission micro refusée (getUserMedia, Web mobile) — $e');
+        return VoiceRecorderStartResult.permissionDenied;
+      }
+      _log('démarrage Web mobile (getUserMedia) a levé — $e');
+      return VoiceRecorderStartResult.error;
+    }
+  }
+
   Future<VoiceEncodeResult> stopAndEncode() async {
+    final webSession = _webSession;
+    if (webSession != null) {
+      _webSession = null;
+      try {
+        final bytes = await webSession.stop().timeout(
+          const Duration(seconds: 5),
+          onTimeout: () {
+            _log('arrêt du micro (Web mobile) : aucune réponse après 5s — abandon');
+            throw TimeoutException('arrêt du micro (Web mobile) : délai dépassé');
+          },
+        );
+        if (bytes.isEmpty) {
+          _log('échec : audio vide (0 octet, Web mobile) — capture probablement interrompue avant la première donnée');
+          return const VoiceEncodeResult.failure('L\'enregistrement est vide (0 octet) — réessayez en parlant plus longtemps après avoir appuyé sur le micro.');
+        }
+        _log('arrêt du micro OK (Web mobile) — ${bytes.length} octets');
+        return VoiceEncodeResult.success('data:$_uploadMimeType;base64,${base64Encode(bytes)}');
+      } catch (e) {
+        _log('arrêt du micro (Web mobile) a levé — $e');
+        return VoiceEncodeResult.failure('Impossible d\'arrêter l\'enregistrement : $e');
+      }
+    }
+
     String? pathOrBlobUrl;
     try {
       // record_web (voir MediaRecorderDelegate.stop()) attend l'évènement
@@ -304,5 +401,8 @@ class VoiceRecorder {
     }
   }
 
-  void dispose() => _recorder.dispose();
+  void dispose() {
+    _webSession?.dispose();
+    _recorder.dispose();
+  }
 }

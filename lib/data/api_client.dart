@@ -591,6 +591,18 @@ class ApiClient {
     });
   }
 
+  /// Transcription EN DIRECT d'un court segment audio (~5s) pendant
+  /// l'enregistrement d'un REX sur Web mobile (voir
+  /// lib/core/voice_recorder.dart, WebRecordingSession et
+  /// rex_screen.dart._handleLiveSegment) — [audio] est une data URL base64
+  /// (même convention que [uploadFile], mais envoyée directement dans le
+  /// corps JSON : le segment est bien trop petit pour justifier un
+  /// aller-retour par Vercel Blob). `text` peut être `null` (segment sans
+  /// parole détectée, ou transcription désactivée côté serveur) : jamais
+  /// une erreur en soi, l'appelant doit simplement ignorer ce segment.
+  Future<Map<String, dynamic>> transcribeSegment(String audio) =>
+      _request('POST', '/transcribe-segment', body: {'audio': audio});
+
   Future<Map<String, dynamic>> postRex(String reference, {String? transcription, String? audioUrl}) {
     return _request('POST', '/chantiers/$reference/rex', body: {
       'transcription': ?transcription,

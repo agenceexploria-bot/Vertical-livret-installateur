@@ -1,6 +1,38 @@
 import type { Express } from 'express';
 import request from 'supertest';
+import { vi } from 'vitest';
 import { prisma } from '../prisma';
+
+export const GROQ_TRANSCRIPTION_URL = 'https://api.groq.com/openai/v1/audio/transcriptions';
+export const OPENAI_TRANSCRIPTION_URL = 'https://api.openai.com/v1/audio/transcriptions';
+
+// GROQ_API_KEY/OPENAI_API_KEY sont explicitement absentes en test (voir
+// vitest.setup.ts) — ce helper les renseigne temporairement et intercepte
+// l'appel Whisper pour ne jamais faire de vrai appel réseau (voir
+// chantiers.test.ts et transcribeSegment.test.ts, qui la réactivent
+// explicitement toutes les deux).
+export async function withStubbedTranscription<T>(
+  envVar: 'GROQ_API_KEY' | 'OPENAI_API_KEY',
+  providerUrl: string,
+  providerResponse: Response,
+  run: () => Promise<T>,
+): Promise<T> {
+  const previousValue = process.env[envVar];
+  const previousFetch = globalThis.fetch;
+  process.env[envVar] = 'test-api-key';
+  globalThis.fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input.toString();
+    if (url === providerUrl) return providerResponse;
+    return previousFetch(input, init);
+  }) as typeof fetch;
+  try {
+    return await run();
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousValue === undefined) delete process.env[envVar];
+    else process.env[envVar] = previousValue;
+  }
+}
 
 // Mêmes listes par défaut que la migration checklist_template_items — `db
 // push` (utilisé par les tests, voir vitest.setup.ts) ne rejoue jamais le SQL

@@ -4,7 +4,9 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import '../../../core/theme.dart';
 import '../../../core/widgets/glass_app_bar.dart';
 import '../../../core/voice_recorder.dart';
@@ -106,7 +108,12 @@ class _RexScreenState extends State<RexScreen> with SingleTickerProviderStateMix
       return;
     }
 
-    final result = await _recorder.start();
+    // La transcription en direct par segments (voir _handleLiveSegment)
+    // n'a de sens que là où la Web Speech API ci-dessous n'existe pas
+    // (navigateurs mobiles) — les deux écrivent dans le même _liveText de
+    // façons incompatibles (remplacement vs accumulation) : jamais les deux
+    // en même temps.
+    final result = await _recorder.start(onLiveSegment: _speechAvailable ? null : _handleLiveSegment);
     if (!mounted) return;
     if (result != VoiceRecorderStartResult.started) {
       final SnackBar snackBar;
@@ -169,6 +176,26 @@ class _RexScreenState extends State<RexScreen> with SingleTickerProviderStateMix
       } catch (e) {
         debugPrint('RexScreen: échec de la transcription en direct — $e');
       }
+    }
+  }
+
+  /// Segment audio d'environ 5s transcrit en direct par Groq (Web mobile
+  /// uniquement — voir VoiceRecorder.start, WebRecordingSession) : le texte
+  /// reçu s'accumule dans _liveText, affiché en direct exactement comme la
+  /// Web Speech API le fait sur desktop. Un échec ici (réseau,
+  /// rate-limit...) ne doit JAMAIS interrompre l'enregistrement en cours —
+  /// voir VoiceRecorder.start pour l'isolation côté enregistreur lui-même,
+  /// ceci couvre l'échec de l'envoi du segment.
+  Future<void> _handleLiveSegment(Uint8List bytes, String mimeType, String extension) async {
+    if (!mounted) return;
+    final api = context.read<ApiClient>();
+    try {
+      final dataUrl = 'data:$mimeType;base64,${base64Encode(bytes)}';
+      final data = await api.transcribeSegment(dataUrl);
+      if (!mounted) return;
+      setState(() => _liveText = appendLiveSegmentText(_liveText, data['text'] as String?));
+    } catch (e) {
+      debugPrint('RexScreen._handleLiveSegment: échec — $e');
     }
   }
 
@@ -394,7 +421,7 @@ class _RexScreenState extends State<RexScreen> with SingleTickerProviderStateMix
           const SizedBox(height: 16),
           _buildErrorBanner('Échec enregistrement audio : $_voiceError', _recorder.stepLog),
         ],
-        if (_isRecording && _speechAvailable) ...[
+        if (_isRecording && (_speechAvailable || _recorder.liveTranscriptionAvailable)) ...[
           const SizedBox(height: 16),
           Container(
             width: double.infinity,

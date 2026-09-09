@@ -52,34 +52,28 @@ const EXTENSION_TO_MIME: Record<string, string> = {
   mp4: 'audio/mp4',
 };
 
-export async function transcribeAudio(audioUrl: string): Promise<string | null> {
+/// Envoie [audioBuffer] (déjà en mémoire) au fournisseur Whisper configuré
+/// et renvoie le texte — `null` si aucun fournisseur n'est configuré, le
+/// fichier est vide/trop gros, ou l'appel échoue/expire/renvoie un texte
+/// vide. Jamais bloquant pour l'appelant (voir [transcribeAudio] pour le
+/// REX complet après upload, ou routes/transcribeSegment.ts pour la
+/// transcription EN DIRECT d'un court segment pendant l'enregistrement).
+export async function transcribeBytes(audioBuffer: Buffer, mimeType: string, extension: string): Promise<string | null> {
   const provider = resolveProvider();
   if (!provider) {
     console.log('transcribeAudio: GROQ_API_KEY absente, transcription désactivée');
     return null;
   }
+  if (audioBuffer.byteLength === 0) {
+    console.log('transcribeAudio: fichier audio vide (0 octet) — capture côté client probablement en cause');
+    return null;
+  }
+  if (audioBuffer.byteLength > MAX_TRANSCRIBABLE_BYTES) {
+    console.log(`transcribeAudio: fichier trop volumineux pour Whisper (${audioBuffer.byteLength} > ${MAX_TRANSCRIBABLE_BYTES})`);
+    return null;
+  }
 
   try {
-    const audioResponse = await fetch(audioUrl);
-    if (!audioResponse.ok) {
-      console.log(`transcribeAudio: téléchargement de l'audio échoué — HTTP ${audioResponse.status} sur ${audioUrl}`);
-      return null;
-    }
-    const audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
-    console.log(`transcribeAudio: audio téléchargé — ${audioBuffer.byteLength} octets depuis ${audioUrl}`);
-    if (audioBuffer.byteLength === 0) {
-      console.log('transcribeAudio: fichier audio vide (0 octet) — capture côté client probablement en cause');
-      return null;
-    }
-    if (audioBuffer.byteLength > MAX_TRANSCRIBABLE_BYTES) {
-      console.log(`transcribeAudio: fichier trop volumineux pour Whisper (${audioBuffer.byteLength} > ${MAX_TRANSCRIBABLE_BYTES})`);
-      return null;
-    }
-
-    const extension = new URL(audioUrl).pathname.split('.').pop()?.toLowerCase() ?? 'webm';
-    const mimeType = EXTENSION_TO_MIME[extension] ?? 'audio/webm';
-    console.log(`transcribeAudio: extension=${extension} mimeType envoyé à Whisper=${mimeType}`);
-
     const form = new FormData();
     form.append('file', new Blob([audioBuffer], { type: mimeType }), `rex.${extension}`);
     form.append('model', provider.model);
@@ -128,4 +122,25 @@ export async function transcribeAudio(audioUrl: string): Promise<string | null> 
     console.log(`transcribeAudio: échec — ${isTimeout ? 'délai de 8s dépassé (timeout)' : String(error)}`);
     return null;
   }
+}
+
+export async function transcribeAudio(audioUrl: string): Promise<string | null> {
+  let audioBuffer: Buffer;
+  try {
+    const audioResponse = await fetch(audioUrl);
+    if (!audioResponse.ok) {
+      console.log(`transcribeAudio: téléchargement de l'audio échoué — HTTP ${audioResponse.status} sur ${audioUrl}`);
+      return null;
+    }
+    audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
+    console.log(`transcribeAudio: audio téléchargé — ${audioBuffer.byteLength} octets depuis ${audioUrl}`);
+  } catch (error) {
+    console.log(`transcribeAudio: téléchargement de l'audio a levé — ${error}`);
+    return null;
+  }
+
+  const extension = new URL(audioUrl).pathname.split('.').pop()?.toLowerCase() ?? 'webm';
+  const mimeType = EXTENSION_TO_MIME[extension] ?? 'audio/webm';
+  console.log(`transcribeAudio: extension=${extension} mimeType envoyé à Whisper=${mimeType}`);
+  return transcribeBytes(audioBuffer, mimeType, extension);
 }

@@ -1,11 +1,11 @@
-import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import request from 'supertest';
 import bcrypt from 'bcryptjs';
 import { PDFDocument } from 'pdf-lib';
 import { put } from '@vercel/blob';
 import { createApp } from '../app';
 import { prisma } from '../prisma';
-import { resetDb, signup as doSignup } from './helpers';
+import { resetDb, signup as doSignup, withStubbedTranscription, GROQ_TRANSCRIPTION_URL, OPENAI_TRANSCRIPTION_URL } from './helpers';
 
 const ONE_PX_PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
@@ -553,35 +553,6 @@ describe('POST /chantiers/:reference/rex', () => {
     expect(res.body.chantier.rex[0].audioPath).toBe(audioUrl);
   });
 
-  // GROQ_API_KEY/OPENAI_API_KEY sont explicitement absentes en test (voir
-  // vitest.setup.ts) — ces tests les renseignent temporairement et
-  // interceptent l'appel Whisper pour ne jamais faire de vrai appel réseau.
-  async function withStubbedTranscription<T>(
-    envVar: 'GROQ_API_KEY' | 'OPENAI_API_KEY',
-    providerUrl: string,
-    providerResponse: Response,
-    run: () => Promise<T>,
-  ): Promise<T> {
-    const previousValue = process.env[envVar];
-    const previousFetch = globalThis.fetch;
-    process.env[envVar] = 'test-api-key';
-    globalThis.fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
-      const url = typeof input === 'string' ? input : input.toString();
-      if (url === providerUrl) return providerResponse;
-      return previousFetch(input, init);
-    }) as typeof fetch;
-    try {
-      return await run();
-    } finally {
-      globalThis.fetch = previousFetch;
-      if (previousValue === undefined) delete process.env[envVar];
-      else process.env[envVar] = previousValue;
-    }
-  }
-
-  const GROQ_URL = 'https://api.groq.com/openai/v1/audio/transcriptions';
-  const OPENAI_URL = 'https://api.openai.com/v1/audio/transcriptions';
-
   it('transcrit automatiquement la note vocale via Groq (prioritaire) quand GROQ_API_KEY est configurée', async () => {
     const ct = await createCt();
     await createChantier(ct.accessToken);
@@ -589,7 +560,7 @@ describe('POST /chantiers/:reference/rex', () => {
 
     const res = await withStubbedTranscription(
       'GROQ_API_KEY',
-      GROQ_URL,
+      GROQ_TRANSCRIPTION_URL,
       new Response(JSON.stringify({ text: 'Tout est conforme, RAS.' }), { status: 200 }),
       () =>
         request(app)
@@ -609,7 +580,7 @@ describe('POST /chantiers/:reference/rex', () => {
 
     const res = await withStubbedTranscription(
       'OPENAI_API_KEY',
-      OPENAI_URL,
+      OPENAI_TRANSCRIPTION_URL,
       new Response(JSON.stringify({ text: 'Repli OpenAI, RAS.' }), { status: 200 }),
       () =>
         request(app)
@@ -627,7 +598,7 @@ describe('POST /chantiers/:reference/rex', () => {
     await createChantier(ct.accessToken);
     const audioUrl = await fakeUpload('rex.webm', ONE_PX_PNG_BASE64, 'audio/webm');
 
-    const res = await withStubbedTranscription('GROQ_API_KEY', GROQ_URL, new Response('erreur', { status: 500 }), () =>
+    const res = await withStubbedTranscription('GROQ_API_KEY', GROQ_TRANSCRIPTION_URL, new Response('erreur', { status: 500 }), () =>
       request(app)
         .post('/chantiers/LD64397/rex')
         .set('Authorization', `Bearer ${ct.accessToken}`)
