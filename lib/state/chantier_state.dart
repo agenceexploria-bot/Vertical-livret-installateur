@@ -83,6 +83,21 @@ class ChantierState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Résout un chantier à partir de sa seule référence — utilisé par un lien
+  /// direct (route /chantier/:ref, voir router.dart) : contrairement à la
+  /// navigation normale depuis la liste (déjà chargée, [selectChantier]
+  /// suffit), un lien WhatsApp/SMS peut arriver avant même que
+  /// [fetchChantiers] n'ait tourné (accueil jamais construit, la route est
+  /// atteinte directement) — va chercher le chantier au besoin. Laisse
+  /// l'exception (404 introuvable, 403 pas rattaché — voir
+  /// requireRattachement côté backend) remonter à l'appelant, qui affiche un
+  /// message clair plutôt qu'un écran vide.
+  Future<void> loadChantierByReference(String reference) async {
+    final chantier = await _repository.getChantier(reference);
+    _replaceInList(chantier);
+    selectChantier(chantier);
+  }
+
   Chantier? findByReference(String reference) {
     for (final c in _chantiers) {
       if (c.reference == reference) return c;

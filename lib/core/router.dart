@@ -62,6 +62,21 @@ List<String> _boAllowedPrefixesFor(UserRole role) {
   }
 }
 
+/// Destination /login qui mémorise [from] (la route visée avant d'être
+/// redirigé) pour y revenir juste après connexion — voir [loginRedirectFrom]
+/// pour la lecture symétrique. Pure et testable indépendamment du routeur :
+/// c'est exactement la chaîne que GoRouter recevra, puis re-parsera en
+/// `state.uri` au prochain passage dans `redirect`.
+String loginRedirectWith(Uri from) => '/login?from=${Uri.encodeComponent(from.toString())}';
+
+/// Lit la destination mémorisée par [loginRedirectWith] sur l'URI courante
+/// de /login — `null` si absente ou vide (comportement par défaut :
+/// atterrissage sur la home, inchangé).
+String? loginRedirectFrom(Uri loginUri) {
+  final from = loginUri.queryParameters['from'];
+  return (from != null && from.isNotEmpty) ? from : null;
+}
+
 class AppRouter {
   /// Construit le routeur une seule fois, avec [authState] comme
   /// `refreshListenable` : sans ça, la redirection ne se ré-évalue jamais
@@ -132,7 +147,12 @@ class AppRouter {
         if (authState.isLoading) return null;
 
         if (!authState.isAuthenticated && !isLoggingIn && !isSigningUp && !isForgotPassword && !isResetPassword) {
-          return '/login';
+          // Mémorise la destination d'origine (ex. un lien direct vers un
+          // chantier transmis par WhatsApp/SMS, voir "Copier le lien" dans
+          // bo_chantier_detail_screen.dart/ct_chantier_detail_screen.dart)
+          // pour y revenir juste après connexion, plutôt que d'atterrir sur
+          // la home — voir [loginRedirectWith]/[loginRedirectFrom].
+          return loginRedirectWith(state.uri);
         }
 
         if (authState.isAuthenticated) {
@@ -141,8 +161,13 @@ class AppRouter {
             return '/pending';
           }
 
-          // Redirection vers home si déjà connecté et on essaie d'aller sur login/signup/pending
+          // Redirection vers home si déjà connecté et on essaie d'aller sur
+          // login/signup/pending — sauf juste après une connexion réussie
+          // depuis un lien direct (voir ci-dessus) : `from` prime alors sur
+          // la home.
           if (authState.currentUser!.isActive && (isLoggingIn || isSigningUp || isPending)) {
+            final from = isLoggingIn ? loginRedirectFrom(state.uri) : null;
+            if (from != null) return from;
             return '/';
           }
 

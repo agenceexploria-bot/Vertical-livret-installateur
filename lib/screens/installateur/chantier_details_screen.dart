@@ -7,21 +7,84 @@ import '../../core/widgets/app_card.dart';
 import '../../core/widgets/glass_app_bar.dart';
 import '../../core/widgets/sync_banner.dart';
 import '../../core/widgets/responsive_layout.dart';
+import '../../data/api_client.dart';
 import '../../state/auth_state.dart';
 import '../../state/chantier_state.dart';
 import '../../state/network_state.dart';
 
-class ChantierDetailsScreen extends StatelessWidget {
+class ChantierDetailsScreen extends StatefulWidget {
   const ChantierDetailsScreen({super.key});
+
+  @override
+  State<ChantierDetailsScreen> createState() => _ChantierDetailsScreenState();
+}
+
+class _ChantierDetailsScreenState extends State<ChantierDetailsScreen> {
+  bool _isLoading = false;
+  String? _error;
+  String? _requestedRef;
+
+  /// Un lien direct (WhatsApp/SMS, voir bo_chantier_detail_screen.dart
+  /// "Copier le lien") peut atterrir ici avant même que la liste des
+  /// chantiers n'ait été chargée (l'accueil, qui déclenche normalement
+  /// fetchChantiers, n'est alors jamais construit) — ou avec un
+  /// currentChantier resté sur un AUTRE chantier consulté juste avant. Dans
+  /// les deux cas, on va chercher CE chantier précis par sa référence plutôt
+  /// que de supposer qu'il est déjà là.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final ref = GoRouterState.of(context).pathParameters['ref'];
+    if (ref == null || ref == _requestedRef) return;
+    final chantierState = context.read<ChantierState>();
+    if (chantierState.currentChantier?.reference == ref) return;
+    _requestedRef = ref;
+    _load(ref);
+  }
+
+  Future<void> _load(String ref) async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      await context.read<ChantierState>().loadChantierByReference(ref);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.message);
+      return;
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _error = 'Impossible de charger ce chantier. Vérifiez votre connexion.');
+      return;
+    }
+    if (mounted) setState(() => _isLoading = false);
+  }
 
   @override
   Widget build(BuildContext context) {
     final chantierState = context.watch<ChantierState>();
     final networkState = context.watch<NetworkState>();
     final offlineExpiry = context.watch<AuthState>().offlineExpiry;
+    final ref = GoRouterState.of(context).pathParameters['ref'];
     final chantier = chantierState.currentChantier;
 
-    if (chantier == null) {
+    if (_isLoading) {
+      return const ResponsiveLayout(
+        child: Center(child: CircularProgressIndicator(color: AppColors.orange)),
+      );
+    }
+
+    if (_error != null) {
+      return ResponsiveLayout(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Center(child: Text(_error!, textAlign: TextAlign.center)),
+        ),
+      );
+    }
+
+    if (chantier == null || (ref != null && chantier.reference != ref)) {
       return const ResponsiveLayout(
         child: Center(child: Text('Chantier introuvable')),
       );

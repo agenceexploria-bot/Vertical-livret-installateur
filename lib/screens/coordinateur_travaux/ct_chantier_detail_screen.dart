@@ -1,8 +1,11 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../core/chantier_link.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/ajouter_document_chantier_dialog.dart';
 import '../../core/widgets/app_card.dart';
@@ -48,6 +51,11 @@ class CtChantierDetailScreen extends StatelessWidget {
         backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,
         actions: [
+          IconButton(
+            onPressed: () => _copierLien(context, chantier),
+            icon: const Icon(Icons.link),
+            tooltip: 'Copier le lien de ce chantier',
+          ),
           IconButton(
             onPressed: () => context.push('/ct/chantier/${chantier.reference}/modifier'),
             icon: const Icon(Icons.edit_outlined),
@@ -282,6 +290,24 @@ class CtChantierDetailScreen extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  /// Lien direct vers la fiche installateur de ce chantier (route
+  /// /chantier/:ref, voir router.dart) — copié dans le presse-papier pour
+  /// être transmis par WhatsApp/SMS. Contrairement à la version Web du
+  /// back-office (toujours servie depuis une vraie page, voir
+  /// bo_chantier_detail_screen.dart), cet écran tourne aussi en natif
+  /// mobile — Uri.base n'y reflète aucune origine web utilisable, d'où le
+  /// repli sur le domaine de production (déjà en dur côté backend, voir
+  /// PROD_ORIGIN dans backend/src/app.ts).
+  Future<void> _copierLien(BuildContext context, Chantier chantier) async {
+    final origin = kIsWeb ? Uri.base.origin : 'https://vertical-livret-installateur.vercel.app';
+    final url = chantierLinkUrl(origin: origin, reference: chantier.reference);
+    await Clipboard.setData(ClipboardData(text: url));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Lien copié — transmettez-le à l\'installateur.')),
     );
   }
 

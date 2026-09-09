@@ -1,6 +1,28 @@
+import 'dart:io';
+import 'package:drift/drift.dart' show driftRuntimeOptions;
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vertical_app/data/api_client.dart';
+import 'package:vertical_app/data/local/app_database.dart';
 import 'package:vertical_app/data/models/chantier.dart';
+import 'package:vertical_app/data/repositories/chantier_repository.dart';
 import 'package:vertical_app/state/chantier_state.dart';
+
+/// Doublure de ApiClient.getChantier — voir ChantierState.loadChantierByReference
+/// (lien direct WhatsApp/SMS vers un chantier, voir "Copier le lien" dans
+/// bo_chantier_detail_screen.dart).
+class _GetChantierApiClient extends ApiClient {
+  final Map<String, dynamic>? chantierJson;
+  final Object? error;
+  _GetChantierApiClient.success(this.chantierJson) : error = null;
+  _GetChantierApiClient.failure(this.error) : chantierJson = null;
+
+  @override
+  Future<Map<String, dynamic>> getChantier(String reference) async {
+    if (error != null) throw error!;
+    return {'chantier': chantierJson};
+  }
+}
 
 Chantier _chantier(String reference, {bool pvSigne = false, DateTime? pvSigneAt}) => Chantier(
       reference: reference,
@@ -124,6 +146,57 @@ void main() {
 
       expect(chantiersTermines(chantiers), isEmpty);
       expect(chantiersEnCours(chantiers).map((c) => c.reference), ['LD2']);
+    });
+  });
+
+  group('ChantierState.loadChantierByReference (lien direct WhatsApp/SMS vers un chantier)', () {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+
+    // Répertoire temporaire dédié par test — voir chantier_repository_test.dart
+    // (AppDatabase utilise toujours le même nom de fichier ; le partager
+    // entre tests ferait fuiter les lignes de l'un vers l'autre).
+    Future<AppDatabase> pumpDb() async {
+      final dir = Directory.systemTemp.createTempSync('chantier_state_test');
+      const channel = MethodChannel('plugins.flutter.io/path_provider');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
+        channel,
+        (call) async => dir.path,
+      );
+      return AppDatabase();
+    }
+
+    test('succès : le chantier résolu devient currentChantier', () async {
+      final db = await pumpDb();
+      final json = _chantier('LD70850').toJson();
+      final state = ChantierState(ChantierRepository(_GetChantierApiClient.success(json), db));
+
+      await state.loadChantierByReference('LD70850');
+
+      expect(state.currentChantier?.reference, 'LD70850');
+    });
+
+    test('installateur non rattaché (403) : relève l\'exception avec le message exact du backend — jamais un écran vide sans explication', () async {
+      final db = await pumpDb();
+      final exception = ApiException(403, 'Vous n\'êtes pas rattaché à ce chantier');
+      final state = ChantierState(ChantierRepository(_GetChantierApiClient.failure(exception), db));
+
+      await expectLater(
+        () => state.loadChantierByReference('LD70850'),
+        throwsA(same(exception)),
+      );
+      expect(state.currentChantier, isNull);
+    });
+
+    test('chantier introuvable (404) : relève l\'exception avec le message exact du backend', () async {
+      final db = await pumpDb();
+      final exception = ApiException(404, 'Chantier introuvable');
+      final state = ChantierState(ChantierRepository(_GetChantierApiClient.failure(exception), db));
+
+      await expectLater(
+        () => state.loadChantierByReference('INEXISTANT'),
+        throwsA(same(exception)),
+      );
     });
   });
 }

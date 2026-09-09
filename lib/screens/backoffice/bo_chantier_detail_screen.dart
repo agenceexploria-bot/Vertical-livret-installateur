@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../core/chantier_link.dart';
 import '../../core/document_capture.dart';
 import '../../core/document_download.dart';
 import '../../core/theme.dart';
@@ -44,6 +46,21 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  /// Lien direct vers la fiche installateur de ce chantier (route
+  /// /chantier/:ref, voir router.dart) — copié dans le presse-papier pour
+  /// être transmis par WhatsApp/SMS. Uri.base.origin reflète l'origine
+  /// réellement servie (prod, preview, localhost en dev) plutôt qu'un
+  /// domaine codé en dur. Le hash (#/...) est la stratégie d'URL par défaut
+  /// de Flutter Web ici (usePathUrlStrategy n'est jamais appelé).
+  Future<void> _copierLien(BuildContext context, Chantier chantier) async {
+    final url = chantierLinkUrl(origin: Uri.base.origin, reference: chantier.reference);
+    await Clipboard.setData(ClipboardData(text: url));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Lien copié — transmettez-le à l\'installateur.')),
+    );
   }
 
   /// Affiche un message clair en cas d'échec d'une action serveur — sans ça,
@@ -101,18 +118,24 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
             ],
           ),
           const SizedBox(height: 16),
-          Row(
+          Wrap(
+            alignment: WrapAlignment.end,
+            spacing: 10,
+            runSpacing: 10,
             children: [
-              const Spacer(),
-              if (canModifier) ...[
+              OutlinedButton.icon(
+                onPressed: () => _copierLien(context, chantier),
+                icon: const Icon(Icons.link, size: 18),
+                label: const Text('Copier le lien'),
+                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 42), padding: const EdgeInsets.symmetric(horizontal: 16)),
+              ),
+              if (canModifier)
                 OutlinedButton.icon(
                   onPressed: () => _openModifierDialog(context, chantier),
                   icon: const Icon(Icons.edit_outlined, size: 18),
                   label: const Text('Modifier'),
                   style: OutlinedButton.styleFrom(minimumSize: const Size(0, 42), padding: const EdgeInsets.symmetric(horizontal: 16)),
                 ),
-                const SizedBox(width: 10),
-              ],
               if (isAdmin)
                 OutlinedButton.icon(
                   onPressed: () => _confirmerSuppression(context, chantier),
