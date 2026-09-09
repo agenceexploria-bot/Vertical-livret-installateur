@@ -553,33 +553,43 @@ describe('POST /chantiers/:reference/rex', () => {
     expect(res.body.chantier.rex[0].audioPath).toBe(audioUrl);
   });
 
-  // OPENAI_API_KEY est explicitement absente en test (voir vitest.setup.ts) —
-  // ces deux tests la renseignent temporairement et interceptent l'appel
-  // Whisper pour ne jamais faire de vrai appel réseau payant.
-  async function withStubbedOpenAi<T>(openAiResponse: Response, run: () => Promise<T>): Promise<T> {
-    const previousKey = process.env.OPENAI_API_KEY;
+  // GROQ_API_KEY/OPENAI_API_KEY sont explicitement absentes en test (voir
+  // vitest.setup.ts) — ces tests les renseignent temporairement et
+  // interceptent l'appel Whisper pour ne jamais faire de vrai appel réseau.
+  async function withStubbedTranscription<T>(
+    envVar: 'GROQ_API_KEY' | 'OPENAI_API_KEY',
+    providerUrl: string,
+    providerResponse: Response,
+    run: () => Promise<T>,
+  ): Promise<T> {
+    const previousValue = process.env[envVar];
     const previousFetch = globalThis.fetch;
-    process.env.OPENAI_API_KEY = 'test-openai-key';
+    process.env[envVar] = 'test-api-key';
     globalThis.fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.toString();
-      if (url === 'https://api.openai.com/v1/audio/transcriptions') return openAiResponse;
+      if (url === providerUrl) return providerResponse;
       return previousFetch(input, init);
     }) as typeof fetch;
     try {
       return await run();
     } finally {
       globalThis.fetch = previousFetch;
-      if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
-      else process.env.OPENAI_API_KEY = previousKey;
+      if (previousValue === undefined) delete process.env[envVar];
+      else process.env[envVar] = previousValue;
     }
   }
 
-  it('transcrit automatiquement la note vocale quand OPENAI_API_KEY est configurée', async () => {
+  const GROQ_URL = 'https://api.groq.com/openai/v1/audio/transcriptions';
+  const OPENAI_URL = 'https://api.openai.com/v1/audio/transcriptions';
+
+  it('transcrit automatiquement la note vocale via Groq (prioritaire) quand GROQ_API_KEY est configurée', async () => {
     const ct = await createCt();
     await createChantier(ct.accessToken);
     const audioUrl = await fakeUpload('rex.webm', ONE_PX_PNG_BASE64, 'audio/webm');
 
-    const res = await withStubbedOpenAi(
+    const res = await withStubbedTranscription(
+      'GROQ_API_KEY',
+      GROQ_URL,
       new Response(JSON.stringify({ text: 'Tout est conforme, RAS.' }), { status: 200 }),
       () =>
         request(app)
@@ -592,12 +602,32 @@ describe('POST /chantiers/:reference/rex', () => {
     expect(res.body.chantier.rex[0].transcription).toBe('Tout est conforme, RAS.');
   });
 
+  it('retombe sur OpenAI quand GROQ_API_KEY est absente mais OPENAI_API_KEY est configurée', async () => {
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
+    const audioUrl = await fakeUpload('rex.webm', ONE_PX_PNG_BASE64, 'audio/webm');
+
+    const res = await withStubbedTranscription(
+      'OPENAI_API_KEY',
+      OPENAI_URL,
+      new Response(JSON.stringify({ text: 'Repli OpenAI, RAS.' }), { status: 200 }),
+      () =>
+        request(app)
+          .post('/chantiers/LD64397/rex')
+          .set('Authorization', `Bearer ${ct.accessToken}`)
+          .send({ audioUrl }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.chantier.rex[0].transcription).toBe('Repli OpenAI, RAS.');
+  });
+
   it("n'empêche pas la création du REX si la transcription automatique échoue", async () => {
     const ct = await createCt();
     await createChantier(ct.accessToken);
     const audioUrl = await fakeUpload('rex.webm', ONE_PX_PNG_BASE64, 'audio/webm');
 
-    const res = await withStubbedOpenAi(new Response('erreur', { status: 500 }), () =>
+    const res = await withStubbedTranscription('GROQ_API_KEY', GROQ_URL, new Response('erreur', { status: 500 }), () =>
       request(app)
         .post('/chantiers/LD64397/rex')
         .set('Authorization', `Bearer ${ct.accessToken}`)

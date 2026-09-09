@@ -1,12 +1,39 @@
-/// Transcription automatique des notes vocales REX via l'API Whisper
-/// d'OpenAI. La reconnaissance vocale en direct côté app (speech_to_text,
-/// voir rex_screen.dart) est best-effort — réseau, navigateur/OS — et reste
-/// vide si elle échoue ; ceci est le filet de sécurité qui tourne côté
-/// serveur sur l'audio déjà déposé, indépendamment de ce que le client a pu
-/// capter en direct. Nécessite OPENAI_API_KEY (voir .env.example) ; sans
-/// cette variable, la fonction ne fait rien et la note vocale reste sans
-/// transcription, comme avant.
-const OPENAI_TRANSCRIPTION_URL = 'https://api.openai.com/v1/audio/transcriptions';
+/// Transcription automatique des notes vocales REX via Whisper — Groq
+/// d'abord (gratuit, API compatible OpenAI), OpenAI en repli si
+/// GROQ_API_KEY est absente mais OPENAI_API_KEY l'est (voir
+/// [resolveProvider]). La reconnaissance vocale en direct côté app
+/// (speech_to_text, voir rex_screen.dart) est best-effort — réseau,
+/// navigateur/OS — et reste vide si elle échoue ; ceci est le filet de
+/// sécurité qui tourne côté serveur sur l'audio déjà déposé, indépendamment
+/// de ce que le client a pu capter en direct. Nécessite GROQ_API_KEY ou
+/// OPENAI_API_KEY (voir .env.example) ; sans aucune des deux, la fonction ne
+/// fait rien et la note vocale reste sans transcription, comme avant.
+interface TranscriptionProvider {
+  name: string;
+  apiKey: string;
+  url: string;
+  // whisper-large-v3-turbo (Groq) privilégie la vitesse à la précision —
+  // pertinent ici : cet appel reste dans le chemin de la requête HTTP,
+  // sous un délai de 8s (voir plus bas).
+  model: string;
+}
+
+/// Groq d'abord (gratuit) ; OpenAI en repli si seule OPENAI_API_KEY est
+/// configurée — les deux exposent une API /audio/transcriptions compatible
+/// (mêmes paramètres : model, file, language), seule l'URL de base et la clé
+/// changent. `null` si aucune des deux n'est configurée.
+function resolveProvider(): TranscriptionProvider | null {
+  const groqKey = process.env.GROQ_API_KEY;
+  if (groqKey) {
+    return { name: 'Groq', apiKey: groqKey, url: 'https://api.groq.com/openai/v1/audio/transcriptions', model: 'whisper-large-v3-turbo' };
+  }
+  const openAiKey = process.env.OPENAI_API_KEY;
+  if (openAiKey) {
+    console.log('transcribeAudio: GROQ_API_KEY absente, repli sur OPENAI_API_KEY');
+    return { name: 'OpenAI', apiKey: openAiKey, url: 'https://api.openai.com/v1/audio/transcriptions', model: 'whisper-1' };
+  }
+  return null;
+}
 
 // Whisper refuse tout fichier de plus de 25 Mo — inutile de tenter l'appel
 // au-delà (les notes vocales REX sont plafonnées à 50 Mo côté upload, voir
@@ -26,9 +53,9 @@ const EXTENSION_TO_MIME: Record<string, string> = {
 };
 
 export async function transcribeAudio(audioUrl: string): Promise<string | null> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    console.log('transcribeAudio: OPENAI_API_KEY absent, transcription désactivée');
+  const provider = resolveProvider();
+  if (!provider) {
+    console.log('transcribeAudio: GROQ_API_KEY absente, transcription désactivée');
     return null;
   }
 
@@ -55,7 +82,7 @@ export async function transcribeAudio(audioUrl: string): Promise<string | null> 
 
     const form = new FormData();
     form.append('file', new Blob([audioBuffer], { type: mimeType }), `rex.${extension}`);
-    form.append('model', 'whisper-1');
+    form.append('model', provider.model);
     // Sans ce paramètre, Whisper détecte la langue automatiquement et peut se
     // tromper (notamment sur un audio court ou bruité) — le REX est toujours
     // en français, donc jamais utile de laisser la détection deviner.
@@ -69,9 +96,9 @@ export async function transcribeAudio(audioUrl: string): Promise<string | null> 
     const timeout = setTimeout(() => controller.abort(), 8_000);
     let response: Response;
     try {
-      response = await fetch(OPENAI_TRANSCRIPTION_URL, {
+      response = await fetch(provider.url, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${apiKey}` },
+        headers: { Authorization: `Bearer ${provider.apiKey}` },
         body: form,
         signal: controller.signal,
       });
@@ -83,13 +110,13 @@ export async function transcribeAudio(audioUrl: string): Promise<string | null> 
       // Content-Type rejeté ou une clé invalide donnent chacun un message
       // différent dans le corps — impossible à diagnostiquer sans lui.
       const body = await response.text().catch(() => '<corps illisible>');
-      console.log(`transcribeAudio: Whisper a refusé la requête — HTTP ${response.status} — ${body}`);
+      console.log(`transcribeAudio: ${provider.name} a refusé la requête — HTTP ${response.status} — ${body}`);
       return null;
     }
 
     const data = (await response.json()) as { text?: string };
     const text = data.text?.trim();
-    console.log(`transcribeAudio: réponse Whisper reçue — ${text ? `${text.length} caractères` : 'texte vide'}`);
+    console.log(`transcribeAudio: réponse ${provider.name} reçue — ${text ? `${text.length} caractères` : 'texte vide'}`);
     return text && text.length > 0 ? text : null;
   } catch (error) {
     // Réseau indisponible, clé invalide... — jamais bloquant pour la
