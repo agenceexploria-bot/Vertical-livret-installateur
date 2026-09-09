@@ -103,6 +103,14 @@ export function serializeChantier(
     coordinateurTravauxId: c.coordinateurTravauxId,
     coordinateurTravauxNom: c.coordinateurTravaux ? `${c.coordinateurTravaux.prenom} ${c.coordinateurTravaux.nom}` : null,
     syncStatus: c.syncStatus,
+    // Module SAV — type vaut toujours 'installation' pour un chantier
+    // existant (valeur par défaut de la migration, jamais null) ; les
+    // champs SAV restent null pour une installation.
+    type: c.type,
+    parentReference: c.parentReference,
+    descriptionIntervention: c.descriptionIntervention,
+    piecesRemplacees: c.piecesRemplacees,
+    savDate: c.savDate,
     rex: (c.rex ?? []).map(serializeRex),
     pvPdfPath: c.pvPdfPath,
     pvSigne: c.pvSigne,

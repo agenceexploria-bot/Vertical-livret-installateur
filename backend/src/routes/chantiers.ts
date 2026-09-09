@@ -7,6 +7,7 @@ import { requireAuth, requireRole, AuthedRequest } from '../middleware/auth';
 import { saveBuffer, deleteBlobFile, isOwnBlobUrl } from '../lib/imageStorage';
 import { fetchBlobFile, fusionnerSignatureDansPdf } from '../lib/pvMerge';
 import { genererPdfPvFormulaire, PvFormReponses } from '../lib/pvFormPdf';
+import { genererPdfSavFormulaire } from '../lib/savFormPdf';
 import { PV_SECTION_1, PV_SECTION_2, PV_SECTION_3, PvChecklistItemDef } from '../lib/pvFormulaireDefinition';
 import { isPointComplete } from '../lib/pointControleStatus';
 import { transcribeAudio } from '../lib/transcription';
@@ -51,8 +52,18 @@ async function requireRattachement(req: ChantierScopedRequest, res: Response, ne
 chantiersRouter.get('/', requireAuth, async (req: AuthedRequest, res) => {
   const { userId, role } = req.auth!;
 
+  // ?type=installation|sav (optionnel) — utilisé par l'accueil installateur
+  // pour ses deux listes distinctes ("Mes chantiers" / "Interventions
+  // SAV", voir home_screen.dart) ; sans le paramètre, renvoie tout comme
+  // avant (comportement inchangé pour le back-office).
+  const typeFilter = req.query.type;
+  const type = typeFilter === 'installation' || typeFilter === 'sav' ? typeFilter : undefined;
+
   const chantiers = await prisma.chantier.findMany({
-    where: role === 'installateur' ? { installateurs: { some: { userId } } } : undefined,
+    where: {
+      ...(role === 'installateur' ? { installateurs: { some: { userId } } } : {}),
+      ...(type ? { type } : {}),
+    },
     include: CHANTIER_INCLUDE,
     orderBy: { dateDebut: 'asc' },
   });
@@ -137,6 +148,85 @@ chantiersRouter.get('/:reference', requireAuth, requireRattachement, async (req:
   });
   if (!chantier) return res.status(404).json({ error: 'Chantier introuvable' });
   res.json({ chantier: serializeChantier(chantier) });
+});
+
+const createSavSchema = z.object({
+  descriptionProbleme: z.string().min(1),
+  installateurId: z.string().min(1),
+  savDate: z.string().optional(),
+});
+
+// Crée une intervention SAV rattachée à ce chantier d'installation — JAMAIS
+// orpheline (cadrage module SAV) : uniquement depuis la fiche du chantier
+// d'origine, CT/Direction/Admin. La référence SAV est dérivée de celle du
+// chantier d'origine (SAV-<référence>-<incrément>) plutôt que saisie à la
+// main, pour rester toujours traçable — voir parentReference.
+// descriptionProbleme (ce que le CA a constaté/signalé à la création)
+// pré-remplit descriptionIntervention, que l'installateur complète/corrige
+// ensuite en soumettant le PV SAV (voir POST .../pv/reponses) — un seul
+// champ, pas de distinction "signalé" / "réalisé" en base.
+chantiersRouter.post('/:reference/sav', requireAuth, requireRole('coordinateurTravaux', 'direction', 'admin'), async (req, res) => {
+  const parsed = createSavSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  const d = parsed.data;
+
+  const parent = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
+  if (!parent) return res.status(404).json({ error: 'Chantier introuvable' });
+  if (parent.type !== 'installation') {
+    return res.status(400).json({ error: 'Une intervention SAV ne peut être créée que depuis un chantier d\'installation' });
+  }
+
+  const installateur = await prisma.user.findUnique({ where: { id: d.installateurId } });
+  if (!installateur || installateur.role !== 'installateur') {
+    return res.status(400).json({ error: 'Installateur sélectionné invalide' });
+  }
+
+  // Incrément par chantier d'origine — SAV-<référence>-1, -2... Le nombre de
+  // SAV déjà créés (même si l'un a été supprimé depuis) suffit : on ne
+  // cherche jamais à combler un trou, seulement à ne jamais réutiliser un
+  // numéro déjà attribué.
+  const existingSavCount = await prisma.chantier.count({ where: { parentReference: parent.reference } });
+  const reference = `SAV-${parent.reference}-${existingSavCount + 1}`;
+  const savDate = d.savDate ? new Date(d.savDate) : new Date();
+
+  const sav = await prisma.chantier.create({
+    data: {
+      reference,
+      client: parent.client,
+      adresse: parent.adresse,
+      ville: parent.ville,
+      dateDebut: savDate,
+      dateFin: savDate,
+      contactNom: parent.contactNom,
+      contactTel: parent.contactTel,
+      contactEmail: parent.contactEmail,
+      horaires: parent.horaires,
+      consignes: parent.consignes,
+      typeMonteCharge: parent.typeMonteCharge,
+      capacite: parent.capacite,
+      niveaux: parent.niveaux,
+      referenceAffaire: parent.referenceAffaire,
+      coordinateurTravauxId: parent.coordinateurTravauxId,
+      type: 'sav',
+      parentReference: parent.reference,
+      descriptionIntervention: d.descriptionProbleme,
+      savDate,
+      // Aucun pointsControle créé (contrairement à POST / pour une
+      // installation) : réception marchandises et auto-contrôle n'ont pas
+      // de sens pour un SAV — c'est aussi ce qui permet au frontend de
+      // masquer ces modules sans logique supplémentaire (listes vides).
+      installateurs: { create: { userId: d.installateurId } },
+    },
+    include: CHANTIER_INCLUDE,
+  });
+
+  // Pas de notification dédiée ici : il n'existe aujourd'hui aucun système
+  // de notification côté installateur dans l'app (GET /notifications est
+  // réservé à CT/Admin, voir routes/notifications.ts) — l'installateur
+  // découvre le SAV via le temps réel existant (chantier-changed) au
+  // prochain rafraîchissement de sa liste.
+  await triggerChantierChanged(sav.reference);
+  res.status(201).json({ chantier: serializeChantier(sav) });
 });
 
 chantiersRouter.post('/:reference/rattacher', requireAuth, requireRole('coordinateurTravaux', 'direction', 'admin'), async (req, res) => {
@@ -641,18 +731,105 @@ const pvFormulaireSchema = z.object({
   signatureImage: z.string().min(1, "L'image de la signature est requise"),
 });
 
-// Nouveau flux (formulaire PV interactif, voir pvFormPdf.ts) : contrairement
-// à .../pv/signature (qui superpose la signature sur un gabarit PDF déjà
-// déposé), ici il n'y a pas de gabarit — le backend génère le PDF final de
-// toutes pièces à partir des réponses du formulaire + la signature. Réservé
-// aux chantiers qui n'utilisent PAS l'ancien flux (pvPdfPath == null) ; même
-// verrou qu'ailleurs, un PV déjà signé ne se re-signe pas.
+// PV SAV — pas de checklist du gabarit officiel ici, texte libre comme sur
+// un rapport d'intervention papier (voir savFormPdf.ts). [photos] : URLs
+// déjà déposées sur Vercel Blob (voir routes/uploads.ts, kind "savPhoto")
+// — embarquées dans le PDF final, jamais conservées comme documents
+// autonomes séparés.
+const savFormulaireSchema = z.object({
+  descriptionIntervention: z.string().min(1),
+  piecesRemplacees: z.string().optional().nullable(),
+  photos: z.array(z.string()).default([]),
+  nomSignataire: z.string().min(1),
+  fonctionSignataire: z.string().min(1),
+  signatureImage: z.string().min(1, "L'image de la signature est requise"),
+});
+
+// Nouveau flux (formulaire PV interactif, voir pvFormPdf.ts/savFormPdf.ts) :
+// contrairement à .../pv/signature (qui superpose la signature sur un
+// gabarit PDF déjà déposé), ici il n'y a pas de gabarit — le backend génère
+// le PDF final de toutes pièces à partir des réponses du formulaire + la
+// signature. Réservé aux chantiers qui n'utilisent PAS l'ancien flux
+// (pvPdfPath == null) ; même verrou qu'ailleurs, un PV déjà signé ne se
+// re-signe pas. Une seule route pour les deux formulaires (réception ou
+// SAV) : le type du chantier déjà en base tranche, jamais une valeur fournie
+// par le client — un installateur ne peut pas soumettre un PV SAV sur une
+// installation (ou l'inverse) en trafiquant sa requête.
 chantiersRouter.post(
   '/:reference/pv/reponses',
   requireAuth,
   requireRole('installateur'),
   requireRattachement,
   async (req, res) => {
+    const existing = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
+    if (!existing) return res.status(404).json({ error: 'Chantier introuvable' });
+    if (existing.pvPdfPath) {
+      return res.status(400).json({ error: 'Ce chantier utilise le dépôt de gabarit PDF — voir la signature classique du PV' });
+    }
+    if (existing.pvSigne) {
+      return res.status(400).json({ error: 'Ce PV est déjà signé — seul le CT/Admin peut le réinitialiser en le supprimant' });
+    }
+
+    if (existing.type === 'sav') {
+      const parsed = savFormulaireSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+      if (!isPngDataUrl(parsed.data.signatureImage)) {
+        return res.status(400).json({ error: 'La signature doit être une image PNG' });
+      }
+      for (const url of parsed.data.photos) {
+        if (!isOwnBlobUrl(url)) return res.status(400).json({ error: 'URL de photo invalide' });
+      }
+
+      let pdfBytes: Buffer;
+      try {
+        const signatureBytes = Buffer.from(parsed.data.signatureImage.split(',')[1] ?? '', 'base64');
+        const photos = await Promise.all(
+          parsed.data.photos.map(async (url) => ({
+            bytes: await fetchBlobFile(url),
+            isPng: new URL(url).pathname.toLowerCase().endsWith('.png'),
+          })),
+        );
+        pdfBytes = await genererPdfSavFormulaire({
+          chantier: {
+            reference: existing.reference,
+            client: existing.client,
+            adresse: existing.adresse,
+            referenceAffaire: existing.referenceAffaire,
+            parentReference: existing.parentReference ?? '—',
+          },
+          descriptionIntervention: parsed.data.descriptionIntervention,
+          piecesRemplacees: parsed.data.piecesRemplacees,
+          savDate: existing.savDate ?? new Date(),
+          nomSignataire: parsed.data.nomSignataire,
+          fonctionSignataire: parsed.data.fonctionSignataire,
+          signaturePngBytes: signatureBytes,
+          photos,
+        });
+      } catch (err) {
+        console.error('Génération du PDF du PV SAV échouée:', err);
+        return res.status(502).json({ error: 'Impossible de générer le PDF du PV, réessayez.' });
+      }
+
+      if (existing.pvSignatureImagePath) await deleteBlobFile(existing.pvSignatureImagePath);
+      const pvSignatureImagePath = await saveBuffer(pdfBytes, `pv-sav-signe-${existing.id}`, 'application/pdf');
+
+      const chantier = await prisma.chantier.update({
+        where: { reference: req.params.reference },
+        data: {
+          descriptionIntervention: parsed.data.descriptionIntervention,
+          piecesRemplacees: parsed.data.piecesRemplacees,
+          pvSigne: true,
+          pvSigneur: parsed.data.nomSignataire,
+          pvFonctionSignataire: parsed.data.fonctionSignataire,
+          pvSigneAt: new Date(),
+          pvSignatureImagePath,
+        },
+        include: CHANTIER_INCLUDE,
+      });
+      await triggerChantierChanged(chantier.reference);
+      return res.json({ chantier: serializeChantier(chantier) });
+    }
+
     const parsed = pvFormulaireSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
     if (!isPngDataUrl(parsed.data.signatureImage)) {
@@ -661,15 +838,6 @@ chantiersRouter.post(
     const dateReception = new Date(parsed.data.dateReception);
     if (Number.isNaN(dateReception.getTime())) {
       return res.status(400).json({ error: 'Date de réception invalide' });
-    }
-
-    const existing = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
-    if (!existing) return res.status(404).json({ error: 'Chantier introuvable' });
-    if (existing.pvPdfPath) {
-      return res.status(400).json({ error: 'Ce chantier utilise le dépôt de gabarit PDF — voir la signature classique du PV' });
-    }
-    if (existing.pvSigne) {
-      return res.status(400).json({ error: 'Ce PV est déjà signé — seul le CT/Admin peut le réinitialiser en le supprimant' });
     }
 
     let pdfBytes: Buffer;

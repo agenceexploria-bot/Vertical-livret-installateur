@@ -996,3 +996,201 @@ describe('POST /chantiers/:reference/documents-chantier (Modules 1-3)', () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe('Module SAV', () => {
+  async function rattacherInstallateur(ctToken: string, reference = 'LD64397') {
+    const installateur = await createInstallateur({ isActive: true });
+    await request(app)
+      .post(`/chantiers/${reference}/rattacher`)
+      .set('Authorization', `Bearer ${ctToken}`)
+      .send({ userId: installateur.user.id });
+    return installateur;
+  }
+
+  describe('POST /chantiers/:reference/sav', () => {
+    it('crée un SAV rattaché au chantier d\'installation d\'origine, référence générée, installateur assigné', async () => {
+      const ct = await createCt();
+      await createChantier(ct.accessToken);
+      const installateur = await createInstallateur({ isActive: true });
+
+      const res = await request(app)
+        .post('/chantiers/LD64397/sav')
+        .set('Authorization', `Bearer ${ct.accessToken}`)
+        .send({ descriptionProbleme: 'Bruit anormal en cabine', installateurId: installateur.user.id });
+
+      expect(res.status).toBe(201);
+      expect(res.body.chantier.reference).toBe('SAV-LD64397-1');
+      expect(res.body.chantier.type).toBe('sav');
+      expect(res.body.chantier.parentReference).toBe('LD64397');
+      expect(res.body.chantier.descriptionIntervention).toBe('Bruit anormal en cabine');
+      expect(res.body.chantier.installateursRattaches).toHaveLength(1);
+      expect(res.body.chantier.installateursRattaches[0].id).toBe(installateur.user.id);
+      // Aucun point de contrôle créé (contrairement à une installation) —
+      // c'est ce qui permet au frontend de masquer réception/auto-contrôle.
+      expect(res.body.chantier.receptionMarchandises).toEqual([]);
+      expect(res.body.chantier.autoControle).toEqual([]);
+    });
+
+    it('incrémente la référence à chaque nouveau SAV sur le même chantier d\'origine', async () => {
+      const ct = await createCt();
+      await createChantier(ct.accessToken);
+      const installateur = await createInstallateur({ isActive: true });
+
+      const premier = await request(app)
+        .post('/chantiers/LD64397/sav')
+        .set('Authorization', `Bearer ${ct.accessToken}`)
+        .send({ descriptionProbleme: 'Premier incident', installateurId: installateur.user.id });
+      const second = await request(app)
+        .post('/chantiers/LD64397/sav')
+        .set('Authorization', `Bearer ${ct.accessToken}`)
+        .send({ descriptionProbleme: 'Second incident', installateurId: installateur.user.id });
+
+      expect(premier.body.chantier.reference).toBe('SAV-LD64397-1');
+      expect(second.body.chantier.reference).toBe('SAV-LD64397-2');
+    });
+
+    it('refuse un SAV orphelin : impossible de créer un SAV depuis un chantier introuvable', async () => {
+      const ct = await createCt();
+      const installateur = await createInstallateur({ isActive: true });
+
+      const res = await request(app)
+        .post('/chantiers/INEXISTANT/sav')
+        .set('Authorization', `Bearer ${ct.accessToken}`)
+        .send({ descriptionProbleme: 'Bruit anormal', installateurId: installateur.user.id });
+
+      expect(res.status).toBe(404);
+    });
+
+    it('refuse de créer un SAV depuis un chantier qui est déjà lui-même un SAV', async () => {
+      const ct = await createCt();
+      await createChantier(ct.accessToken);
+      const installateur = await createInstallateur({ isActive: true });
+      const sav = await request(app)
+        .post('/chantiers/LD64397/sav')
+        .set('Authorization', `Bearer ${ct.accessToken}`)
+        .send({ descriptionProbleme: 'Premier incident', installateurId: installateur.user.id });
+
+      const res = await request(app)
+        .post(`/chantiers/${sav.body.chantier.reference}/sav`)
+        .set('Authorization', `Bearer ${ct.accessToken}`)
+        .send({ descriptionProbleme: 'SAV sur un SAV', installateurId: installateur.user.id });
+
+      expect(res.status).toBe(400);
+    });
+
+    it('refuse un installateur qui essaie de créer un SAV', async () => {
+      const ct = await createCt();
+      await createChantier(ct.accessToken);
+      const installateur = await createInstallateur({ isActive: true });
+
+      const res = await request(app)
+        .post('/chantiers/LD64397/sav')
+        .set('Authorization', `Bearer ${installateur.accessToken}`)
+        .send({ descriptionProbleme: 'Bruit anormal', installateurId: installateur.user.id });
+
+      expect(res.status).toBe(403);
+    });
+  });
+
+  describe('GET /chantiers?type=', () => {
+    it('ne renvoie que les chantiers du type demandé, filtré par rattachement pour un installateur', async () => {
+      const ct = await createCt();
+      await createChantier(ct.accessToken);
+      const installateur = await rattacherInstallateur(ct.accessToken);
+      await request(app)
+        .post('/chantiers/LD64397/sav')
+        .set('Authorization', `Bearer ${ct.accessToken}`)
+        .send({ descriptionProbleme: 'Bruit anormal', installateurId: installateur.user.id });
+
+      const enCours = await request(app)
+        .get('/chantiers?type=installation')
+        .set('Authorization', `Bearer ${installateur.accessToken}`);
+      const sav = await request(app)
+        .get('/chantiers?type=sav')
+        .set('Authorization', `Bearer ${installateur.accessToken}`);
+
+      expect(enCours.body.chantiers.map((c: { reference: string }) => c.reference)).toEqual(['LD64397']);
+      expect(sav.body.chantiers.map((c: { reference: string }) => c.reference)).toEqual(['SAV-LD64397-1']);
+    });
+  });
+
+  describe('POST /chantiers/:reference/pv/reponses (formulaire SAV)', () => {
+    async function creerSav(ctToken: string) {
+      const installateur = await createInstallateur({ isActive: true });
+      const res = await request(app)
+        .post('/chantiers/LD64397/sav')
+        .set('Authorization', `Bearer ${ctToken}`)
+        .send({ descriptionProbleme: 'Bruit anormal en cabine', installateurId: installateur.user.id });
+      return { installateur, reference: res.body.chantier.reference as string };
+    }
+
+    it('génère le PDF SAV, verrouille le PV et enregistre la description/pièces remplacées', async () => {
+      const ct = await createCt();
+      await createChantier(ct.accessToken);
+      const { installateur, reference } = await creerSav(ct.accessToken);
+      const photoUrl = await fakeUpload('avant-apres.png', ONE_PX_PNG_BASE64, 'image/png');
+
+      const res = await request(app)
+        .post(`/chantiers/${reference}/pv/reponses`)
+        .set('Authorization', `Bearer ${installateur.accessToken}`)
+        .send({
+          descriptionIntervention: 'Remplacement du contacteur de porte palière niveau 2.',
+          piecesRemplacees: 'Contacteur de porte (réf. XYZ-123)',
+          photos: [photoUrl],
+          nomSignataire: 'M. Weber',
+          fonctionSignataire: 'Client',
+          signatureImage: SIGNATURE_PNG_DATA_URL,
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.chantier.pvSigne).toBe(true);
+      expect(res.body.chantier.pvSigneur).toBe('M. Weber');
+      expect(res.body.chantier.descriptionIntervention).toBe('Remplacement du contacteur de porte palière niveau 2.');
+      expect(res.body.chantier.piecesRemplacees).toBe('Contacteur de porte (réf. XYZ-123)');
+      expect(res.body.chantier.pvSignatureImagePath).toMatch(/\.pdf$/);
+    }, 60000);
+
+    it('refuse de soumettre le PV SAV une seconde fois (verrou pvSigne, comme le PV de réception)', async () => {
+      const ct = await createCt();
+      await createChantier(ct.accessToken);
+      const { installateur, reference } = await creerSav(ct.accessToken);
+      const payload = {
+        descriptionIntervention: 'Intervention initiale.',
+        photos: [],
+        nomSignataire: 'M. Weber',
+        fonctionSignataire: 'Client',
+        signatureImage: SIGNATURE_PNG_DATA_URL,
+      };
+
+      await request(app)
+        .post(`/chantiers/${reference}/pv/reponses`)
+        .set('Authorization', `Bearer ${installateur.accessToken}`)
+        .send(payload);
+      const second = await request(app)
+        .post(`/chantiers/${reference}/pv/reponses`)
+        .set('Authorization', `Bearer ${installateur.accessToken}`)
+        .send({ ...payload, descriptionIntervention: 'Seconde tentative.' });
+
+      expect(second.status).toBe(400);
+    }, 60000);
+
+    it('refuse une soumission sans description d\'intervention', async () => {
+      const ct = await createCt();
+      await createChantier(ct.accessToken);
+      const { installateur, reference } = await creerSav(ct.accessToken);
+
+      const res = await request(app)
+        .post(`/chantiers/${reference}/pv/reponses`)
+        .set('Authorization', `Bearer ${installateur.accessToken}`)
+        .send({
+          descriptionIntervention: '',
+          photos: [],
+          nomSignataire: 'M. Weber',
+          fonctionSignataire: 'Client',
+          signatureImage: SIGNATURE_PNG_DATA_URL,
+        });
+
+      expect(res.status).toBe(400);
+    });
+  });
+});

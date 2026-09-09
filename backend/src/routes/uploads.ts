@@ -25,6 +25,10 @@ const KIND_CONFIG: Record<string, { allowedContentTypes?: string[]; maximumSizeI
   avatar: { allowedContentTypes: ['image/jpeg', 'image/png'], maximumSizeInBytes: 10 * 1024 * 1024 },
   habilitation: { allowedContentTypes: ['application/pdf', 'image/jpeg', 'image/png'], maximumSizeInBytes: 25 * 1024 * 1024 },
   pointPhoto: { allowedContentTypes: ['image/jpeg', 'image/png'], maximumSizeInBytes: 25 * 1024 * 1024 },
+  // Photos jointes au formulaire PV SAV (voir POST .../pv/reponses, module
+  // SAV) — mêmes contraintes que pointPhoto, embarquées dans le PDF final
+  // (voir savFormPdf.ts) plutôt que conservées comme document autonome.
+  savPhoto: { allowedContentTypes: ['image/jpeg', 'image/png'], maximumSizeInBytes: 25 * 1024 * 1024 },
   // audio/webm : Web (MediaRecorder du navigateur) ; audio/ogg : Android
   // (encodeur Opus natif, conteneur OGG — voir record_android, jamais du
   // webm malgré l'ancien nom de fichier) ; audio/mp4 : iOS le cas échéant
