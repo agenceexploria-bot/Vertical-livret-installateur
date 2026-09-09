@@ -188,7 +188,12 @@ class ChantierRepository {
       final dernierRex = chantier.rex.isNotEmpty ? chantier.rex.first : null;
       debugPrint('ChantierRepository.submitRex: réponse serveur — dernier REX transcription=${dernierRex?.transcription}');
       return chantier;
-    } catch (_) {
+    } catch (e) {
+      // Avant, cette exception était avalée sans trace (catch (_)) : un REX
+      // qui échoue pour n'importe quelle raison (upload blob, réseau...)
+      // finissait dans la file d'attente hors-ligne sans qu'on sache jamais
+      // pourquoi — voir diagnostic transcription REX mobile.
+      debugPrint('ChantierRepository.submitRex: échec, repli file d\'attente hors-ligne — $e');
       await _db.enqueueOperation(
         type: 'submitRex',
         chantierReference: reference,
