@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vertical_app/data/api_client.dart';
 import 'package:vertical_app/data/local/app_database.dart';
+import 'package:vertical_app/data/models/chantier.dart';
 import 'package:vertical_app/data/repositories/chantier_repository.dart';
 
 /// Flux complet mocké de submitRex : upload de l'audio -> postRex -> mise à
@@ -32,6 +33,35 @@ class _UploadFailsApiClient extends ApiClient {
 
   @override
   Future<String> uploadFile({required String kind, required String dataUrl, String? filename}) async => throw error;
+}
+
+/// Module SAV — création d'une intervention SAV depuis le back-office (voir
+/// ChantierRepository.createSav). Capture les arguments transmis pour
+/// vérifier qu'ils sont bien propagés jusqu'à ApiClient.createSav.
+class _CreateSavApiClient extends ApiClient {
+  final Map<String, dynamic> chantierJson;
+  final Object? error;
+  String? lastReference;
+  String? lastDescription;
+  String? lastInstallateurId;
+  String? lastSavDate;
+  _CreateSavApiClient.success(this.chantierJson) : error = null;
+  _CreateSavApiClient.failure(this.error) : chantierJson = const {};
+
+  @override
+  Future<Map<String, dynamic>> createSav(
+    String reference, {
+    required String descriptionProbleme,
+    required String installateurId,
+    String? savDate,
+  }) async {
+    lastReference = reference;
+    lastDescription = descriptionProbleme;
+    lastInstallateurId = installateurId;
+    lastSavDate = savDate;
+    if (error != null) throw error!;
+    return {'chantier': chantierJson};
+  }
 }
 
 class _PostRexFailsApiClient extends ApiClient {
@@ -161,6 +191,51 @@ void main() {
       );
 
       expect(await db.getPendingOperationsOrdered(), isEmpty);
+    });
+  });
+
+  group('ChantierRepository.createSav', () {
+    test('succès : transmet référence/description/installateur/date à ApiClient, renvoie le chantier SAV créé', () async {
+      final db = await pumpDb();
+      final savJson = {..._baseChantierJson(), 'reference': 'SAV-LD64397-1', 'type': 'sav', 'parentReference': 'LD64397'};
+      final api = _CreateSavApiClient.success(savJson);
+      final repository = ChantierRepository(api, db);
+
+      final sav = await repository.createSav(
+        'LD64397',
+        descriptionProbleme: 'Bruit anormal en cabine',
+        installateurId: 'user-1',
+        savDate: DateTime.utc(2026, 9, 15),
+      );
+
+      expect(api.lastReference, 'LD64397');
+      expect(api.lastDescription, 'Bruit anormal en cabine');
+      expect(api.lastInstallateurId, 'user-1');
+      expect(api.lastSavDate, '2026-09-15T00:00:00.000Z');
+      expect(sav.reference, 'SAV-LD64397-1');
+      expect(sav.type, ChantierType.sav);
+      expect(sav.parentReference, 'LD64397');
+    });
+
+    test('savDate omise (optionnelle) : n\'envoie pas de date à ApiClient', () async {
+      final db = await pumpDb();
+      final api = _CreateSavApiClient.success({..._baseChantierJson(), 'reference': 'SAV-LD64397-1', 'type': 'sav'});
+      final repository = ChantierRepository(api, db);
+
+      await repository.createSav('LD64397', descriptionProbleme: 'Bruit anormal', installateurId: 'user-1');
+
+      expect(api.lastSavDate, isNull);
+    });
+
+    test('rejet serveur (ex. chantier introuvable ou installateur invalide) : relève l\'exception telle quelle', () async {
+      final db = await pumpDb();
+      final exception = ApiException(400, 'Installateur sélectionné invalide');
+      final repository = ChantierRepository(_CreateSavApiClient.failure(exception), db);
+
+      await expectLater(
+        () => repository.createSav('LD64397', descriptionProbleme: 'Bruit anormal', installateurId: 'invalide'),
+        throwsA(same(exception)),
+      );
     });
   });
 }

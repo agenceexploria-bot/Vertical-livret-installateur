@@ -220,6 +220,18 @@ class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
     );
   }
 
+  /// Module SAV — distingue une intervention SAV dans la liste unifiée
+  /// (installations + SAV) sans ajouter de nouvelle dimension de filtre :
+  /// une intervention SAV peut être aussi bien "en cours" que "terminée",
+  /// un badge la marque plutôt qu'un segment mutuellement exclusif de plus.
+  Widget _savTag() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(color: AppColors.orange.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4)),
+      child: const Text('SAV', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.orange)),
+    );
+  }
+
   (String, StatusType) _livretBadge(Chantier c) {
     if (c.pvSigne) return ('Terminé', StatusType.conforme);
     if (c.progressionAutoControle > 0 || c.progressionReception > 0) return ('Pose en cours', StatusType.enCours);
@@ -325,7 +337,15 @@ class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
       backgroundColor: index.isOdd ? const Color(0xFFF7F8F9) : null,
       child: Row(
         children: [
-          Expanded(flex: 3, child: Text(c.reference, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+          Expanded(
+            flex: 3,
+            child: Row(
+              children: [
+                Flexible(child: Text(c.reference, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), overflow: TextOverflow.ellipsis)),
+                if (c.type == ChantierType.sav) ...[const SizedBox(width: 6), _savTag()],
+              ],
+            ),
+          ),
           Expanded(flex: 3, child: Text(c.client, style: const TextStyle(fontSize: 13))),
           Expanded(flex: 2, child: Text(DateFormat('dd/MM').format(c.dateDebut), style: const TextStyle(fontSize: 13))),
           Expanded(flex: 4, child: StatusBadge(label: livret.$1, type: livret.$2)),
@@ -358,6 +378,7 @@ class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
+                if (c.type == ChantierType.sav) ...[_savTag(), const SizedBox(width: 6)],
                 const Icon(Icons.chevron_right, size: 18, color: AppColors.acierClair),
               ],
             ),

@@ -72,6 +72,23 @@ class ChantierRepository {
     return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
   }
 
+  /// Création d'une intervention SAV — toujours en ligne, comme
+  /// [createChantier] (action back-office web).
+  Future<Chantier> createSav(
+    String reference, {
+    required String descriptionProbleme,
+    required String installateurId,
+    DateTime? savDate,
+  }) async {
+    final data = await _api.createSav(
+      reference,
+      descriptionProbleme: descriptionProbleme,
+      installateurId: installateurId,
+      savDate: savDate?.toIso8601String(),
+    );
+    return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
+  }
+
   Future<Chantier> rattacher(String reference, String userId) async {
     final data = await _api.rattacher(reference, userId);
     return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);

@@ -111,12 +111,24 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
             runSpacing: 8,
             children: [
               Text('${chantier.reference} — ${chantier.client}, ${chantier.ville}', style: Theme.of(context).textTheme.titleMedium),
+              if (chantier.type == ChantierType.sav)
+                const StatusBadge(label: 'SAV', type: StatusType.factuel),
               StatusBadge(
                 label: livretOk ? 'Prêt' : 'En attente',
                 type: livretOk ? StatusType.conforme : StatusType.enCours,
               ),
             ],
           ),
+          if (chantier.type == ChantierType.sav) ...[
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: () => context.push('/backoffice/ct/chantiers/${chantier.parentReference}'),
+              child: Text(
+                'Intervention SAV rattachée au chantier ${chantier.parentReference ?? '—'}',
+                style: const TextStyle(fontSize: 12.5, color: AppColors.orange, fontWeight: FontWeight.w600, decoration: TextDecoration.underline),
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           Wrap(
             alignment: WrapAlignment.end,
@@ -134,6 +146,16 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
                   onPressed: () => _openModifierDialog(context, chantier),
                   icon: const Icon(Icons.edit_outlined, size: 18),
                   label: const Text('Modifier'),
+                  style: OutlinedButton.styleFrom(minimumSize: const Size(0, 42), padding: const EdgeInsets.symmetric(horizontal: 16)),
+                ),
+              // Module SAV — une intervention SAV se crée uniquement depuis
+              // son chantier d'installation d'origine, jamais depuis une
+              // autre intervention SAV (voir POST .../sav côté backend).
+              if (canModifier && chantier.type == ChantierType.installation)
+                OutlinedButton.icon(
+                  onPressed: () => _openCreerSavDialog(context, chantier),
+                  icon: const Icon(Icons.build_outlined, size: 18),
+                  label: const Text('Créer une intervention SAV'),
                   style: OutlinedButton.styleFrom(minimumSize: const Size(0, 42), padding: const EdgeInsets.symmetric(horizontal: 16)),
                 ),
               if (isAdmin)
@@ -191,7 +213,7 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
       builder: (context, constraints) {
         final isWide = constraints.maxWidth > 800;
         final left = Column(children: [_buildInstallateursPanel(context, chantier), _buildFiletSecoursPanel()]);
-        final right = _buildAvancementPanel(chantier);
+        final right = chantier.type == ChantierType.sav ? _buildSavPanel(chantier) : _buildAvancementPanel(chantier);
         if (!isWide) return Column(children: [left, const SizedBox(height: 4), right]);
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -473,6 +495,39 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
             value: chantier.docsTerrain.isEmpty
                 ? const Text('—', style: TextStyle(fontSize: 12.5, color: AppColors.acierClair))
                 : StatusIndicator(label: '${chantier.docsTerrain.length} déposé(s)', type: StatusType.enCours),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Module SAV — remplace [_buildAvancementPanel] (pensé pour une
+  /// installation, avec réception/auto-contrôle sans objet ici) par un
+  /// résumé propre à l'intervention.
+  Widget _buildSavPanel(Chantier chantier) {
+    return BoPanel(
+      title: 'Intervention SAV',
+      child: Column(
+        children: [
+          BoKv(label: 'Chantier d\'origine', value: Text(chantier.parentReference ?? '—', style: const TextStyle(fontSize: 12.5))),
+          BoKv(
+            label: 'Date d\'intervention',
+            value: Text(
+              chantier.savDate != null ? DateFormat('dd/MM/yyyy').format(chantier.savDate!) : '—',
+              style: const TextStyle(fontSize: 12.5),
+            ),
+          ),
+          BoKv(
+            label: 'PV',
+            value: chantier.pvSigne
+                ? const StatusIndicator(label: 'Signé', type: StatusType.conforme)
+                : const Text('—', style: TextStyle(fontSize: 12.5, color: AppColors.acierClair)),
+          ),
+          BoKv(
+            label: 'REX',
+            value: chantier.rex.isNotEmpty
+                ? StatusIndicator(label: '${chantier.rex.length} envoyé(s)', type: StatusType.conforme)
+                : const Text('—', style: TextStyle(fontSize: 12.5, color: AppColors.acierClair)),
           ),
         ],
       ),
@@ -880,6 +935,13 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
     );
   }
 
+  void _openCreerSavDialog(BuildContext context, Chantier chantier) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => _CreerSavDialog(chantier: chantier),
+    );
+  }
+
   void _openModifierDialog(BuildContext context, Chantier chantier) {
     showDialog(
       context: context,
@@ -1028,6 +1090,135 @@ class _ModifierChantierDialogState extends State<_ModifierChantierDialog> {
           child: _isSubmitting
               ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
               : const Text('Enregistrer'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Module SAV — création d'une intervention SAV depuis la fiche du chantier
+/// d'origine (voir _openCreerSavDialog). L'installateur assigné n'a pas
+/// besoin d'être déjà rattaché à ce chantier (le backend le rattache lui-même
+/// à la création, voir POST .../sav) — même liste de comptes actifs que
+/// _openRattacherDialog.
+class _CreerSavDialog extends StatefulWidget {
+  final Chantier chantier;
+  const _CreerSavDialog({required this.chantier});
+
+  @override
+  State<_CreerSavDialog> createState() => _CreerSavDialogState();
+}
+
+class _CreerSavDialogState extends State<_CreerSavDialog> {
+  final _descriptionController = TextEditingController();
+  String? _installateurId;
+  DateTime? _savDate;
+  bool _isSubmitting = false;
+  String? _erreur;
+
+  @override
+  void dispose() {
+    _descriptionController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _choisirDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _savDate ?? DateTime.now(),
+      firstDate: DateTime.now().subtract(const Duration(days: 30)),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (picked != null) setState(() => _savDate = picked);
+  }
+
+  Future<void> _creer() async {
+    if (_descriptionController.text.trim().isEmpty) {
+      setState(() => _erreur = 'La description du problème est requise.');
+      return;
+    }
+    if (_installateurId == null) {
+      setState(() => _erreur = 'Choisissez un installateur à assigner.');
+      return;
+    }
+    setState(() {
+      _isSubmitting = true;
+      _erreur = null;
+    });
+    try {
+      final sav = await context.read<ChantierState>().createSav(
+            widget.chantier.reference,
+            descriptionProbleme: _descriptionController.text.trim(),
+            installateurId: _installateurId!,
+            savDate: _savDate,
+          );
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      context.push('/backoffice/ct/chantiers/${sav.reference}');
+    } on ApiException catch (e) {
+      setState(() {
+        _erreur = e.message;
+        _isSubmitting = false;
+      });
+    } catch (_) {
+      setState(() {
+        _erreur = 'Une erreur est survenue. Réessayez.';
+        _isSubmitting = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final installateurs = context.watch<ComptesState>().installateurs.where((u) => u.isActive && !u.suspendu).toList();
+
+    return AlertDialog(
+      title: Text('Créer une intervention SAV — ${widget.chantier.reference}'),
+      content: SizedBox(
+        width: 380,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: _descriptionController,
+                maxLines: 3,
+                decoration: const InputDecoration(labelText: 'Description du problème', alignLabelWithHint: true),
+              ),
+              const SizedBox(height: 14),
+              DropdownButtonFormField<String>(
+                initialValue: _installateurId,
+                decoration: const InputDecoration(labelText: 'Installateur à assigner'),
+                items: installateurs.map((u) => DropdownMenuItem(value: u.id, child: Text(u.fullName))).toList(),
+                onChanged: (value) => setState(() => _installateurId = value),
+              ),
+              const SizedBox(height: 14),
+              Material(
+                color: Colors.transparent,
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Date prévue (optionnel)'),
+                  subtitle: Text(_savDate != null ? DateFormat('dd/MM/yyyy').format(_savDate!) : 'Aujourd\'hui'),
+                  trailing: const Icon(Icons.calendar_today_outlined, size: 18),
+                  onTap: _choisirDate,
+                ),
+              ),
+              if (_erreur != null) ...[
+                const SizedBox(height: 10),
+                Text(_erreur!, style: const TextStyle(color: AppColors.rouge, fontSize: 12.5)),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Annuler')),
+        ElevatedButton(
+          onPressed: _isSubmitting ? null : _creer,
+          child: _isSubmitting
+              ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Text('Créer'),
         ),
       ],
     );

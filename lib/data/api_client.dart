@@ -574,6 +574,23 @@ class ApiClient {
   Future<Map<String, dynamic>> createChantier(Map<String, dynamic> body) =>
       _request('POST', '/chantiers', body: body);
 
+  /// Création d'une intervention SAV depuis la fiche du chantier d'origine
+  /// (CT/Admin/Direction, back-office) — voir POST /chantiers/:reference/sav.
+  /// [savDate] au format ISO 8601, optionnel (le backend utilise la date du
+  /// jour à défaut).
+  Future<Map<String, dynamic>> createSav(
+    String reference, {
+    required String descriptionProbleme,
+    required String installateurId,
+    String? savDate,
+  }) {
+    return _request('POST', '/chantiers/$reference/sav', body: {
+      'descriptionProbleme': descriptionProbleme,
+      'installateurId': installateurId,
+      'savDate': ?savDate,
+    });
+  }
+
   Future<Map<String, dynamic>> rattacher(String reference, String userId) =>
       _request('POST', '/chantiers/$reference/rattacher', body: {'userId': userId});
 

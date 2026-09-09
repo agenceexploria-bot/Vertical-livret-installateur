@@ -123,6 +123,26 @@ class ChantierState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Module SAV — création d'une intervention SAV depuis la fiche du
+  /// chantier d'origine (back-office). Renvoie le chantier SAV créé pour que
+  /// l'écran appelant puisse y naviguer directement.
+  Future<Chantier> createSav(
+    String reference, {
+    required String descriptionProbleme,
+    required String installateurId,
+    DateTime? savDate,
+  }) async {
+    final sav = await _repository.createSav(
+      reference,
+      descriptionProbleme: descriptionProbleme,
+      installateurId: installateurId,
+      savDate: savDate,
+    );
+    _chantiers = [..._chantiers, sav];
+    notifyListeners();
+    return sav;
+  }
+
   Future<void> rattacher(String reference, String userId) async {
     final updated = await _repository.rattacher(reference, userId);
     _replaceInList(updated);
