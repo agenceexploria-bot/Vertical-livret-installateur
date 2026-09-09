@@ -296,6 +296,35 @@ class ChantierRepository {
     return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
   }
 
+  /// Validation du formulaire PV SAV — toujours en ligne, comme
+  /// [submitPvFormulaire] (génération du PDF côté serveur). [photos] sont des
+  /// data URL base64 (voir [PhotoCapture]) déposées sur Vercel Blob (kind
+  /// 'savPhoto') avant l'appel, comme [addDocumentChantier] pour ses fichiers.
+  Future<Chantier> submitSavPvFormulaire(
+    String reference, {
+    required String descriptionIntervention,
+    String? piecesRemplacees,
+    required List<String> photos,
+    required String nomSignataire,
+    required String fonctionSignataire,
+    required String signatureImage,
+  }) async {
+    final photoUrls = <String>[];
+    for (final photo in photos) {
+      photoUrls.add(await _api.uploadFile(kind: 'savPhoto', dataUrl: photo));
+    }
+    final data = await _api.postSavPvReponses(
+      reference,
+      descriptionIntervention: descriptionIntervention,
+      piecesRemplacees: piecesRemplacees,
+      photos: photoUrls,
+      nomSignataire: nomSignataire,
+      fonctionSignataire: fonctionSignataire,
+      signatureImage: signatureImage,
+    );
+    return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
+  }
+
   /// Supprime définitivement le PV d'un chantier (CT/Admin, back-office) —
   /// action toujours en ligne, comme [deleteRex]/[deleteChantier].
   Future<Chantier> deletePv(String reference) async {

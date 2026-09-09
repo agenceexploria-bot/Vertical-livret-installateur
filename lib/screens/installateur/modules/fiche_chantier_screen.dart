@@ -70,8 +70,12 @@ class FicheChantierScreen extends StatelessWidget {
                 ],
               ),
             ),
+            if (chantier.type == ChantierType.sav) ...[
+              const SizedBox(height: 16),
+              _buildSavBanner(context, chantier),
+            ],
             const SizedBox(height: 24),
-            
+
             _buildSection(context, 'Informations client', [
               _buildRow('Client', chantier.client),
               _buildRow('Adresse', chantier.adresse),
@@ -143,6 +147,33 @@ class FicheChantierScreen extends StatelessWidget {
         const SnackBar(content: Text('Impossible d\'ouvrir le GPS.')),
       );
     }
+  }
+
+  Widget _buildSavBanner(BuildContext context, Chantier chantier) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.encre.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: AppColors.encre, width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.build_outlined, color: AppColors.encre),
+              SizedBox(width: 8),
+              Text('Intervention SAV', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.encre, fontSize: 15)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          _buildRow('Chantier d\'origine', chantier.parentReference ?? '—'),
+          if (chantier.descriptionIntervention != null) _buildRow('Problème signalé', chantier.descriptionIntervention!),
+        ],
+      ),
+    );
   }
 
   Widget _buildDocuments(BuildContext context, Chantier chantier) {

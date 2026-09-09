@@ -8,9 +8,37 @@ import '../../core/widgets/glass_app_bar.dart';
 import '../../core/widgets/sync_banner.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../data/api_client.dart';
+import '../../data/models/chantier.dart';
 import '../../state/auth_state.dart';
 import '../../state/chantier_state.dart';
 import '../../state/network_state.dart';
+
+enum ChantierModule { fiche, docsAdmin, tech, reception, autoControle, pv, rex, terrain }
+
+/// Modules affichés sur la fiche chantier, dans l'ordre. Une intervention
+/// SAV n'a ni réception marchandises, ni auto-contrôle, ni documents terrain
+/// (aucun point de contrôle créé côté backend, voir POST .../sav) —
+/// masqués plutôt qu'affichés vides. Pure — testable sans BuildContext ni
+/// ChantierState (voir chantier_details_screen_test.dart).
+const _installationModules = [
+  ChantierModule.fiche,
+  ChantierModule.docsAdmin,
+  ChantierModule.tech,
+  ChantierModule.reception,
+  ChantierModule.autoControle,
+  ChantierModule.pv,
+  ChantierModule.rex,
+  ChantierModule.terrain,
+];
+const _savModules = [
+  ChantierModule.fiche,
+  ChantierModule.docsAdmin,
+  ChantierModule.tech,
+  ChantierModule.pv,
+  ChantierModule.rex,
+];
+
+List<ChantierModule> visibleModules(ChantierType type) => type == ChantierType.sav ? _savModules : _installationModules;
 
 class ChantierDetailsScreen extends StatefulWidget {
   const ChantierDetailsScreen({super.key});
@@ -90,71 +118,9 @@ class _ChantierDetailsScreenState extends State<ChantierDetailsScreen> {
       );
     }
 
-    final List<_ModuleItem> modules = [
-      _ModuleItem(
-        index: 1,
-        titre: 'Fiche chantier',
-        sousTitre: 'Consignes et contacts',
-        icon: Icons.info_outline,
-        onTap: () => context.push('/chantier/${chantier.reference}/fiche'),
-      ),
-      _ModuleItem(
-        index: 2,
-        titre: 'Documents administratifs',
-        sousTitre: 'Sécurité et accès',
-        icon: Icons.assignment_outlined,
-        onTap: () => context.push('/chantier/${chantier.reference}/docs-admin'),
-      ),
-      _ModuleItem(
-        index: 3,
-        titre: 'Dossier technique',
-        sousTitre: 'Plans et notices',
-        icon: Icons.architecture_outlined,
-        onTap: () => context.push('/chantier/${chantier.reference}/tech'),
-      ),
-      _ModuleItem(
-        index: 4,
-        titre: 'Réception marchandises',
-        sousTitre: '${(chantier.progressionReception * 100).toInt()}% complété',
-        icon: Icons.inventory_2_outlined,
-        onTap: () => context.push('/chantier/${chantier.reference}/reception'),
-      ),
-      _ModuleItem(
-        index: 5,
-        titre: 'Auto-contrôle',
-        sousTitre: '${(chantier.progressionAutoControle * 100).toInt()}% complété',
-        icon: Icons.fact_check_outlined,
-        onTap: () => context.push('/chantier/${chantier.reference}/auto-controle'),
-      ),
-      _ModuleItem(
-        index: 6,
-        titre: 'Procès-verbal de réception',
-        // Accessible en permanence, dès le premier jour du chantier, quel
-        // que soit l'avancement de l'auto-contrôle (décision métier confirmée
-        // 2026-09-01) — seul un PV déjà signé change ce libellé/la
-        // destination (voir onTap ci-dessous, /confirmation en lecture seule).
-        sousTitre: chantier.pvSigne ? 'Signé par ${chantier.pvSigneur ?? 'le client'}' : 'À faire signer par le client',
-        icon: Icons.draw_outlined,
-        // pvPdfPath == null signale le nouveau flux (formulaire interactif,
-        // aucun gabarit à attendre du back-office) — voir la refonte du PV.
-        onTap: () => context.push(chantier.pvSigne
-            ? '/confirmation'
-            : chantier.pvPdfPath != null ? '/signature' : '/pv-formulaire'),
-      ),
-      _ModuleItem(
-        index: 7,
-        titre: 'Retour d\'expérience',
-        sousTitre: chantier.rex.isEmpty ? 'À saisir' : '${chantier.rex.length} envoyé(s)',
-        icon: Icons.mic_none_outlined,
-        onTap: () => context.push('/chantier/${chantier.reference}/rex'),
-      ),
-      _ModuleItem(
-        index: 8,
-        titre: 'Documents terrain',
-        sousTitre: 'Photos et bons de livraison',
-        icon: Icons.camera_alt_outlined,
-        onTap: () => context.push('/chantier/${chantier.reference}/terrain'),
-      ),
+    final modules = [
+      for (final (i, module) in visibleModules(chantier.type).indexed)
+        _buildModuleItem(context, module, index: i + 1, chantier: chantier),
     ];
 
     return ResponsiveLayout(
@@ -183,6 +149,89 @@ class _ChantierDetailsScreenState extends State<ChantierDetailsScreen> {
         ],
       ),
     );
+  }
+
+  _ModuleItem _buildModuleItem(BuildContext context, ChantierModule module, {required int index, required Chantier chantier}) {
+    switch (module) {
+      case ChantierModule.fiche:
+        return _ModuleItem(
+          index: index,
+          titre: 'Fiche chantier',
+          sousTitre: 'Consignes et contacts',
+          icon: Icons.info_outline,
+          onTap: () => context.push('/chantier/${chantier.reference}/fiche'),
+        );
+      case ChantierModule.docsAdmin:
+        return _ModuleItem(
+          index: index,
+          titre: 'Documents administratifs',
+          sousTitre: 'Sécurité et accès',
+          icon: Icons.assignment_outlined,
+          onTap: () => context.push('/chantier/${chantier.reference}/docs-admin'),
+        );
+      case ChantierModule.tech:
+        return _ModuleItem(
+          index: index,
+          titre: 'Dossier technique',
+          sousTitre: 'Plans et notices',
+          icon: Icons.architecture_outlined,
+          onTap: () => context.push('/chantier/${chantier.reference}/tech'),
+        );
+      case ChantierModule.reception:
+        return _ModuleItem(
+          index: index,
+          titre: 'Réception marchandises',
+          sousTitre: '${(chantier.progressionReception * 100).toInt()}% complété',
+          icon: Icons.inventory_2_outlined,
+          onTap: () => context.push('/chantier/${chantier.reference}/reception'),
+        );
+      case ChantierModule.autoControle:
+        return _ModuleItem(
+          index: index,
+          titre: 'Auto-contrôle',
+          sousTitre: '${(chantier.progressionAutoControle * 100).toInt()}% complété',
+          icon: Icons.fact_check_outlined,
+          onTap: () => context.push('/chantier/${chantier.reference}/auto-controle'),
+        );
+      case ChantierModule.pv:
+        final isSav = chantier.type == ChantierType.sav;
+        return _ModuleItem(
+          index: index,
+          titre: isSav ? 'Procès-verbal d\'intervention' : 'Procès-verbal de réception',
+          // Accessible en permanence, dès le premier jour du chantier, quel
+          // que soit l'avancement de l'auto-contrôle (décision métier
+          // confirmée 2026-09-01) — seul un PV déjà signé change ce
+          // libellé/la destination (voir onTap ci-dessous, /confirmation en
+          // lecture seule).
+          sousTitre: chantier.pvSigne ? 'Signé par ${chantier.pvSigneur ?? 'le client'}' : 'À faire signer par le client',
+          icon: Icons.draw_outlined,
+          // pvPdfPath == null signale le nouveau flux (formulaire
+          // interactif, aucun gabarit à attendre du back-office) — voir la
+          // refonte du PV. Une intervention SAV n'a jamais de gabarit
+          // déposé : uniquement le formulaire allégé /pv-sav-formulaire.
+          onTap: () => context.push(chantier.pvSigne
+              ? '/confirmation'
+              : isSav
+                  ? '/pv-sav-formulaire'
+                  : chantier.pvPdfPath != null ? '/signature' : '/pv-formulaire'),
+        );
+      case ChantierModule.rex:
+        return _ModuleItem(
+          index: index,
+          titre: 'Retour d\'expérience',
+          sousTitre: chantier.rex.isEmpty ? 'À saisir' : '${chantier.rex.length} envoyé(s)',
+          icon: Icons.mic_none_outlined,
+          onTap: () => context.push('/chantier/${chantier.reference}/rex'),
+        );
+      case ChantierModule.terrain:
+        return _ModuleItem(
+          index: index,
+          titre: 'Documents terrain',
+          sousTitre: 'Photos et bons de livraison',
+          icon: Icons.camera_alt_outlined,
+          onTap: () => context.push('/chantier/${chantier.reference}/terrain'),
+        );
+    }
   }
 }
 

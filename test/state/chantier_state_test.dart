@@ -24,7 +24,7 @@ class _GetChantierApiClient extends ApiClient {
   }
 }
 
-Chantier _chantier(String reference, {bool pvSigne = false, DateTime? pvSigneAt}) => Chantier(
+Chantier _chantier(String reference, {bool pvSigne = false, DateTime? pvSigneAt, ChantierType type = ChantierType.installation}) => Chantier(
       reference: reference,
       client: 'Client $reference',
       adresse: '1 rue Test',
@@ -43,6 +43,7 @@ Chantier _chantier(String reference, {bool pvSigne = false, DateTime? pvSigneAt}
       autoControle: const [],
       pvSigne: pvSigne,
       pvSigneAt: pvSigneAt,
+      type: type,
     );
 
 void main() {
@@ -146,6 +147,53 @@ void main() {
 
       expect(chantiersTermines(chantiers), isEmpty);
       expect(chantiersEnCours(chantiers).map((c) => c.reference), ['LD2']);
+    });
+  });
+
+  group('chantiersInstallation / chantiersSav (module SAV — deux tuiles de l\'accueil installateur)', () {
+    test('sépare correctement une liste mixte installations/SAV', () {
+      final chantiers = [
+        _chantier('LD1', type: ChantierType.installation),
+        _chantier('SAV-LD1-1', type: ChantierType.sav),
+        _chantier('LD2', type: ChantierType.installation),
+        _chantier('SAV-LD1-2', type: ChantierType.sav),
+      ];
+
+      expect(chantiersInstallation(chantiers).map((c) => c.reference), ['LD1', 'LD2']);
+      expect(chantiersSav(chantiers).map((c) => c.reference), ['SAV-LD1-1', 'SAV-LD1-2']);
+    });
+
+    test('compteurs exacts (les tuiles affichent chantiersXList.length) : liste vide -> 0 des deux côtés', () {
+      expect(chantiersInstallation([]), isEmpty);
+      expect(chantiersSav([]), isEmpty);
+    });
+
+    test('un chantier sans champ type explicite (rétrocompatibilité) est classé installation par défaut', () {
+      final chantier = Chantier.fromJson({
+        'reference': 'LD_ANCIEN',
+        'client': 'Client',
+        'adresse': '1 rue',
+        'ville': 'Ville',
+        'dateDebut': '2026-01-01T00:00:00.000Z',
+        'dateFin': '2026-01-02T00:00:00.000Z',
+        'contactNom': 'M. Test',
+        'contactTel': '0600000000',
+        'horaires': '8h-17h',
+        'consignes': [],
+        'typeMonteCharge': 'Monte-charge',
+        'capacite': '300 kg',
+        'niveaux': 2,
+        'referenceAffaire': 'AF-1',
+        'rex': [],
+        'livretsOuverts': [],
+        'receptionMarchandises': [],
+        'autoControle': [],
+        'installateursRattaches': [],
+        'docsTerrain': [],
+      });
+
+      expect(chantiersInstallation([chantier]).map((c) => c.reference), ['LD_ANCIEN']);
+      expect(chantiersSav([chantier]), isEmpty);
     });
   });
 

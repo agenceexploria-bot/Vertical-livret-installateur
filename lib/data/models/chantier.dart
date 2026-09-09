@@ -5,6 +5,12 @@ import 'document_chantier.dart';
 
 enum ChantierSyncStatus { nouveau, charge }
 
+/// Module SAV — `installation` est la valeur par défaut côté backend
+/// (rétrocompatible avec tous les chantiers existants). Une intervention SAV
+/// est toujours rattachée à un chantier d'installation d'origine via
+/// [Chantier.parentReference].
+enum ChantierType { installation, sav }
+
 /// Retour d'expérience d'un installateur sur un chantier — plusieurs entrées
 /// possibles par chantier (voir [Chantier.rex]).
 class Rex {
@@ -50,6 +56,13 @@ class Chantier {
   final String? coordinateurTravauxNom;
   ChantierSyncStatus syncStatus;
 
+  // Module SAV.
+  final ChantierType type;
+  final String? parentReference;
+  final String? descriptionIntervention;
+  final String? piecesRemplacees;
+  final DateTime? savDate;
+
   final List<PointControle> receptionMarchandises;
   final List<PointControle> autoControle;
   // Plusieurs REX possibles par chantier — un installateur peut compléter son
@@ -94,6 +107,11 @@ class Chantier {
     this.coordinateurTravauxId,
     this.coordinateurTravauxNom,
     this.syncStatus = ChantierSyncStatus.nouveau,
+    this.type = ChantierType.installation,
+    this.parentReference,
+    this.descriptionIntervention,
+    this.piecesRemplacees,
+    this.savDate,
     required this.receptionMarchandises,
     required this.autoControle,
     List<Rex>? rex,
@@ -144,6 +162,11 @@ class Chantier {
         coordinateurTravauxId: json['coordinateurTravauxId'] as String?,
         coordinateurTravauxNom: json['coordinateurTravauxNom'] as String?,
         syncStatus: ChantierSyncStatus.values.firstWhere((s) => s.name == json['syncStatus'], orElse: () => ChantierSyncStatus.nouveau),
+        type: ChantierType.values.firstWhere((t) => t.name == json['type'], orElse: () => ChantierType.installation),
+        parentReference: json['parentReference'] as String?,
+        descriptionIntervention: json['descriptionIntervention'] as String?,
+        piecesRemplacees: json['piecesRemplacees'] as String?,
+        savDate: json['savDate'] != null ? DateTime.parse(json['savDate'] as String) : null,
         receptionMarchandises: ((json['receptionMarchandises'] as List?) ?? [])
             .map((p) => PointControle.fromJson(p as Map<String, dynamic>))
             .toList(),
@@ -190,6 +213,11 @@ class Chantier {
         'coordinateurTravauxId': coordinateurTravauxId,
         'coordinateurTravauxNom': coordinateurTravauxNom,
         'syncStatus': syncStatus.name,
+        'type': type.name,
+        'parentReference': parentReference,
+        'descriptionIntervention': descriptionIntervention,
+        'piecesRemplacees': piecesRemplacees,
+        'savDate': savDate?.toIso8601String(),
         'receptionMarchandises': receptionMarchandises.map((p) => p.toJson()).toList(),
         'autoControle': autoControle.map((p) => p.toJson()).toList(),
         'rex': rex.map((r) => r.toJson()).toList(),

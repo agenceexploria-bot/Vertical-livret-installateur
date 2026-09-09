@@ -11,6 +11,8 @@ import '../screens/auth/forgot_password_screen.dart';
 import '../screens/auth/reset_password_screen.dart';
 import '../screens/auth/pending_screen.dart';
 import '../screens/installateur/home_screen.dart';
+import '../screens/installateur/chantiers_installation_screen.dart';
+import '../screens/installateur/sav_list_screen.dart';
 import '../screens/installateur/chantier_details_screen.dart';
 import '../screens/installateur/profil_screen.dart';
 import '../screens/installateur/modules/fiche_chantier_screen.dart';
@@ -22,6 +24,7 @@ import '../screens/installateur/modules/rex_screen.dart';
 import '../screens/installateur/modules/docs_terrain_screen.dart';
 import '../screens/client/signature_screen.dart';
 import '../screens/client/pv_formulaire_screen.dart';
+import '../screens/client/pv_sav_formulaire_screen.dart';
 import '../screens/client/confirmation_screen.dart';
 import '../screens/coordinateur_travaux/ct_home_screen.dart';
 import '../screens/coordinateur_travaux/ct_validation_screen.dart';
@@ -228,6 +231,10 @@ class AppRouter {
             return const InstallateurHomeScreen();
           },
         ),
+        // Module SAV — les deux tuiles de l'accueil installateur, voir
+        // InstallateurHomeScreen.
+        GoRoute(path: '/mes-chantiers', builder: (context, state) => const ChantiersInstallationScreen()),
+        GoRoute(path: '/sav', builder: (context, state) => const SavListScreen()),
         GoRoute(
           path: '/ct/validation',
           builder: (context, state) => const CtValidationScreen(),
@@ -266,6 +273,9 @@ class AppRouter {
         // signature directe sur PDF pour tout chantier sans gabarit déjà
         // déposé (voir la bascule dans chantier_details_screen.dart).
         GoRoute(path: '/pv-formulaire', builder: (context, state) => const PvFormulaireScreen()),
+        // Module SAV — formulaire allégé (description, pièces remplacées,
+        // photos, signature), voir PvSavFormulaireScreen.
+        GoRoute(path: '/pv-sav-formulaire', builder: (context, state) => const PvSavFormulaireScreen()),
         GoRoute(path: '/confirmation', builder: (context, state) => const ConfirmationScreen()),
         GoRoute(path: '/profil', builder: (context, state) => const ProfilScreen()),
 

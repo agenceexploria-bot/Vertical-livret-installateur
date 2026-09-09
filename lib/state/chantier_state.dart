@@ -24,6 +24,12 @@ List<Chantier> chantiersTermines(List<Chantier> chantiers) {
   return termines;
 }
 
+/// Module SAV — sépare les chantiers d'installation des interventions SAV
+/// (voir [Chantier.type]) : les deux tuiles de l'accueil installateur en
+/// dérivent chacune une liste. Pure, comme [chantiersEnCours]/[chantiersTermines].
+List<Chantier> chantiersInstallation(List<Chantier> chantiers) => chantiers.where((c) => c.type == ChantierType.installation).toList();
+List<Chantier> chantiersSav(List<Chantier> chantiers) => chantiers.where((c) => c.type == ChantierType.sav).toList();
+
 class ChantierState extends ChangeNotifier {
   final ChantierRepository _repository;
   List<Chantier> _chantiers = [];
@@ -40,6 +46,12 @@ class ChantierState extends ChangeNotifier {
   /// (fonctions pures, plus haut) pour la logique de filtrage/tri elle-même.
   List<Chantier> get chantiersEnCoursList => chantiersEnCours(_chantiers);
   List<Chantier> get chantiersTerminesList => chantiersTermines(_chantiers);
+
+  /// Module SAV — les deux tuiles de l'accueil installateur mènent chacune à
+  /// l'une de ces deux vues, dérivées du même [chantiers] déjà chargé (pas
+  /// d'appel réseau séparé). Voir [chantiersInstallation]/[chantiersSav].
+  List<Chantier> get chantiersInstallationList => chantiersInstallation(_chantiers);
+  List<Chantier> get chantiersSavList => chantiersSav(_chantiers);
 
   /// Stale-while-revalidate : si le cache Drift a déjà des chantiers, ils
   /// s'affichent immédiatement (pas de spinner) pendant que le réseau
@@ -335,6 +347,28 @@ class ChantierState extends ChangeNotifier {
       reference,
       reponses: reponses,
       dateReception: dateReception,
+      nomSignataire: nomSignataire,
+      fonctionSignataire: fonctionSignataire,
+      signatureImage: signatureImage,
+    );
+    _replaceInList(updated);
+  }
+
+  /// Module SAV — validation du PV SAV, voir [ChantierRepository.submitSavPvFormulaire].
+  Future<void> submitSavPvFormulaire(
+    String reference, {
+    required String descriptionIntervention,
+    String? piecesRemplacees,
+    required List<String> photos,
+    required String nomSignataire,
+    required String fonctionSignataire,
+    required String signatureImage,
+  }) async {
+    final updated = await _repository.submitSavPvFormulaire(
+      reference,
+      descriptionIntervention: descriptionIntervention,
+      piecesRemplacees: piecesRemplacees,
+      photos: photos,
       nomSignataire: nomSignataire,
       fonctionSignataire: fonctionSignataire,
       signatureImage: signatureImage,

@@ -25,6 +25,7 @@ class _ConfirmationScreenState extends State<ConfirmationScreen> {
   @override
   Widget build(BuildContext context) {
     final chantier = context.watch<ChantierState>().currentChantier;
+    final isSav = chantier?.type == ChantierType.sav;
 
     return ResponsiveLayout(
       child: Padding(
@@ -34,7 +35,7 @@ class _ConfirmationScreenState extends State<ConfirmationScreen> {
           children: [
             const Icon(Icons.check_circle, size: 80, color: AppColors.vert),
             const SizedBox(height: 32),
-            const Text('PV signé et archivé', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            Text(isSav ? 'PV d\'intervention signé et archivé' : 'PV signé et archivé', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             if (chantier != null)
               Text(
@@ -61,7 +62,12 @@ class _ConfirmationScreenState extends State<ConfirmationScreen> {
                 children: [
                   const Icon(Icons.picture_as_pdf, color: AppColors.rouge),
                   const SizedBox(width: 16),
-                  Expanded(child: Text('PV_${chantier?.reference ?? ''}_Reception.pdf', style: const TextStyle(fontSize: 13))),
+                  Expanded(
+                    child: Text(
+                      'PV_${chantier?.reference ?? ''}_${isSav ? 'Intervention' : 'Reception'}.pdf',
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ),
                   _isDownloading
                       ? const SizedBox(
                           height: 20,

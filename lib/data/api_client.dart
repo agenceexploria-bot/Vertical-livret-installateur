@@ -673,6 +673,32 @@ class ApiClient {
     });
   }
 
+  /// Validation du formulaire PV SAV (module SAV) — forme allégée par
+  /// rapport à [postPvReponses] : pas de checklist, une description libre de
+  /// l'intervention + pièces remplacées (optionnel) + photos déjà déposées
+  /// sur Vercel Blob (voir kind 'savPhoto', ApiClient.uploadFile), embarquées
+  /// dans le PDF final par le backend (voir savFormPdf.ts). Réutilise la même
+  /// route que le PV de réception : le backend distingue le formulaire à
+  /// appliquer selon `chantier.type`, jamais un champ fourni par le client.
+  Future<Map<String, dynamic>> postSavPvReponses(
+    String reference, {
+    required String descriptionIntervention,
+    String? piecesRemplacees,
+    required List<String> photos,
+    required String nomSignataire,
+    required String fonctionSignataire,
+    required String signatureImage,
+  }) {
+    return _request('POST', '/chantiers/$reference/pv/reponses', body: {
+      'descriptionIntervention': descriptionIntervention,
+      'piecesRemplacees': ?piecesRemplacees,
+      'photos': photos,
+      'nomSignataire': nomSignataire,
+      'fonctionSignataire': fonctionSignataire,
+      'signatureImage': signatureImage,
+    });
+  }
+
   /// Supprime définitivement le PV d'un chantier (CT/Admin) — gabarit et
   /// signature éventuelle.
   Future<Map<String, dynamic>> deletePv(String reference) =>
