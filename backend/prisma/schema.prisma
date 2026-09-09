@@ -7,6 +7,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum ChantierType {
+  installation
+  sav
+}
+
 enum UserRole {
   installateur
   coordinateurTravaux
@@ -124,6 +129,23 @@ model Chantier {
   pvSigneAt            DateTime?
   pvSignatureImagePath String?
   createdAt         DateTime @default(now())
+
+  // Type de chantier — installation (comportement actuel, valeur par
+  // défaut, rétrocompatible sans migration de données) ou SAV
+  // (intervention rattachée à un chantier d'installation d'origine, voir
+  // parentReference). Le PV SAV réutilise pvSigne/pvSigneur/
+  // pvFonctionSignataire/pvSigneAt/pvSignatureImagePath ci-dessus, mêmes
+  // verrous que le PV de réception.
+  type                    ChantierType @default(installation)
+  // Référence du chantier d'installation d'origine — renseignée seulement
+  // pour un SAV (type == sav), null pour une installation. Simple pointeur
+  // informatif (pas de relation Prisma stricte, pas de FK) : pas de
+  // comportement de suppression en cascade à définir pour l'instant.
+  parentReference         String?
+  // Champs SAV — nullables, utilisés seulement si type == sav.
+  descriptionIntervention String?
+  piecesRemplacees        String?
+  savDate                 DateTime?
 
   // Rattachement direct à un Coordinateur travaux responsable, renseigné par
   // l'Admin à la création (voir la refonte : sélecteur de CT dans le
