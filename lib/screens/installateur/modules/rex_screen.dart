@@ -9,9 +9,9 @@ import '../../../core/theme.dart';
 import '../../../core/widgets/glass_app_bar.dart';
 import '../../../core/voice_recorder.dart';
 import '../../../core/widgets/responsive_layout.dart';
+import '../../../data/api_client.dart';
 import '../../../data/models/chantier.dart';
 import '../../../state/chantier_state.dart';
-import '../../../state/network_state.dart';
 
 enum _RexMode { vocal, texte }
 
@@ -32,7 +32,15 @@ class _RexScreenState extends State<RexScreen> with SingleTickerProviderStateMix
   bool _speechAvailable = false;
   bool _isRecording = false;
   bool _isEncoding = false;
+  bool _isSubmitting = false;
   String? _audioDataUrl;
+  // Cause précise du dernier échec d'enregistrement/envoi — affichée à
+  // l'écran (voir _buildVocalMode/_buildTechnicalDetails) pour que Tobi
+  // puisse lire lui-même ce qui a cassé, sans brancher de console (voir
+  // diagnostic transcription REX mobile).
+  String? _voiceError;
+  String? _sendError;
+  bool _showTechnicalDetails = false;
   String _liveText = '';
   int _seconds = 0;
   Timer? _timer;
@@ -80,7 +88,9 @@ class _RexScreenState extends State<RexScreen> with SingleTickerProviderStateMix
       if (!mounted) return;
       setState(() {
         _isEncoding = false;
-        _audioDataUrl = encoded;
+        _audioDataUrl = encoded.dataUrl;
+        _voiceError = encoded.error;
+        _showTechnicalDetails = false;
         // La transcription en temps réel (best-effort, voir plus bas) est
         // pré-remplie mais reste éditable : l'installateur corrige si besoin
         // avant l'envoi. Si ce champ reste vide, le backend tente une
@@ -88,9 +98,9 @@ class _RexScreenState extends State<RexScreen> with SingleTickerProviderStateMix
         // backend/src/lib/transcription.ts).
         _textController.text = _liveText;
       });
-      if (encoded == null) {
+      if (!encoded.isSuccess) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Impossible d\'enregistrer la note vocale — réessayez.')),
+          SnackBar(content: Text('Échec enregistrement audio : ${encoded.error}')),
         );
       }
       return;
@@ -162,25 +172,56 @@ class _RexScreenState extends State<RexScreen> with SingleTickerProviderStateMix
     }
   }
 
-  bool get _peutEnvoyer =>
-      _mode == _RexMode.vocal ? _audioDataUrl != null : _textController.text.trim().isNotEmpty;
+  bool get _peutEnvoyer => !_isSubmitting &&
+      (_mode == _RexMode.vocal ? _audioDataUrl != null : _textController.text.trim().isNotEmpty);
 
   Future<void> _envoyer(BuildContext context) async {
-    final isOnline = context.read<NetworkState>().isOnline;
     final chantierState = context.read<ChantierState>();
     final reference = chantierState.currentChantier!.reference;
     final texte = _textController.text.trim();
 
-    await chantierState.submitRex(
-      reference,
-      transcription: texte.isNotEmpty ? texte : null,
-      audio: _mode == _RexMode.vocal ? _audioDataUrl : null,
-    );
+    setState(() {
+      _isSubmitting = true;
+      _sendError = null;
+      _showTechnicalDetails = false;
+    });
+
+    bool wasQueued;
+    try {
+      // Depuis que ChantierRepository.submitRex ne met plus en file
+      // d'attente hors-ligne que les vraies coupures réseau (voir
+      // isOfflineRetryable), un rejet serveur ou un bug client remonte ici
+      // au lieu d'être avalé en silence — voir diagnostic transcription REX
+      // mobile : c'est exactement l'absence de cette remontée qui laissait
+      // croire qu'un REX avait été envoyé alors qu'il n'avait jamais atteint
+      // le serveur.
+      wasQueued = await chantierState.submitRex(
+        reference,
+        transcription: texte.isNotEmpty ? texte : null,
+        audio: _mode == _RexMode.vocal ? _audioDataUrl : null,
+      );
+    } on ApiException catch (e) {
+      if (!context.mounted) return;
+      setState(() {
+        _isSubmitting = false;
+        _sendError = 'Échec envoi REX : ${e.message}';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_sendError!)));
+      return;
+    } catch (e) {
+      if (!context.mounted) return;
+      setState(() {
+        _isSubmitting = false;
+        _sendError = 'Échec envoi REX : $e';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_sendError!)));
+      return;
+    }
 
     if (!context.mounted) return;
-    if (!isOnline) {
+    if (wasQueued) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Hors-ligne : le REX sera envoyé au retour du réseau.')),
+        const SnackBar(content: Text('REX créé — hors-ligne, l\'audio sera envoyé au retour du réseau.')),
       );
     }
     Navigator.of(context).pop();
@@ -261,12 +302,22 @@ class _RexScreenState extends State<RexScreen> with SingleTickerProviderStateMix
         _buildModeSwitch(),
         const SizedBox(height: 32),
         if (_mode == _RexMode.vocal) _buildVocalMode() else _buildTexteMode(),
+        if (_sendError != null) ...[
+          const SizedBox(height: 16),
+          _buildErrorBanner(_sendError!, _recorder.stepLog),
+        ],
         const SizedBox(height: 32),
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
             onPressed: _peutEnvoyer ? () => _envoyer(context) : null,
-            child: const Text('Valider et envoyer le REX'),
+            child: _isSubmitting
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Text('Valider et envoyer le REX'),
           ),
         ),
       ],
@@ -339,6 +390,10 @@ class _RexScreenState extends State<RexScreen> with SingleTickerProviderStateMix
           textAlign: TextAlign.center,
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: _isRecording ? AppColors.rouge : AppColors.encre),
         ),
+        if (!_isRecording && !_isEncoding && _voiceError != null) ...[
+          const SizedBox(height: 16),
+          _buildErrorBanner('Échec enregistrement audio : $_voiceError', _recorder.stepLog),
+        ],
         if (_isRecording && _speechAvailable) ...[
           const SizedBox(height: 16),
           Container(
@@ -362,11 +417,62 @@ class _RexScreenState extends State<RexScreen> with SingleTickerProviderStateMix
             controller: _textController,
             maxLines: 4,
             decoration: const InputDecoration(
-              hintText: 'Aucune transcription — l\'audio seul sera envoyé.',
+              // L'audio a bien été capturé (sinon _voiceError serait affiché
+              // ci-dessus à la place) — ce champ vide signifie seulement que
+              // la reconnaissance vocale en direct n'a rien capté, pas que
+              // l'envoi va échouer : le backend tente sa propre transcription
+              // automatique sur l'audio dès réception (voir
+              // backend/src/lib/transcription.ts).
+              hintText: 'Aucune transcription captée en direct — seul l\'audio sera envoyé (une transcription sera tentée à la réception).',
             ),
           ),
         ],
       ],
+    );
+  }
+
+  /// Message d'erreur affiché à l'écran pour une étape en échec, avec un
+  /// panneau "détails techniques" dépliable listant les étapes franchies
+  /// (voir VoiceRecorder.stepLog) — pensé pour être lisible directement sur
+  /// le téléphone de Tobi, sans brancher aucune console (voir diagnostic
+  /// transcription REX mobile).
+  Widget _buildErrorBanner(String message, List<String> technicalSteps) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.rouge.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: AppColors.rouge.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(message, style: const TextStyle(fontSize: 13, color: AppColors.rouge, fontWeight: FontWeight.w600, height: 1.4)),
+          if (technicalSteps.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: () => setState(() => _showTechnicalDetails = !_showTechnicalDetails),
+              child: Text(
+                _showTechnicalDetails ? 'Masquer les détails techniques ▲' : 'Voir les détails techniques ▼',
+                style: const TextStyle(fontSize: 12, color: AppColors.acier, fontWeight: FontWeight.w600),
+              ),
+            ),
+            if (_showTechnicalDetails) ...[
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: AppColors.fond, borderRadius: BorderRadius.circular(6)),
+                child: Text(
+                  technicalSteps.asMap().entries.map((e) => '${e.key + 1}. ${e.value}').join('\n'),
+                  style: const TextStyle(fontSize: 11, color: AppColors.acier, fontFamily: 'monospace', height: 1.5),
+                ),
+              ),
+            ],
+          ],
+        ],
+      ),
     );
   }
 

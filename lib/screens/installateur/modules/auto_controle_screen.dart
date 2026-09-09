@@ -213,6 +213,12 @@ class _PointCardState extends State<_PointCard> {
       final photo = await PhotoCapture.captureCompressed(context);
       if (photo == null || !context.mounted) return;
       await context.read<ChantierState>().updatePoint(widget.reference, widget.point.id, photo: photo);
+    } on ApiException catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Une erreur est survenue. Réessayez.')));
     } finally {
       if (mounted) setState(() => _isCapturing = false);
     }
@@ -244,7 +250,15 @@ class _PointCardState extends State<_PointCard> {
   Future<void> _toggle(BuildContext context) async {
     final next = widget.point.status == PointStatus.vide ? PointStatus.conforme : PointStatus.vide;
     final nom = context.read<AuthState>().currentUser?.fullName;
-    await context.read<ChantierState>().updatePoint(widget.reference, widget.point.id, status: next.name, validatedByName: nom);
+    try {
+      await context.read<ChantierState>().updatePoint(widget.reference, widget.point.id, status: next.name, validatedByName: nom);
+    } on ApiException catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Une erreur est survenue. Réessayez.')));
+    }
   }
 
   /// Une anomalie doit être prouvée par une photo — contrairement à la
@@ -253,7 +267,7 @@ class _PointCardState extends State<_PointCard> {
   Future<void> _signalerAnomalie(BuildContext context) async {
     final nom = context.read<AuthState>().currentUser?.fullName;
     if (widget.point.status == PointStatus.nonConforme) {
-      await context.read<ChantierState>().updatePoint(widget.reference, widget.point.id, status: PointStatus.vide.name, validatedByName: nom);
+      await _updateAnomalieStatus(context, PointStatus.vide.name, nom);
       return;
     }
     if (widget.point.photoPath == null) {
@@ -262,6 +276,18 @@ class _PointCardState extends State<_PointCard> {
       );
       return;
     }
-    await context.read<ChantierState>().updatePoint(widget.reference, widget.point.id, status: PointStatus.nonConforme.name, validatedByName: nom);
+    await _updateAnomalieStatus(context, PointStatus.nonConforme.name, nom);
+  }
+
+  Future<void> _updateAnomalieStatus(BuildContext context, String status, String? validatedByName) async {
+    try {
+      await context.read<ChantierState>().updatePoint(widget.reference, widget.point.id, status: status, validatedByName: validatedByName);
+    } on ApiException catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Une erreur est survenue. Réessayez.')));
+    }
   }
 }

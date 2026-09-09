@@ -9,13 +9,13 @@ import 'package:vertical_app/data/repositories/auth_repository.dart';
 /// Un `ApiClient` réel touchant réellement `http.get`/`post` n'est pas
 /// exploitable ici pour simuler une coupure réseau : `flutter_test` mocke
 /// `HttpClient` et renvoie systématiquement un faux HTTP 400 (jamais
-/// d'exception de connexion), donc jamais `ApiException(0, ...)` — voir
+/// d'exception de connexion), donc jamais `ApiException.network(...)` — voir
 /// ApiClient._request. On simule directement les deux cas réels
 /// (coupure réseau vs rejet serveur) via ces deux doublures.
 class _NetworkFailureApiClient extends ApiClient {
   @override
   Future<String> uploadFile({required String kind, required String dataUrl, String? filename}) async {
-    throw ApiException(0, 'Erreur réseau. Vérifiez votre connexion.');
+    throw ApiException.network('Erreur réseau. Vérifiez votre connexion.');
   }
 }
 
@@ -50,7 +50,7 @@ void main() {
   }
 
   group('AuthRepository.addHabilitation', () {
-    test('coupure réseau (ApiException(0, ...), voir ApiClient._request) : ne lève pas, met en file d\'attente hors-ligne', () async {
+    test('coupure réseau (ApiException.network(...), voir ApiClient._request) : ne lève pas, met en file d\'attente hors-ligne', () async {
       final db = await pumpDb();
       final repository = AuthRepository(_NetworkFailureApiClient(), db);
 

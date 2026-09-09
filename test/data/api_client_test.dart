@@ -23,4 +23,26 @@ void main() {
       expect(result, 'http://localhost:3000/uploads/token');
     });
   });
+
+  group('isOfflineRetryable', () {
+    test('true uniquement pour ApiException.network (absence réelle de réponse HTTP)', () {
+      expect(isOfflineRetryable(ApiException.network('Erreur réseau.')), isTrue);
+    });
+
+    test('false pour un ApiException avec un vrai code HTTP (le serveur a répondu et rejeté)', () {
+      expect(isOfflineRetryable(ApiException(403, 'Type de fichier refusé.')), isFalse);
+    });
+
+    test('false pour un ApiException(0, ...) qui n\'est PAS marqué réseau (ex. data URL mal formée)', () {
+      // Avant isOfflineRetryable, statusCode == 0 seul était utilisé comme
+      // critère — ambigu, puisqu'une erreur de validation locale (pas de
+      // vrai code HTTP disponible) utilise aussi 0 sans être un cas
+      // hors-ligne légitime à rejouer indéfiniment.
+      expect(isOfflineRetryable(ApiException(0, 'Fichier invalide.')), isFalse);
+    });
+
+    test('false pour une exception qui n\'est même pas un ApiException (bug client)', () {
+      expect(isOfflineRetryable(FormatException('inattendu')), isFalse);
+    });
+  });
 }

@@ -7,11 +7,33 @@ import '../core/platform/page_origin.dart';
 class ApiException implements Exception {
   final int statusCode;
   final String message;
-  ApiException(this.statusCode, this.message);
+  /// true UNIQUEMENT pour une absence réelle de réponse HTTP (pas de réseau,
+  /// DNS, timeout, serveur injoignable...) — le seul cas où rejouer la même
+  /// action plus tard, sans rien changer, a une chance de réussir. Tout le
+  /// reste (fichier invalide, rejet serveur 4xx/5xx, bug client) échouera
+  /// exactement pareil au prochain essai : voir [isOfflineRetryable], qui
+  /// s'appuie sur ce champ plutôt que sur statusCode == 0 (ambigu — une
+  /// erreur de validation locale comme un data URL mal formé utilise aussi
+  /// 0, faute de vrai code HTTP, sans être pour autant un cas hors-ligne).
+  final bool isNetworkFailure;
+  ApiException(this.statusCode, this.message, {this.isNetworkFailure = false});
+  ApiException.network(String message) : this(0, message, isNetworkFailure: true);
 
   @override
   String toString() => message;
 }
+
+/// true seulement si [e] signale une absence réelle de réponse HTTP (voir
+/// [ApiException.isNetworkFailure]) — LE seul critère à utiliser pour
+/// décider si une action échouée doit être mise en file d'attente hors-ligne
+/// (PendingOperations) plutôt que remontée immédiatement à l'appelant. Tout
+/// le reste (rejet serveur, fichier invalide, bug client, exception
+/// inattendue) doit être remonté tel quel : le mettre en file échouerait
+/// pareil indéfiniment, tout en laissant croire à l'utilisateur — via la
+/// mise à jour optimiste qui accompagne l'enqueue — que l'action a réussi
+/// (voir diagnostic transcription REX mobile : c'est exactement ce qui
+/// masquait un vrai échec côté client sans jamais atteindre le serveur).
+bool isOfflineRetryable(Object e) => e is ApiException && e.isNetworkFailure;
 
 /// Assemble le callbackUrl transmis à Vercel Blob (voir
 /// ApiClient.uploadFile) à partir d'une origine déjà résolue — pure,
@@ -155,8 +177,13 @@ class ApiClient {
     } on ApiException {
       rethrow;
     } catch (e) {
-      debugPrint('ApiClient.uploadFile (préparation du jeton) : $e');
-      throw ApiException(0, 'Erreur réseau : ${e.toString()}');
+      // Exception inattendue (pas un ApiException — _request en a déjà
+      // levé un pour toute vraie absence de réponse HTTP) : un bug, pas une
+      // absence de réseau confirmée. isNetworkFailure reste donc à false par
+      // défaut — jamais mis en file d'attente hors-ligne pour rejouer
+      // indéfiniment la même erreur.
+      debugPrint('ApiClient.uploadFile (préparation du jeton) : échec inattendu — $e');
+      throw ApiException(0, 'Erreur inattendue : ${e.toString()}');
     }
     final clientToken = tokenData['clientToken'] as String;
 
@@ -173,7 +200,7 @@ class ApiClient {
       // (accessible via les devtools navigateur en web) donne le détail
       // exact au lieu d'un message générique impossible à diagnostiquer.
       debugPrint('ApiClient.uploadFile (PUT Blob) : $e');
-      throw ApiException(0, 'Erreur réseau : ${e.toString()}');
+      throw ApiException.network('Erreur réseau : ${e.toString()}');
     }
     if (response.statusCode >= 400) {
       debugPrint('ApiClient.uploadFile (PUT Blob) : HTTP ${response.statusCode} — ${response.body}');
@@ -262,7 +289,7 @@ class ApiClient {
       // timeout...) — distinct d'une réponse d'erreur du serveur (voir
       // _extractError ci-dessous), mais message identique côté utilisateur :
       // dans les deux cas, il n'y a rien de plus précis à lui dire.
-      throw ApiException(0, 'Erreur réseau. Vérifiez votre connexion.');
+      throw ApiException.network('Erreur réseau. Vérifiez votre connexion.');
     }
 
     if (response.statusCode == 401 && auth && allowRetry && _refreshToken != null) {

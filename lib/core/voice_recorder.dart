@@ -4,8 +4,24 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
+import 'platform/blob_reader.dart';
 import 'platform/web_media_recorder.dart';
 import 'voice_recorder_file_io.dart' if (dart.library.html) 'voice_recorder_file_web.dart' as file_io;
+
+/// Résultat de [VoiceRecorder.stopAndEncode] : soit la note vocale encodée
+/// ([dataUrl]), soit la raison précise de l'échec ([error]) — jamais les
+/// deux. Remplace l'ancien retour `String?`, dont le seul `null` ne
+/// distinguait aucune des étapes qui peuvent échouer (arrêt du micro,
+/// lecture du blob, fichier vide...) : sans cette distinction, l'écran REX
+/// ne pouvait afficher qu'un message générique, quelle que soit la cause
+/// réelle (voir rex_screen.dart, diagnostic transcription REX mobile).
+class VoiceEncodeResult {
+  final String? dataUrl;
+  final String? error;
+  const VoiceEncodeResult.success(this.dataUrl) : error = null;
+  const VoiceEncodeResult.failure(this.error) : dataUrl = null;
+  bool get isSuccess => dataUrl != null;
+}
 
 /// Résultat du démarrage d'un enregistrement — distingue un refus de
 /// permission (rejouable ou non) d'un échec technique, et [unsupported]
@@ -92,7 +108,21 @@ class VoiceRecorder {
   // choisi (voir start()).
   String _uploadMimeType = 'audio/ogg';
 
+  /// Trace de chaque étape franchie par le cycle start → stopAndEncode le
+  /// plus récent — remise à zéro à chaque [start()]. Consultable sans
+  /// brancher de console (voir le panneau "détails techniques" de
+  /// rex_screen.dart) : c'est la seule fenêtre sur ce qui s'est réellement
+  /// passé quand Tobi teste sur un téléphone qu'on ne peut pas déboguer à
+  /// distance.
+  final List<String> stepLog = [];
+
+  void _log(String message) {
+    stepLog.add(message);
+    debugPrint('VoiceRecorder: $message');
+  }
+
   Future<VoiceRecorderStartResult> start() async {
+    stepLog.clear();
     // Sur Android 6+ et iOS, la déclaration dans le manifest/Info.plist ne
     // suffit pas : la permission doit être (re)demandée à l'exécution avant
     // chaque tentative d'accès au micro — sans ça, l'enregistrement échoue
@@ -102,8 +132,15 @@ class VoiceRecorder {
     // hasPermission()/start() ci-dessous.
     if (!kIsWeb) {
       final status = await Permission.microphone.request();
-      if (status.isPermanentlyDenied) return VoiceRecorderStartResult.permissionPermanentlyDenied;
-      if (!status.isGranted) return VoiceRecorderStartResult.permissionDenied;
+      if (status.isPermanentlyDenied) {
+        _log('permission micro refusée définitivement');
+        return VoiceRecorderStartResult.permissionPermanentlyDenied;
+      }
+      if (!status.isGranted) {
+        _log('permission micro refusée');
+        return VoiceRecorderStartResult.permissionDenied;
+      }
+      _log('permission micro accordée');
     } else {
       try {
         // Safari/WebKit ne supporte pas la requête de permission "microphone"
@@ -112,9 +149,13 @@ class VoiceRecorder {
         // laisser cette erreur remonter telle quelle, on l'ignore et on tente
         // quand même le démarrage ci-dessous, qui déclenche lui-même l'invite
         // native du navigateur via getUserMedia.
-        if (!await _recorder.hasPermission()) return VoiceRecorderStartResult.permissionDenied;
+        if (!await _recorder.hasPermission()) {
+          _log('permission micro refusée (getUserMedia)');
+          return VoiceRecorderStartResult.permissionDenied;
+        }
+        _log('permission micro accordée (getUserMedia)');
       } catch (e) {
-        debugPrint('VoiceRecorder.start (hasPermission): $e');
+        _log('hasPermission a levé, tentative de démarrage malgré tout — $e');
       }
     }
 
@@ -130,10 +171,14 @@ class VoiceRecorder {
       // l'enregistrement échouait silencieusement à l'arrêt.
       final mimeType = pickSupportedAudioMimeType(isAudioMimeTypeSupported);
       final codec = webAudioCodecFor(mimeType);
-      if (codec == null) return VoiceRecorderStartResult.unsupported;
+      if (codec == null) {
+        _log('aucun format audio supporté par ce navigateur (MediaRecorder)');
+        return VoiceRecorderStartResult.unsupported;
+      }
       encoder = codec.encoder;
       _uploadMimeType = codec.uploadMimeType;
       _path = 'rex-${DateTime.now().millisecondsSinceEpoch}.${codec.extension}';
+      _log('format retenu : $mimeType (upload en $_uploadMimeType)');
     } else {
       // Contrairement au Web, `record` écrit ici un vrai fichier sur mobile
       // : il faut un chemin absolu vers un répertoire accessible en
@@ -159,15 +204,19 @@ class VoiceRecorder {
       // commentaire ci-dessus) — vérifier explicitement l'état évite de
       // renvoyer `started` pour un enregistrement qui n'a en réalité jamais
       // démarré.
-      if (!await _recorder.isRecording()) return VoiceRecorderStartResult.error;
+      if (!await _recorder.isRecording()) {
+        _log('_recorder.start() n\'a pas démarré l\'enregistrement (isRecording=false)');
+        return VoiceRecorderStartResult.error;
+      }
+      _log('enregistrement démarré');
       return VoiceRecorderStartResult.started;
     } catch (e) {
-      debugPrint('VoiceRecorder.start: $e');
+      _log('_recorder.start() a levé — $e');
       return VoiceRecorderStartResult.error;
     }
   }
 
-  Future<String?> stopAndEncode() async {
+  Future<VoiceEncodeResult> stopAndEncode() async {
     String? pathOrBlobUrl;
     try {
       // record_web (voir MediaRecorderDelegate.stop()) attend l'évènement
@@ -183,37 +232,75 @@ class VoiceRecorder {
       pathOrBlobUrl = await _recorder.stop().timeout(
         const Duration(seconds: 5),
         onTimeout: () {
-          debugPrint('VoiceRecorder.stopAndEncode: _recorder.stop() n\'a jamais répondu après 5s (évènement "onstop" du MediaRecorder jamais déclenché ?) — abandon');
+          _log('arrêt du micro : aucune réponse après 5s (évènement "onstop" du MediaRecorder jamais déclenché ?) — abandon');
           return null;
         },
       );
     } catch (e) {
-      debugPrint('VoiceRecorder.stopAndEncode: _recorder.stop() a levé — $e');
-      return null;
+      _log('arrêt du micro : _recorder.stop() a levé — $e');
+      return VoiceEncodeResult.failure('Impossible d\'arrêter l\'enregistrement : $e');
     }
-    debugPrint('VoiceRecorder.stopAndEncode: _recorder.stop() -> $pathOrBlobUrl ($_uploadMimeType)');
-    if (pathOrBlobUrl == null) return null;
+    if (pathOrBlobUrl == null) {
+      return const VoiceEncodeResult.failure('Le micro n\'a pas répondu à l\'arrêt de l\'enregistrement (délai dépassé).');
+    }
+    _log('arrêt du micro OK — $pathOrBlobUrl ($_uploadMimeType)');
     try {
+      final Uint8List bytes;
       if (kIsWeb) {
         // Sur le Web, `record` renvoie une URL blob: résoluble via fetch
         // depuis la même page — c'est la cible prioritaire de cette PWA.
         // _uploadMimeType reflète le codec réellement choisi au démarrage
         // (voir start()) — jamais figé à webm, qu'un navigateur Safari/iOS
         // n'a de toute façon jamais produit.
-        final response = await http.get(Uri.parse(pathOrBlobUrl));
-        // Un blob de quelques dizaines d'octets (ou 0) sur un enregistrement
-        // de plusieurs secondes trahit une capture vide (conteneur audio/mp4
-        // sans données) plutôt qu'un problème d'upload ou de transcription
-        // plus loin dans la chaîne — voir README 4.6.
-        debugPrint('VoiceRecorder.stopAndEncode: blob web ${response.bodyBytes.length} octets');
-        return 'data:$_uploadMimeType;base64,${base64Encode(response.bodyBytes)}';
+        bytes = await _readBlobWithFallback(pathOrBlobUrl);
+      } else {
+        bytes = await file_io.readVoiceRecorderFile(pathOrBlobUrl);
+        _log('lecture du fichier natif OK — ${bytes.length} octets');
       }
-      final bytes = await file_io.readVoiceRecorderFile(pathOrBlobUrl);
-      debugPrint('VoiceRecorder.stopAndEncode: fichier natif ${bytes.length} octets');
-      return 'data:$_uploadMimeType;base64,${base64Encode(bytes)}';
+      // Un blob de quelques octets (ou 0) sur un enregistrement de plusieurs
+      // secondes trahit une capture vide (conteneur audio sans données —
+      // micro coupé trop tôt, permission retirée en cours d'enregistrement,
+      // encodeur qui n'a jamais reçu de son...) plutôt qu'un problème
+      // d'upload ou de transcription plus loin dans la chaîne — voir README
+      // 4.6. Sans cette vérification, un audio vide était envoyé et accepté
+      // tel quel, pour finir en "note vocale sans transcription" sans jamais
+      // signaler la vraie cause.
+      if (bytes.isEmpty) {
+        _log('échec : audio vide (0 octet) — capture probablement interrompue avant la première donnée');
+        return const VoiceEncodeResult.failure('L\'enregistrement est vide (0 octet) — réessayez en parlant plus longtemps après avoir appuyé sur le micro.');
+      }
+      return VoiceEncodeResult.success('data:$_uploadMimeType;base64,${base64Encode(bytes)}');
     } catch (e) {
-      debugPrint('VoiceRecorder.stopAndEncode: $e');
-      return null;
+      _log('échec de lecture de l\'audio enregistré — $e');
+      return VoiceEncodeResult.failure('Impossible de lire la note vocale enregistrée : $e');
+    }
+  }
+
+  /// Lecture principale (http.get, basé sur fetch() côté navigateur) avec
+  /// repli automatique en XMLHttpRequest si elle échoue ou renvoie un
+  /// résultat vide — cas connu comme fragile sur certaines versions de
+  /// Safari/WebKit pour un blob: URL (voir blob_reader_web.dart). Ne
+  /// remplace jamais silencieusement l'une par l'autre sans le journaliser :
+  /// si le repli est celui qui a fini par marcher, c'est un indice clé pour
+  /// le prochain diagnostic.
+  Future<Uint8List> _readBlobWithFallback(String blobUrl) async {
+    try {
+      final response = await http.get(Uri.parse(blobUrl));
+      if (response.bodyBytes.isNotEmpty) {
+        _log('lecture du blob (http.get) OK — ${response.bodyBytes.length} octets');
+        return response.bodyBytes;
+      }
+      _log('lecture du blob (http.get) : résultat vide, tentative de repli en XMLHttpRequest');
+    } catch (e) {
+      _log('lecture du blob (http.get) a levé — $e — tentative de repli en XMLHttpRequest');
+    }
+    try {
+      final bytes = await readBlobUrlViaXhr(blobUrl);
+      _log('lecture du blob (repli XMLHttpRequest) OK — ${bytes.length} octets');
+      return bytes;
+    } catch (e) {
+      _log('lecture du blob (repli XMLHttpRequest) a aussi levé — $e');
+      rethrow;
     }
   }
 

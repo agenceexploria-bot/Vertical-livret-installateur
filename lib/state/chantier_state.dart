@@ -45,7 +45,13 @@ class ChantierState extends ChangeNotifier {
       for (final c in _chantiers) {
         c.livretsOuverts.add(user.id);
       }
-      await Future.wait(_chantiers.map((c) => _repository.markLivretOuvert(c.reference)));
+      // Rejet serveur ou bug client possible depuis que markLivretOuvert ne
+      // met plus en file d'attente hors-ligne que les vraies coupures réseau
+      // (voir ChantierRepository.markLivretOuvert) — un simple "vu" raté ne
+      // doit jamais empêcher le chargement de la liste des chantiers.
+      await Future.wait(_chantiers.map((c) => _repository.markLivretOuvert(c.reference).catchError((e) {
+            debugPrint('ChantierState.fetchChantiers: markLivretOuvert a échoué pour ${c.reference} — $e');
+          })));
     }
     notifyListeners();
   }
@@ -207,9 +213,14 @@ class ChantierState extends ChangeNotifier {
     await _repository.updatePoint(reference, pointId, status: status, photo: photo, validatedByName: validatedByName);
   }
 
-  Future<void> submitRex(String reference, {String? transcription, String? audio}) async {
-    final updated = await _repository.submitRex(reference, transcription: transcription, audio: audio);
-    _replaceInList(updated);
+  /// Renvoie `true` si l'envoi a été mis en file d'attente hors-ligne
+  /// (vraie coupure réseau) plutôt que réellement parti au serveur — voir
+  /// [SubmitRexResult] et rex_screen.dart, qui en tire un message différent
+  /// selon le cas plutôt qu'un succès générique dans les deux cas.
+  Future<bool> submitRex(String reference, {String? transcription, String? audio}) async {
+    final result = await _repository.submitRex(reference, transcription: transcription, audio: audio);
+    _replaceInList(result.chantier);
+    return result.wasQueued;
   }
 
   /// Optimistic UI : l'entrée REX disparaît immédiatement, avec restauration

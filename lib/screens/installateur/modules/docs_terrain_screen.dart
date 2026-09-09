@@ -154,26 +154,35 @@ class _DocsTerrainScreenState extends State<DocsTerrainScreen> {
     final reference = chantierState.currentChantier!.reference;
     final auteur = context.read<AuthState>().currentUser?.fullName;
 
-    // Le repository tente le réseau et, en cas d'échec, met l'envoi en file
-    // d'attente locale (PendingOperations) — rejoué automatiquement au retour réseau.
-    await chantierState.addDocument(
-      reference,
-      titre: picked.fileName,
-      categorie: categorie.name,
-      file: picked.dataUrl,
-      auteurName: auteur,
-    );
-
-    if (!context.mounted) return;
-    if (!isOnline) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Hors-ligne : le document sera envoyé au retour du réseau.')),
+    try {
+      // Le repository tente le réseau et, en cas d'échec réseau confirmé, met
+      // l'envoi en file d'attente locale (PendingOperations) — rejoué
+      // automatiquement au retour réseau. Tout autre échec (rejet serveur,
+      // bug client) remonte ici plutôt que d'être rejoué indéfiniment.
+      await chantierState.addDocument(
+        reference,
+        titre: picked.fileName,
+        categorie: categorie.name,
+        file: picked.dataUrl,
+        auteurName: auteur,
       );
+
+      if (!context.mounted) return;
+      if (!isOnline) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Hors-ligne : le document sera envoyé au retour du réseau.')),
+        );
+      }
+      setState(() => _selectedCategory = null);
+    } on ApiException catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Une erreur est survenue. Réessayez.')));
+    } finally {
+      if (mounted) setState(() => _isCapturing = false);
     }
-    setState(() {
-      _selectedCategory = null;
-      _isCapturing = false;
-    });
   }
 
   /// Glisser-déposer (Web) — même logique que [_addDocument], juste une autre

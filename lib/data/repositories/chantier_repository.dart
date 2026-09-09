@@ -7,6 +7,18 @@ import '../models/point_controle.dart';
 import '../models/document_terrain.dart';
 import '../models/pv_reponses.dart';
 
+/// Résultat de [ChantierRepository.submitRex] : [wasQueued] distingue un
+/// envoi réellement parti au serveur d'un repli en file d'attente
+/// hors-ligne (vraie coupure réseau, voir [isOfflineRetryable]) — sans
+/// cette distinction, l'écran REX ne peut afficher qu'un succès générique,
+/// masquant le cas où l'audio attend encore d'être envoyé (voir
+/// rex_screen.dart, diagnostic transcription REX mobile).
+class SubmitRexResult {
+  final Chantier chantier;
+  final bool wasQueued;
+  const SubmitRexResult({required this.chantier, required this.wasQueued});
+}
+
 class ChantierRepository {
   final ApiClient _api;
   final AppDatabase _db;
@@ -123,11 +135,15 @@ class ChantierRepository {
 
   /// Écriture hors-ligne : si l'appel réseau échoue, l'action est mise en
   /// file d'attente locale (table PendingOperations) pour être rejouée par le
-  /// SyncEngine dès que le réseau revient.
+  /// SyncEngine dès que le réseau revient. [isOfflineRetryable] tranche : une
+  /// absence de réseau confirmée part en file ; tout le reste (rejet
+  /// serveur, bug client) remonte immédiatement plutôt que d'être rejoué
+  /// indéfiniment en silence.
   Future<void> markLivretOuvert(String reference) async {
     try {
       await _api.markLivretOuvert(reference);
-    } catch (_) {
+    } catch (e) {
+      if (!isOfflineRetryable(e)) rethrow;
       await _db.enqueueOperation(type: 'markLivretOuvert', chantierReference: reference, payload: const {});
     }
   }
@@ -144,7 +160,8 @@ class ChantierRepository {
     try {
       final photoUrl = photo != null ? await _api.uploadFile(kind: 'pointPhoto', dataUrl: photo) : null;
       await _api.updatePoint(reference, pointId, status: status, photoUrl: photoUrl, clientValidatedAt: clientValidatedAt);
-    } catch (_) {
+    } catch (e) {
+      if (!isOfflineRetryable(e)) rethrow;
       await _db.enqueueOperation(
         type: 'updatePoint',
         chantierReference: reference,
@@ -179,7 +196,7 @@ class ChantierRepository {
   /// URL base64) — l'un des deux suffit, l'audio seul est accepté. Si
   /// [transcription] est absente, le backend tente une transcription
   /// automatique de l'audio (voir backend/src/lib/transcription.ts).
-  Future<Chantier> submitRex(String reference, {String? transcription, String? audio}) async {
+  Future<SubmitRexResult> submitRex(String reference, {String? transcription, String? audio}) async {
     try {
       final audioUrl = audio != null ? await _api.uploadFile(kind: 'rexAudio', dataUrl: audio) : null;
       debugPrint('ChantierRepository.submitRex: audioUrl=$audioUrl transcriptionLocale=${transcription != null}');
@@ -187,13 +204,22 @@ class ChantierRepository {
       final chantier = Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
       final dernierRex = chantier.rex.isNotEmpty ? chantier.rex.first : null;
       debugPrint('ChantierRepository.submitRex: réponse serveur — dernier REX transcription=${dernierRex?.transcription}');
-      return chantier;
+      return SubmitRexResult(chantier: chantier, wasQueued: false);
     } catch (e) {
-      // Avant, cette exception était avalée sans trace (catch (_)) : un REX
-      // qui échoue pour n'importe quelle raison (upload blob, réseau...)
-      // finissait dans la file d'attente hors-ligne sans qu'on sache jamais
-      // pourquoi — voir diagnostic transcription REX mobile.
-      debugPrint('ChantierRepository.submitRex: échec, repli file d\'attente hors-ligne — $e');
+      // Avant, cette exception était avalée sans trace (catch (_)), et TOUTE
+      // erreur — y compris un rejet serveur ou un bug client — finissait
+      // dans la file d'attente hors-ligne avec une mise à jour optimiste :
+      // le REX semblait "envoyé" alors que rien n'avait jamais atteint le
+      // serveur, sans le moindre indice pour le diagnostiquer (voir
+      // diagnostic transcription REX mobile — c'est exactement ce qui s'est
+      // produit sur Android ET iPhone). Seule une absence de réseau
+      // confirmée (isOfflineRetryable) a une chance de réussir en rejouant
+      // plus tard sans rien changer : tout le reste doit remonter tel quel.
+      if (!isOfflineRetryable(e)) {
+        debugPrint('ChantierRepository.submitRex: échec non-réseau (rejet serveur ou bug client) — jamais mis en file, jamais marqué envoyé — $e');
+        rethrow;
+      }
+      debugPrint('ChantierRepository.submitRex: pas de réseau — repli file d\'attente hors-ligne — $e');
       await _db.enqueueOperation(
         type: 'submitRex',
         chantierReference: reference,
@@ -202,7 +228,7 @@ class ChantierRepository {
       await _applyOptimisticUpdate(reference, (chantier) {
         chantier.rex.insert(0, Rex(id: 'local-${DateTime.now().microsecondsSinceEpoch}', transcription: transcription, soumisAt: DateTime.now()));
       });
-      return getChantier(reference);
+      return SubmitRexResult(chantier: await getChantier(reference), wasQueued: true);
     }
   }
 
@@ -291,7 +317,8 @@ class ChantierRepository {
     try {
       final fileUrl = await _api.uploadFile(kind: 'documentTerrain', dataUrl: file);
       await _api.addDocument(reference, titre: titre, categorie: categorie, fileUrl: fileUrl);
-    } catch (_) {
+    } catch (e) {
+      if (!isOfflineRetryable(e)) rethrow;
       await _db.enqueueOperation(
         type: 'addDocument',
         chantierReference: reference,
