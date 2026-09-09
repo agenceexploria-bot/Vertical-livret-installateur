@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -7,6 +8,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
+import '../../../core/platform/mobile_detector.dart';
 import '../../../core/theme.dart';
 import '../../../core/widgets/glass_app_bar.dart';
 import '../../../core/voice_recorder.dart';
@@ -108,12 +110,21 @@ class _RexScreenState extends State<RexScreen> with SingleTickerProviderStateMix
       return;
     }
 
-    // La transcription en direct par segments (voir _handleLiveSegment)
-    // n'a de sens que là où la Web Speech API ci-dessous n'existe pas
-    // (navigateurs mobiles) — les deux écrivent dans le même _liveText de
-    // façons incompatibles (remplacement vs accumulation) : jamais les deux
-    // en même temps.
-    final result = await _recorder.start(onLiveSegment: _speechAvailable ? null : _handleLiveSegment);
+    // Toujours branché, JAMAIS gaté par _speechAvailable : sur Web mobile,
+    // voice_recorder.dart n'exploite ce callback que là où il a réellement
+    // un second enregistreur à brancher (voir isMobileDevice() dans
+    // VoiceRecorder.start) — inoffensif ailleurs (desktop, natif), ignoré
+    // purement et simplement. Un ancien garde-fou ici se fiait à
+    // _speechAvailable pour éviter que Web Speech API et le streaming par
+    // segments écrivent tous les deux dans _liveText — mais
+    // speech_to_text.initialize() peut renvoyer `true` sur Android ET
+    // iPhone sans jamais livrer le moindre résultat en pratique (fiabilité
+    // mobile de cette API, la raison même de l'existence du streaming par
+    // segments) : ce garde-fou désactivait alors les deux mécanismes à la
+    // fois, silencieusement — c'est exactement ce qui s'est produit lors du
+    // diagnostic transcription REX mobile (zéro appel à
+    // /transcribe-segment sur Android ET iPhone).
+    final result = await _recorder.start(onLiveSegment: _handleLiveSegment);
     if (!mounted) return;
     if (result != VoiceRecorderStartResult.started) {
       final SnackBar snackBar;
@@ -417,6 +428,30 @@ class _RexScreenState extends State<RexScreen> with SingleTickerProviderStateMix
           textAlign: TextAlign.center,
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: _isRecording ? AppColors.rouge : AppColors.encre),
         ),
+        // Indicateur de diagnostic permanent (Web mobile uniquement) : sans
+        // lui, un second enregistreur qui ne démarre jamais (interop, ou
+        // simplement jamais branché — voir le garde-fou _speechAvailable
+        // retiré ci-dessus, exactement ce qui s'est produit lors du
+        // diagnostic transcription REX mobile) reste invisible tant que
+        // personne ne branche de console.
+        if (_isRecording && kIsWeb && isMobileDevice()) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: (_recorder.liveTranscriptionAvailable ? AppColors.vert : AppColors.acierClair).withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              _recorder.liveTranscriptionAvailable ? 'Direct : actif' : 'Direct : indisponible',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: _recorder.liveTranscriptionAvailable ? AppColors.vert : AppColors.acier,
+              ),
+            ),
+          ),
+        ],
         if (!_isRecording && !_isEncoding && _voiceError != null) ...[
           const SizedBox(height: 16),
           _buildErrorBanner('Échec enregistrement audio : $_voiceError', _recorder.stepLog),
