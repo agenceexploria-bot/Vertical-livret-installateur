@@ -80,4 +80,24 @@ void main() {
       expect(renduVuePour(largeurDisponible: 1200, vueListe: true, breakpoint: breakpoint), ChantiersRenduVue.liste);
     });
   });
+
+  group('peutCreerDepuisListeVide (pas de création SAV depuis la liste)', () {
+    test('vue SAV : jamais de création, quel que soit le segment ou la recherche', () {
+      for (final segment in TableauChantiersSegment.values) {
+        expect(peutCreerDepuisListeVide(savOnly: true, isSearching: false, segment: segment), isFalse);
+        expect(peutCreerDepuisListeVide(savOnly: true, isSearching: true, segment: segment), isFalse);
+      }
+    });
+
+    test('vue Chantiers : création possible sur les segments En cours/Tous, hors recherche', () {
+      expect(peutCreerDepuisListeVide(savOnly: false, isSearching: false, segment: TableauChantiersSegment.enCours), isTrue);
+      expect(peutCreerDepuisListeVide(savOnly: false, isSearching: false, segment: TableauChantiersSegment.tous), isTrue);
+    });
+
+    test('vue Chantiers : pas de création en recherche, ni sur Terminés/À traiter', () {
+      expect(peutCreerDepuisListeVide(savOnly: false, isSearching: true, segment: TableauChantiersSegment.enCours), isFalse);
+      expect(peutCreerDepuisListeVide(savOnly: false, isSearching: false, segment: TableauChantiersSegment.termines), isFalse);
+      expect(peutCreerDepuisListeVide(savOnly: false, isSearching: false, segment: TableauChantiersSegment.aTraiter), isFalse);
+    });
+  });
 }
