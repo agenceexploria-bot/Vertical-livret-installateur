@@ -75,13 +75,13 @@ ChantiersRenduVue renduVuePour({required double largeurDisponible, required bool
   return vueListe ? ChantiersRenduVue.liste : ChantiersRenduVue.tuiles;
 }
 
-/// Module SAV — jamais d'action de création depuis la liste SAV (ni le
-/// bouton "Nouveau" ni celle de l'état vide) : une intervention SAV se crée
-/// uniquement depuis la fiche de son chantier d'origine (menu ⋮ → "Créer une
-/// intervention SAV"), jamais depuis une liste (parentReference obligatoire
-/// côté backend, voir POST .../sav). Pure, testable sans BoShell.
-bool peutCreerDepuisListeVide({required bool savOnly, required bool isSearching, required TableauChantiersSegment segment}) {
-  if (savOnly || isSearching) return false;
+/// Depuis la vue SAV, la création reste possible (bouton dédié "Créer une
+/// intervention SAV", voir _buildFiltersRow) mais passe toujours par
+/// [CreerSavDialog] avec sélection obligatoire du chantier d'origine — un
+/// SAV n'est jamais orphelin (parentReference obligatoire côté backend, voir
+/// POST .../sav). Pure, testable sans BoShell.
+bool peutCreerDepuisListeVide({required bool isSearching, required TableauChantiersSegment segment}) {
+  if (isSearching) return false;
   return segment != TableauChantiersSegment.aTraiter && segment != TableauChantiersSegment.termines;
 }
 
@@ -257,15 +257,22 @@ class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
             ),
           ),
         ),
-        // Module SAV — une intervention SAV se crée uniquement depuis la
-        // fiche de son chantier d'origine (menu ⋮ → "Créer une intervention
-        // SAV"), jamais depuis cette liste : le bouton "Nouveau" n'a pas sa
-        // place ici (voir POST .../sav, parentReference obligatoire).
-        if (!widget.savOnly)
-          SizedBox(
-            height: 36,
-            child: _buildNouveauMenu(context),
-          ),
+        // Module SAV — sur la vue SAV, un seul bouton direct plutôt que le
+        // menu "Nouveau" (pas de "Nouveau chantier" ici, hors sujet) — ouvre
+        // le même CreerSavDialog que le menu ⋮ de la fiche chantier, avec
+        // sélection obligatoire du chantier d'origine (jamais de SAV
+        // orphelin, voir POST .../sav).
+        SizedBox(
+          height: 36,
+          child: widget.savOnly
+              ? ElevatedButton.icon(
+                  onPressed: () => _openCreerSavDialog(context),
+                  icon: const Icon(Icons.build_outlined, size: 18),
+                  label: const Text('Créer une intervention SAV', style: TextStyle(fontSize: 13)),
+                  style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12)),
+                )
+              : _buildNouveauMenu(context),
+        ),
       ],
     );
   }
@@ -402,15 +409,17 @@ class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
             TableauChantiersSegment.tous => 'Aucun(e) $noun pour l\'instant.',
             TableauChantiersSegment.aTraiter => 'Rien à traiter pour ce filtre.',
           };
-    final canCreer = peutCreerDepuisListeVide(savOnly: widget.savOnly, isSearching: isSearching, segment: _segment);
+    final canCreer = peutCreerDepuisListeVide(isSearching: isSearching, segment: _segment);
 
     if (chantiers.isEmpty) {
       return BoPanel(
         child: EmptyState(
           icon: emptyIcon,
           message: emptyMessage,
-          actionLabel: canCreer ? 'Créer un nouveau chantier' : null,
-          onAction: canCreer ? () => context.push('/backoffice/ct/chantiers/nouveau') : null,
+          actionLabel: canCreer ? (widget.savOnly ? 'Créer une intervention SAV' : 'Créer un nouveau chantier') : null,
+          onAction: canCreer
+              ? (widget.savOnly ? () => _openCreerSavDialog(context) : () => context.push('/backoffice/ct/chantiers/nouveau'))
+              : null,
         ),
       );
     }
