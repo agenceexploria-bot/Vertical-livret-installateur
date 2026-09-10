@@ -293,6 +293,13 @@ class AppRouter {
         GoRoute(path: '/backoffice/ct/auto-controle', builder: (context, state) => const BoAutoControleDetailScreen()),
         GoRoute(path: '/backoffice/ct/chantiers/nouveau', builder: (context, state) => const BoNewChantierScreen()),
         GoRoute(path: '/backoffice/ct/chantiers/:ref', builder: (context, state) => const BoChantierDetailScreen()),
+        // Module SAV — même écran que ci-dessus (le contexte de navigation,
+        // onglet actif et bouton "Retour", se dérive du type réel du
+        // chantier, voir chantierActiveNav/chantierListeRoute) : cette route
+        // distincte existe pour que l'URL d'une fiche SAV s'affiche
+        // explicitement dans l'espace SAV (favoris, historique navigateur),
+        // jamais sous /chantiers/.
+        GoRoute(path: '/backoffice/ct/sav/:ref', builder: (context, state) => const BoChantierDetailScreen()),
         GoRoute(path: '/backoffice/ct/comptes', builder: (context, state) => const BoComptesScreen()),
         GoRoute(path: '/backoffice/ct/comptes/:id', builder: (context, state) => const BoInstallateurDetailScreen()),
 

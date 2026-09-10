@@ -14,10 +14,17 @@ import '../../../state/auth_state.dart';
 /// Passe par [BuildContext.canPop] plutôt que d'appeler systématiquement
 /// [GoRouter.pop] : un lien ouvert directement dans un nouvel onglet
 /// (partagé, mis en favori, tapé à la main) n'a pas d'historique de
-/// navigation à dépiler — dans ce cas on retombe sur la page d'accueil du
-/// rôle de l'utilisateur plutôt que de planter.
+/// navigation à dépiler — dans ce cas on retombe sur [fallbackRoute] (la
+/// page d'accueil du rôle par défaut) plutôt que de planter.
+///
+/// [fallbackRoute] permet à l'appelant de préciser la bonne destination
+/// quand plusieurs listes mènent à la même page de détail — ex. une fiche
+/// SAV doit retomber sur la liste SAV, jamais sur la liste Chantiers,
+/// cloisonnement de l'espace SAV oblige (voir BoChantierDetailScreen).
 class BoBackButton extends StatelessWidget {
-  const BoBackButton({super.key});
+  final String? fallbackRoute;
+
+  const BoBackButton({super.key, this.fallbackRoute});
 
   @override
   Widget build(BuildContext context) {
@@ -40,6 +47,10 @@ class BoBackButton extends StatelessWidget {
   void _goBack(BuildContext context) {
     if (context.canPop()) {
       context.pop();
+      return;
+    }
+    if (fallbackRoute != null) {
+      context.go(fallbackRoute!);
       return;
     }
     final role = context.read<AuthState>().currentUser?.role;

@@ -21,6 +21,7 @@ import '../../data/models/user.dart';
 import '../../state/auth_state.dart';
 import '../../state/chantier_state.dart';
 import '../../state/comptes_state.dart';
+import 'chantier_route.dart';
 import 'widgets/bo_back_button.dart';
 import 'widgets/bo_shell.dart';
 import 'widgets/bo_panel.dart';
@@ -48,6 +49,30 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  /// Cloisonnement strict de l'espace SAV — identité visuelle immédiate en
+  /// tête de fiche (pas seulement un petit badge à côté de la référence,
+  /// facile à manquer) : impossible de confondre une fiche SAV avec une
+  /// fiche chantier d'installation, quel que soit le point d'entrée.
+  Widget _buildSavBanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.orange.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: AppColors.orange, width: 1.2),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: const [
+          Icon(Icons.build_outlined, size: 18, color: AppColors.orange),
+          SizedBox(width: 8),
+          Text('INTERVENTION SAV', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold, color: AppColors.orange, letterSpacing: 0.4)),
+        ],
+      ),
+    );
   }
 
   /// Actions principales de la fiche regroupées en un seul menu compact
@@ -166,37 +191,41 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
     // Direction peut renseigner le PV mais pas le supprimer.
     final canSupprimerPv = role == UserRole.admin || role == UserRole.coordinateurTravaux;
 
+    final isSav = chantier.type == ChantierType.sav;
+
     return BoShell(
-      activeNav: 'chantiers',
+      activeNav: chantierActiveNav(chantier.type),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const BoBackButton(),
+          BoBackButton(fallbackRoute: chantierListeRoute(chantier.type)),
+          if (isSav) ...[
+            _buildSavBanner(),
+            const SizedBox(height: 12),
+          ],
           Wrap(
             crossAxisAlignment: WrapCrossAlignment.center,
             spacing: 12,
             runSpacing: 8,
             children: [
               Text('${chantier.reference} — ${chantier.client}, ${chantier.ville}', style: Theme.of(context).textTheme.titleMedium),
-              if (chantier.type == ChantierType.sav)
-                const StatusBadge(label: 'SAV', type: StatusType.factuel),
               StatusBadge(
                 label: livretOk ? 'Prêt' : 'En attente',
                 type: livretOk ? StatusType.conforme : StatusType.enCours,
               ),
             ],
           ),
-          if (chantier.type == ChantierType.sav) ...[
-            const SizedBox(height: 8),
-            MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: GestureDetector(
-                onTap: () => context.push('/backoffice/ct/chantiers/${chantier.parentReference}'),
-                child: Text(
-                  'Intervention SAV rattachée au chantier ${chantier.parentReference ?? '—'}',
-                  style: const TextStyle(fontSize: 12.5, color: AppColors.orange, fontWeight: FontWeight.w600, decoration: TextDecoration.underline),
-                ),
-              ),
+          if (isSav) ...[
+            const SizedBox(height: 10),
+            // Exception assumée au cloisonnement : seul lien qui bascule
+            // volontairement vers l'espace Chantiers — libellé explicite en
+            // bouton, jamais un simple lien texte qu'on suivrait sans s'en
+            // rendre compte.
+            OutlinedButton.icon(
+              onPressed: () => context.push('/backoffice/ct/chantiers/${chantier.parentReference}'),
+              icon: const Icon(Icons.open_in_new, size: 16),
+              label: Text('Voir le chantier d\'origine (${chantier.parentReference ?? '—'})'),
+              style: OutlinedButton.styleFrom(minimumSize: const Size(0, 38), padding: const EdgeInsets.symmetric(horizontal: 14)),
             ),
           ],
           const SizedBox(height: 16),
@@ -941,9 +970,11 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
   void _openCreerSavDialog(BuildContext context, Chantier chantier) {
     showDialog(
       context: context,
+      // Le SAV créé ici est toujours de type sav — route SAV dédiée, jamais
+      // /chantiers/ (cloisonnement de l'espace SAV).
       builder: (dialogContext) => CreerSavDialog(
         chantier: chantier,
-        chantierDetailPath: (ref) => '/backoffice/ct/chantiers/$ref',
+        chantierDetailPath: (ref) => '/backoffice/ct/sav/$ref',
       ),
     );
   }
@@ -971,7 +1002,7 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
               Navigator.pop(dialogContext);
               try {
                 await context.read<ChantierState>().deleteChantier(chantier.reference);
-                if (context.mounted) context.go('/backoffice/ct');
+                if (context.mounted) context.go(chantierListeRoute(chantier.type));
               } on ApiException catch (e) {
                 if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));

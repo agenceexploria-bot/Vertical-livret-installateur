@@ -14,6 +14,7 @@ import '../../data/models/point_controle.dart';
 import '../../data/models/user.dart';
 import '../../state/chantier_state.dart';
 import '../../state/comptes_state.dart';
+import 'chantier_route.dart';
 import 'widgets/bo_shell.dart';
 import 'widgets/bo_panel.dart';
 import 'widgets/bo_responsive_table.dart';
@@ -102,7 +103,10 @@ class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
   @override
   Widget build(BuildContext context) {
     final chantierState = context.watch<ChantierState>();
-    final tous = widget.savOnly ? chantiersSav(chantierState.chantiers) : chantierState.chantiers;
+    // Cloisonnement de l'espace SAV — chaque vue ne montre que son propre
+    // type de chantier, jamais l'autre mélangé avec un badge (voir
+    // chantierDetailRoute pour la route de fiche correspondante).
+    final tous = widget.savOnly ? chantiersSav(chantierState.chantiers) : chantiersInstallation(chantierState.chantiers);
     final enCours = chantiersEnCours(tous);
     final termines = chantiersTermines(tous);
     final segmentList = chantiersPourSegment(_segment, tous: tous, enCours: enCours, termines: termines);
@@ -358,21 +362,11 @@ class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
   void _openCreerSavDialog(BuildContext context) {
     showDialog(
       context: context,
+      // Toujours une fiche SAV créée depuis ce dialogue (chantier == null,
+      // sélection obligatoire de l'origine) — route SAV, jamais /chantiers/.
       builder: (dialogContext) => CreerSavDialog(
-        chantierDetailPath: (ref) => '/backoffice/ct/chantiers/$ref',
+        chantierDetailPath: (ref) => '/backoffice/ct/sav/$ref',
       ),
-    );
-  }
-
-  /// Module SAV — distingue une intervention SAV dans la liste unifiée
-  /// (installations + SAV) sans ajouter de nouvelle dimension de filtre :
-  /// une intervention SAV peut être aussi bien "en cours" que "terminée",
-  /// un badge la marque plutôt qu'un segment mutuellement exclusif de plus.
-  Widget _savTag() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(color: AppColors.orange.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4)),
-      child: const Text('SAV', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.orange)),
     );
   }
 
@@ -495,19 +489,14 @@ class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
     final livret = _livretBadge(c);
     final pv = _pvBadge(c);
     return BoTableRow(
-      onTap: () => context.push('/backoffice/ct/chantiers/${c.reference}'),
+      onTap: () => context.push(chantierDetailRoute(c.type, c.reference)),
       border: const Border(top: BorderSide(color: AppColors.lignes)),
       backgroundColor: index.isOdd ? const Color(0xFFF7F8F9) : null,
       child: Row(
         children: [
           Expanded(
             flex: 3,
-            child: Row(
-              children: [
-                Flexible(child: Text(c.reference, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), overflow: TextOverflow.ellipsis)),
-                if (!widget.savOnly && c.type == ChantierType.sav) ...[const SizedBox(width: 6), _savTag()],
-              ],
-            ),
+            child: Text(c.reference, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), overflow: TextOverflow.ellipsis),
           ),
           Expanded(flex: 3, child: Text(c.client, style: const TextStyle(fontSize: 13))),
           Expanded(flex: 2, child: Text(DateFormat('dd/MM').format(c.dateDebut), style: const TextStyle(fontSize: 13))),
@@ -528,7 +517,7 @@ class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
       padding: const EdgeInsets.only(bottom: 10),
       child: AppCard(
         padding: const EdgeInsets.all(14),
-        onTap: () => context.push('/backoffice/ct/chantiers/${c.reference}'),
+        onTap: () => context.push(chantierDetailRoute(c.type, c.reference)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -541,7 +530,6 @@ class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (!widget.savOnly && c.type == ChantierType.sav) ...[_savTag(), const SizedBox(width: 6)],
                 const Icon(Icons.chevron_right, size: 18, color: AppColors.acierClair),
               ],
             ),
