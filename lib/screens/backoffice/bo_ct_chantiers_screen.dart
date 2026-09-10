@@ -18,6 +18,7 @@ import 'widgets/bo_shell.dart';
 import 'widgets/bo_panel.dart';
 import 'widgets/bo_responsive_table.dart';
 import 'widgets/bo_table_row.dart';
+import 'widgets/creer_sav_dialog.dart';
 
 /// Espace Coordinateur travaux — gestion des chantiers (création, suivi, PV
 /// signés pour facturation), validation des installateurs, et — depuis la
@@ -209,14 +210,54 @@ class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
         ),
         SizedBox(
           height: 36,
-          child: ElevatedButton.icon(
-            onPressed: () => context.push('/backoffice/ct/chantiers/nouveau'),
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('Nouveau chantier', style: TextStyle(fontSize: 13)),
-            style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 16)),
-          ),
+          child: _buildNouveauMenu(context),
         ),
       ],
+    );
+  }
+
+  /// Point d'entrée "Nouveau" — un menu plutôt qu'un lien direct vers la
+  /// création de chantier, pour que la création d'une intervention SAV soit
+  /// aussi facile à trouver que celle d'un chantier d'installation (retour
+  /// testeur : la SAV était cherchée ici, pas seulement depuis une fiche
+  /// chantier existante). Le flux "Nouveau chantier" lui-même est inchangé.
+  Widget _buildNouveauMenu(BuildContext context) {
+    return MenuAnchor(
+      menuChildren: [
+        MenuItemButton(
+          onPressed: () => context.push('/backoffice/ct/chantiers/nouveau'),
+          leadingIcon: const Icon(Icons.construction_outlined, size: 18),
+          child: const Text('Nouveau chantier'),
+        ),
+        MenuItemButton(
+          onPressed: () => _openCreerSavDialog(context),
+          leadingIcon: const Icon(Icons.build_outlined, size: 18),
+          child: const Text('Intervention SAV'),
+        ),
+      ],
+      builder: (context, controller, child) {
+        return ElevatedButton.icon(
+          onPressed: () => controller.isOpen ? controller.close() : controller.open(),
+          icon: const Icon(Icons.add, size: 18),
+          label: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Nouveau', style: TextStyle(fontSize: 13)),
+              Icon(Icons.arrow_drop_down, size: 18),
+            ],
+          ),
+          style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 12)),
+        );
+      },
+    );
+  }
+
+  void _openCreerSavDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => CreerSavDialog(
+        chantierDetailPath: (ref) => '/backoffice/ct/chantiers/$ref',
+      ),
     );
   }
 

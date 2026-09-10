@@ -25,7 +25,9 @@ import 'widgets/bo_back_button.dart';
 import 'widgets/bo_shell.dart';
 import 'widgets/bo_panel.dart';
 import 'widgets/bo_table_row.dart';
+import 'widgets/creer_sav_dialog.dart';
 import 'widgets/pv_signature_panel.dart';
+import 'widgets/rex_card.dart';
 
 class BoChantierDetailScreen extends StatefulWidget {
   const BoChantierDetailScreen({super.key});
@@ -152,11 +154,16 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
               // son chantier d'installation d'origine, jamais depuis une
               // autre intervention SAV (voir POST .../sav côté backend).
               if (canModifier && chantier.type == ChantierType.installation)
-                OutlinedButton.icon(
+                ElevatedButton.icon(
                   onPressed: () => _openCreerSavDialog(context, chantier),
                   icon: const Icon(Icons.build_outlined, size: 18),
                   label: const Text('Créer une intervention SAV'),
-                  style: OutlinedButton.styleFrom(minimumSize: const Size(0, 42), padding: const EdgeInsets.symmetric(horizontal: 16)),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(0, 42),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    backgroundColor: AppColors.orange,
+                    foregroundColor: Colors.white,
+                  ),
                 ),
               if (isAdmin)
                 OutlinedButton.icon(
@@ -326,41 +333,15 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
           ? const Text('Aucun REX soumis pour l\'instant.', style: TextStyle(fontSize: 12.5, color: AppColors.acierClair))
           : Column(
               children: [
-                for (final rex in chantier.rex) ...[
+                for (final rex in chantier.rex)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 6),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                DateFormat('dd/MM/yyyy HH:mm').format(rex.soumisAt),
-                                style: const TextStyle(fontSize: 11, color: AppColors.acierClair),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                rex.transcription ?? '(note vocale sans transcription)',
-                                style: const TextStyle(fontSize: 13, color: AppColors.acier),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (peutSupprimer) ...[
-                          const SizedBox(width: 8),
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.acierClair),
-                            tooltip: 'Supprimer ce REX',
-                            onPressed: () => _confirmerSuppressionRex(context, chantier, rex),
-                          ),
-                        ],
-                      ],
+                    child: RexCard(
+                      rex: rex,
+                      onTelechargerAudio: rex.audioPath != null ? () => _telechargerDocument(context, rex.audioPath!) : null,
+                      onSupprimer: peutSupprimer ? () => _confirmerSuppressionRex(context, chantier, rex) : null,
                     ),
                   ),
-                  if (rex != chantier.rex.last) const Divider(height: 1, color: Color(0xFFEEF1F3)),
-                ],
               ],
             ),
     );
@@ -938,7 +919,10 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
   void _openCreerSavDialog(BuildContext context, Chantier chantier) {
     showDialog(
       context: context,
-      builder: (dialogContext) => _CreerSavDialog(chantier: chantier),
+      builder: (dialogContext) => CreerSavDialog(
+        chantier: chantier,
+        chantierDetailPath: (ref) => '/backoffice/ct/chantiers/$ref',
+      ),
     );
   }
 
@@ -1096,131 +1080,3 @@ class _ModifierChantierDialogState extends State<_ModifierChantierDialog> {
   }
 }
 
-/// Module SAV — création d'une intervention SAV depuis la fiche du chantier
-/// d'origine (voir _openCreerSavDialog). L'installateur assigné n'a pas
-/// besoin d'être déjà rattaché à ce chantier (le backend le rattache lui-même
-/// à la création, voir POST .../sav) — même liste de comptes actifs que
-/// _openRattacherDialog.
-class _CreerSavDialog extends StatefulWidget {
-  final Chantier chantier;
-  const _CreerSavDialog({required this.chantier});
-
-  @override
-  State<_CreerSavDialog> createState() => _CreerSavDialogState();
-}
-
-class _CreerSavDialogState extends State<_CreerSavDialog> {
-  final _descriptionController = TextEditingController();
-  String? _installateurId;
-  DateTime? _savDate;
-  bool _isSubmitting = false;
-  String? _erreur;
-
-  @override
-  void dispose() {
-    _descriptionController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _choisirDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _savDate ?? DateTime.now(),
-      firstDate: DateTime.now().subtract(const Duration(days: 30)),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-    );
-    if (picked != null) setState(() => _savDate = picked);
-  }
-
-  Future<void> _creer() async {
-    if (_descriptionController.text.trim().isEmpty) {
-      setState(() => _erreur = 'La description du problème est requise.');
-      return;
-    }
-    if (_installateurId == null) {
-      setState(() => _erreur = 'Choisissez un installateur à assigner.');
-      return;
-    }
-    setState(() {
-      _isSubmitting = true;
-      _erreur = null;
-    });
-    try {
-      final sav = await context.read<ChantierState>().createSav(
-            widget.chantier.reference,
-            descriptionProbleme: _descriptionController.text.trim(),
-            installateurId: _installateurId!,
-            savDate: _savDate,
-          );
-      if (!mounted) return;
-      Navigator.of(context).pop();
-      context.push('/backoffice/ct/chantiers/${sav.reference}');
-    } on ApiException catch (e) {
-      setState(() {
-        _erreur = e.message;
-        _isSubmitting = false;
-      });
-    } catch (_) {
-      setState(() {
-        _erreur = 'Une erreur est survenue. Réessayez.';
-        _isSubmitting = false;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final installateurs = context.watch<ComptesState>().installateurs.where((u) => u.isActive && !u.suspendu).toList();
-
-    return AlertDialog(
-      title: Text('Créer une intervention SAV — ${widget.chantier.reference}'),
-      content: SizedBox(
-        width: 380,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextField(
-                controller: _descriptionController,
-                maxLines: 3,
-                decoration: const InputDecoration(labelText: 'Description du problème', alignLabelWithHint: true),
-              ),
-              const SizedBox(height: 14),
-              DropdownButtonFormField<String>(
-                initialValue: _installateurId,
-                decoration: const InputDecoration(labelText: 'Installateur à assigner'),
-                items: installateurs.map((u) => DropdownMenuItem(value: u.id, child: Text(u.fullName))).toList(),
-                onChanged: (value) => setState(() => _installateurId = value),
-              ),
-              const SizedBox(height: 14),
-              Material(
-                color: Colors.transparent,
-                child: ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('Date prévue (optionnel)'),
-                  subtitle: Text(_savDate != null ? DateFormat('dd/MM/yyyy').format(_savDate!) : 'Aujourd\'hui'),
-                  trailing: const Icon(Icons.calendar_today_outlined, size: 18),
-                  onTap: _choisirDate,
-                ),
-              ),
-              if (_erreur != null) ...[
-                const SizedBox(height: 10),
-                Text(_erreur!, style: const TextStyle(color: AppColors.rouge, fontSize: 12.5)),
-              ],
-            ],
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Annuler')),
-        ElevatedButton(
-          onPressed: _isSubmitting ? null : _creer,
-          child: _isSubmitting
-              ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
-              : const Text('Créer'),
-        ),
-      ],
-    );
-  }
-}

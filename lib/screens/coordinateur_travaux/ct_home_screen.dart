@@ -10,6 +10,7 @@ import '../../core/widgets/status_indicator.dart';
 import '../../core/widgets/user_avatar.dart';
 import '../../data/models/chantier.dart';
 import '../../data/models/user.dart';
+import '../backoffice/widgets/creer_sav_dialog.dart';
 import '../../state/auth_state.dart';
 import '../../state/chantier_state.dart';
 import '../../state/comptes_state.dart';
@@ -62,6 +63,43 @@ class _CtHomeScreenState extends State<CtHomeScreen> {
     return ('Prêt à démarrer', StatusType.attente);
   }
 
+  /// Point d'entrée "Nouveau" — même menu à double choix que le back-office
+  /// Web (voir bo_ct_chantiers_screen.dart) : un CT en déplacement doit
+  /// pouvoir créer une intervention SAV aussi facilement qu'un chantier
+  /// d'installation, pas seulement depuis la fiche d'un chantier existant.
+  Widget _buildNouveauMenu(BuildContext context) {
+    return MenuAnchor(
+      menuChildren: [
+        MenuItemButton(
+          onPressed: () => context.push('/ct/chantier/nouveau'),
+          leadingIcon: const Icon(Icons.construction_outlined, size: 18),
+          child: const Text('Nouveau chantier'),
+        ),
+        MenuItemButton(
+          onPressed: () => _openCreerSavDialog(context),
+          leadingIcon: const Icon(Icons.build_outlined, size: 18),
+          child: const Text('Intervention SAV'),
+        ),
+      ],
+      builder: (context, controller, child) {
+        return IconButton(
+          onPressed: () => controller.isOpen ? controller.close() : controller.open(),
+          icon: const Icon(Icons.add),
+          tooltip: 'Nouveau',
+        );
+      },
+    );
+  }
+
+  void _openCreerSavDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => CreerSavDialog(
+        chantierDetailPath: (ref) => '/ct/chantier/$ref',
+      ),
+    );
+  }
+
   Future<void> _appeler(BuildContext context, User u) async {
     if (u.mobile == null || u.mobile!.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -92,11 +130,7 @@ class _CtHomeScreenState extends State<CtHomeScreen> {
         backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,
         actions: [
-          IconButton(
-            onPressed: () => context.push('/ct/chantier/nouveau'),
-            icon: const Icon(Icons.add),
-            tooltip: 'Nouveau chantier',
-          ),
+          _buildNouveauMenu(context),
           IconButton(
             onPressed: () => context.read<AuthState>().logout(),
             icon: const Icon(Icons.logout),
