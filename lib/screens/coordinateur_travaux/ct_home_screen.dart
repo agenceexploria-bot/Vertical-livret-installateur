@@ -123,6 +123,11 @@ class _CtHomeScreenState extends State<CtHomeScreen> {
     final user = context.watch<AuthState>().currentUser;
     final pendingCount = comptesState.installateurs.where((u) => !u.isActive).length;
     final relances = _livretsNonOuverts(chantierState.chantiers);
+    // "Chantiers en cours" ne concerne que les installations, comme côté
+    // installateur (chantiers_installation_screen.dart) — les interventions
+    // SAV ont leur propre parcours (voir CreerSavDialog) et ne doivent
+    // jamais apparaître mélangées ici sans distinction.
+    final chantiersEnCoursInstallation = chantiersEnCours(chantiersInstallation(chantierState.chantiers));
 
     return ResponsiveLayout(
       appBar: GlassAppBar(
@@ -160,7 +165,7 @@ class _CtHomeScreenState extends State<CtHomeScreen> {
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: 12),
-                for (final c in chantierState.chantiers) ...[
+                for (final c in chantiersEnCoursInstallation) ...[
                   _buildChantierItem(context, c),
                   const SizedBox(height: 12),
                 ],

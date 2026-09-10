@@ -89,27 +89,12 @@ class CtChantierDetailScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          AppCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Livret installateur', style: TextStyle(fontWeight: FontWeight.bold)),
-                    StatusIndicator(label: livretLabel, type: livretType),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                LinearProgressIndicator(value: chantier.progressionAutoControle, color: AppColors.orange, backgroundColor: AppColors.lignes),
-                const SizedBox(height: 6),
-                Text(
-                  '${(chantier.progressionAutoControle * 100).toInt()}% avancement auto-contrôle',
-                  style: const TextStyle(fontSize: 11, color: AppColors.acierClair),
-                ),
-              ],
-            ),
-          ),
+          // Module SAV — une intervention SAV n'a jamais de réception/auto-
+          // contrôle (aucun point de contrôle créé côté backend, voir POST
+          // .../sav) : afficher "0% avancement auto-contrôle" y serait
+          // dénué de sens. Résumé dédié à la place, comme sur la fiche
+          // back-office Web (voir bo_chantier_detail_screen.dart, _buildSavPanel).
+          if (chantier.type == ChantierType.sav) _buildSavCard(context, chantier) else _buildLivretCard(livretLabel, livretType, chantier),
           const SizedBox(height: 16),
           AppCard(
             child: Column(
@@ -150,6 +135,65 @@ class CtChantierDetailScreen extends StatelessWidget {
               _installateurCard(context, chantier, u),
               const SizedBox(height: 8),
             ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLivretCard(String livretLabel, StatusType livretType, Chantier chantier) {
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Livret installateur', style: TextStyle(fontWeight: FontWeight.bold)),
+              StatusIndicator(label: livretLabel, type: livretType),
+            ],
+          ),
+          const SizedBox(height: 12),
+          LinearProgressIndicator(value: chantier.progressionAutoControle, color: AppColors.orange, backgroundColor: AppColors.lignes),
+          const SizedBox(height: 6),
+          Text(
+            '${(chantier.progressionAutoControle * 100).toInt()}% avancement auto-contrôle',
+            style: const TextStyle(fontSize: 11, color: AppColors.acierClair),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Module SAV — équivalent mobile de _buildSavPanel (back-office Web) :
+  /// chantier d'origine, date d'intervention, PV et REX plutôt qu'un
+  /// avancement auto-contrôle sans objet pour une intervention SAV.
+  Widget _buildSavCard(BuildContext context, Chantier chantier) {
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.build_outlined, size: 16, color: AppColors.orange),
+              const SizedBox(width: 6),
+              const Text('Intervention SAV', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.orange)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _kv('Chantier d\'origine', chantier.parentReference ?? '—'),
+          _kv('Date d\'intervention', chantier.savDate != null ? DateFormat('dd/MM/yyyy').format(chantier.savDate!) : '—'),
+          if (chantier.descriptionIntervention != null) _kv('Problème signalé', chantier.descriptionIntervention!),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('PV', style: TextStyle(fontSize: 11.5, color: AppColors.acierClair)),
+              StatusIndicator(
+                label: chantier.pvSigne ? 'Signé' : '—',
+                type: chantier.pvSigne ? StatusType.conforme : StatusType.attente,
+              ),
+            ],
+          ),
         ],
       ),
     );

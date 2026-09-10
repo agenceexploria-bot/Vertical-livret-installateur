@@ -138,6 +138,47 @@ describe('POST /uploads/token', () => {
     expect(res.status).toBe(400);
   });
 
+  // Sécurité — ces extensions restent ACCEPTÉES (jamais un 400, contrairement
+  // à la liste noire des exécutables) mais leur Content-Type stocké doit
+  // être forcé à application/octet-stream : un navigateur qui ouvrirait
+  // directement un .svg/.html stocké avec son Content-Type "naturel"
+  // l'afficherait et exécuterait tout script embarqué. Voir README, section
+  // "Sécurité des documents".
+  it.each(['svg', 'html', 'htm', 'xml', 'xhtml'])(
+    'force le Content-Type stocké à application/octet-stream pour un .%s (documents terrain) sans refuser le fichier',
+    async (extension) => {
+      const token = await createInstallateurToken();
+
+      const res = await request(app)
+        .post('/uploads/token')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          type: 'blob.generate-client-token',
+          payload: { pathname: `notice.${extension}`, callbackUrl: 'http://x', clientPayload: JSON.stringify({ kind: 'documentTerrain' }), multipart: false },
+        });
+
+      expect(res.status).toBe(200);
+      const payload = getPayloadFromClientToken(res.body.clientToken as string);
+      expect(payload.allowedContentTypes).toEqual(['application/octet-stream']);
+    },
+  );
+
+  it('force le Content-Type stocké à application/octet-stream pour un .svg (documents chantier)', async () => {
+    const token = await createCtToken();
+
+    const res = await request(app)
+      .post('/uploads/token')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        type: 'blob.generate-client-token',
+        payload: { pathname: 'plan.svg', callbackUrl: 'http://x', clientPayload: JSON.stringify({ kind: 'documentChantier' }), multipart: false },
+      });
+
+    expect(res.status).toBe(200);
+    const payload = getPayloadFromClientToken(res.body.clientToken as string);
+    expect(payload.allowedContentTypes).toEqual(['application/octet-stream']);
+  });
+
   it('refuse un installateur pour les documents chantier (réservés CT/direction/admin)', async () => {
     const token = await createInstallateurToken();
 

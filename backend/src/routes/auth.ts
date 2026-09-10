@@ -209,6 +209,16 @@ function rejectIfBlocked(user: { role: string; isActive: boolean; suspendu: bool
 const MAX_LOGIN_ATTEMPTS = 10;
 const LOGIN_LOCKOUT_MINUTES = 15;
 
+// Hash bcrypt factice (mot de passe arbitraire, jamais utilisé pour une
+// vraie authentification) — comparé quand l'email n'existe pas, pour que
+// cette branche prenne sensiblement le même temps que la comparaison
+// bcrypt réelle ci-dessous. Sans ça, la réponse "email inconnu" revient
+// quasi instantanément alors qu'un email existant ajoute le délai de
+// bcrypt.compare : un attaquant peut distinguer les deux par le seul
+// temps de réponse (énumération d'emails), même si le corps de la
+// réponse est identique dans les deux cas.
+const DUMMY_PASSWORD_HASH = '$2a$10$BODeMuA9cPxJdwJOKT7VnuZ/QGalUQ3nkO0v9NyPU2jXkwj8OiPJO';
+
 authRouter.post('/login', authRateLimit, async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
@@ -218,7 +228,10 @@ authRouter.post('/login', authRateLimit, async (req, res) => {
     where: { email: identifier },
     include: { habilitations: true },
   });
-  if (!user) return res.status(401).json({ error: 'Identifiants incorrects' });
+  if (!user) {
+    await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
+    return res.status(401).json({ error: 'Identifiants incorrects' });
+  }
 
   if (user.loginLockedUntil && user.loginLockedUntil > new Date()) {
     return res.status(429).json({ error: 'Trop de tentatives — réessayez dans quelques minutes.' });

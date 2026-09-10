@@ -381,6 +381,14 @@ chantiersRouter.patch('/:reference/points/:pointId', requireAuth, requireRattach
   if (parsed.data.photoUrl && !isOwnBlobUrl(parsed.data.photoUrl)) {
     return res.status(400).json({ error: 'URL de fichier invalide' });
   }
+  // Même contrôle que photoUrl — sans lui, un appelant pouvait poser
+  // n'importe quelle URL (même hors de ce store Blob) comme photoPath, plus
+  // tard transmise telle quelle à deleteBlobFile() si le chantier "porteur"
+  // est supprimé : suppression à distance d'un fichier appartenant à un
+  // autre chantier/utilisateur (voir revue de sécurité).
+  if (parsed.data.photoPath && !isOwnBlobUrl(parsed.data.photoPath)) {
+    return res.status(400).json({ error: 'URL de fichier invalide' });
+  }
 
   const photoPath = parsed.data.photoUrl
     ? parsed.data.photoUrl

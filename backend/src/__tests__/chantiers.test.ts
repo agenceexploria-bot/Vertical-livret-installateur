@@ -165,7 +165,7 @@ describe('Progression et modules', () => {
     const patch = await request(app)
       .patch(`/chantiers/LD64397/points/${pointId}`)
       .set('Authorization', `Bearer ${ct.accessToken}`)
-      .send({ status: 'conforme', photoPath: 'photo.jpg' });
+      .send({ status: 'conforme' });
     expect(patch.status).toBe(200);
 
     const res = await request(app).get('/chantiers/LD64397').set('Authorization', `Bearer ${ct.accessToken}`);
@@ -190,7 +190,7 @@ describe('Progression et modules', () => {
     const patch = await request(app)
       .patch(`/chantiers/LD64397/points/${pointId}`)
       .set('Authorization', `Bearer ${ct.accessToken}`)
-      .send({ status: 'conforme', photoPath: 'photo.jpg', clientValidatedAt });
+      .send({ status: 'conforme', clientValidatedAt });
 
     expect(patch.status).toBe(200);
     expect(patch.body.point.validePar).toBe('Sandrine Martin');
@@ -210,6 +210,25 @@ describe('Progression et modules', () => {
 
     expect(patch.status).toBe(200);
     expect(patch.body.point.photoPath).toBe(photoUrl);
+  });
+
+  // Sécurité — photoPath doit subir le même contrôle isOwnBlobUrl que
+  // photoUrl juste au-dessus : sans ça, un appelant pouvait poser n'importe
+  // quelle URL (hors de ce store Blob, voire hors de tout store Blob) comme
+  // photoPath, plus tard transmise telle quelle à deleteBlobFile() si le
+  // chantier "porteur" est supprimé.
+  it('rejette un photoPath qui n\'est pas une URL de ce store Blob', async () => {
+    const ct = await createCt();
+    const created = await createChantier(ct.accessToken);
+    const pointId = created.body.chantier.receptionMarchandises[0].id;
+
+    const patch = await request(app)
+      .patch(`/chantiers/LD64397/points/${pointId}`)
+      .set('Authorization', `Bearer ${ct.accessToken}`)
+      .send({ status: 'conforme', photoPath: 'https://attacker.example.com/fichier-dun-autre-chantier.jpg' });
+
+    expect(patch.status).toBe(400);
+    expect(patch.body.error).toBe('URL de fichier invalide');
   });
 
   // Emplacement quelconque, valide pour une page A4 (595 x 842 pts) — voir

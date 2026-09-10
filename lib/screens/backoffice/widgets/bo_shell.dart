@@ -6,11 +6,13 @@ import '../../../core/theme.dart';
 import '../../../core/widgets/user_avatar.dart';
 import '../../../core/widgets/vertical_logo.dart';
 import 'package:intl/intl.dart';
+import '../../../data/models/chantier.dart';
 import '../../../data/models/user.dart';
 import '../../../state/auth_state.dart';
 import '../../../state/chantier_state.dart';
 import '../../../state/comptes_state.dart';
 import '../../../state/notifications_state.dart';
+import '../chantier_route.dart';
 
 class _BoNavTab {
   final String label;
@@ -302,7 +304,14 @@ class _TopBar extends StatelessWidget {
                               onTap: () {
                                 Navigator.pop(dialogContext);
                                 if (!n.lue) context.read<NotificationsState>().marquerLue(n.id);
-                                context.go('/backoffice/ct/chantiers/${n.chantierReference}');
+                                // Aujourd'hui, une notification ne concerne
+                                // jamais un SAV (auto-contrôle 80%, jamais
+                                // créé pour une intervention SAV) — dérivé
+                                // du type réel quand même, pour ne pas
+                                // réintroduire le bug si un type de
+                                // notification SAV apparaît un jour.
+                                final type = context.read<ChantierState>().findByReference(n.chantierReference)?.type ?? ChantierType.installation;
+                                context.go(chantierDetailRoute(type, n.chantierReference));
                               },
                             ))
                         .toList(),

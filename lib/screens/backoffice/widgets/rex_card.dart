@@ -2,19 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme.dart';
 import '../../../data/models/chantier.dart';
+import 'rex_audio_controller.dart';
 import 'rex_audio_player.dart';
 
 /// Carte compacte pour une entrée REX (module Qualité, back-office) —
 /// auteur + date, transcription (ou message de repli si absente), et
 /// lecteur audio + téléchargement si [Rex.audioPath] est renseigné (masqués
 /// tous les deux sinon, pas de lecteur vide). Voir bo_chantier_detail_screen.dart,
-/// _buildRex.
+/// _buildRex. [audioController] est partagé par toutes les cartes REX d'une
+/// même fiche (un seul lecteur, une seule lecture à la fois) — requis
+/// seulement quand [Rex.audioPath] est renseigné.
 class RexCard extends StatelessWidget {
   final Rex rex;
+  final RexAudioController? audioController;
   final VoidCallback? onTelechargerAudio;
   final VoidCallback? onSupprimer;
 
-  const RexCard({super.key, required this.rex, this.onTelechargerAudio, this.onSupprimer});
+  const RexCard({super.key, required this.rex, this.audioController, this.onTelechargerAudio, this.onSupprimer});
 
   @override
   Widget build(BuildContext context) {
@@ -38,17 +42,21 @@ class RexCard extends StatelessWidget {
                   rex.transcription ?? '(note vocale sans transcription)',
                   style: const TextStyle(fontSize: 13, color: AppColors.acier),
                 ),
-                if (rex.audioPath != null) ...[
+                if (rex.audioPath != null && audioController != null) ...[
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      RexAudioPlayer(url: rex.audioPath!),
+                      Expanded(
+                        child: RexAudioPlayer(rexId: rex.id, url: rex.audioPath!, controller: audioController!),
+                      ),
                       const SizedBox(width: 4),
-                      TextButton.icon(
+                      IconButton(
                         onPressed: onTelechargerAudio,
-                        icon: const Icon(Icons.download_outlined, size: 16),
-                        label: const Text('Télécharger l\'audio', style: TextStyle(fontSize: 12)),
-                        style: TextButton.styleFrom(minimumSize: const Size(0, 32), padding: const EdgeInsets.symmetric(horizontal: 8)),
+                        icon: const Icon(Icons.download_outlined, size: 18, color: AppColors.acierClair),
+                        tooltip: 'Télécharger l\'audio',
+                        visualDensity: VisualDensity.compact,
+                        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                        padding: EdgeInsets.zero,
                       ),
                     ],
                   ),

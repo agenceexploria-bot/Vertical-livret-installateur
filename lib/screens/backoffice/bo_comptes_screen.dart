@@ -530,7 +530,7 @@ class _BoComptesScreenState extends State<BoComptesScreen> {
     final (habLabel, habType) = u.habilitations.isEmpty
         ? ('—', StatusType.factuel)
         : expired.isNotEmpty || expiringSoon.isNotEmpty
-            ? ('${expiringSoon.isNotEmpty ? expiringSoon.first.titre.split(' ').first : expired.first.titre.split(' ').first} — à surveiller', StatusType.nonConforme)
+            ? ('${expired.isNotEmpty ? expired.first.titre.split(' ').first : expiringSoon.first.titre.split(' ').first} — à surveiller', StatusType.nonConforme)
             : ('À jour', StatusType.conforme);
 
     final mesChantiers = chantiers.where((c) => c.installateursRattaches.any((r) => r.id == u.id)).map((c) => c.reference).join(', ');

@@ -153,7 +153,7 @@ class BoAutoControleDetailScreen extends StatelessWidget {
           Expanded(
             flex: 3,
             child: Text(
-              r.point.validePar != null
+              r.point.validePar != null && r.point.valideAt != null
                   ? '${r.point.validePar} · ${DateFormat('dd/MM HH:mm').format(r.point.valideAt!)}'
                   : '—',
               style: const TextStyle(fontSize: 12.5, color: AppColors.acier),

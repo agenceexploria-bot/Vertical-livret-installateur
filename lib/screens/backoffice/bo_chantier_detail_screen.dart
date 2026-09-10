@@ -28,6 +28,7 @@ import 'widgets/bo_panel.dart';
 import 'widgets/bo_table_row.dart';
 import 'widgets/creer_sav_dialog.dart';
 import 'widgets/pv_signature_panel.dart';
+import 'widgets/rex_audio_controller.dart';
 import 'widgets/rex_card.dart';
 
 class BoChantierDetailScreen extends StatefulWidget {
@@ -44,10 +45,16 @@ class BoChantierDetailScreen extends StatefulWidget {
 /// incompatible avec le [SingleChildScrollView] de [BoShell]).
 class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with SingleTickerProviderStateMixin {
   late final TabController _tabController = TabController(length: 5, vsync: this)..addListener(() => setState(() {}));
+  // Un seul lecteur pour tous les REX de cette fiche (voir
+  // RexAudioController — impose "un seul audio à la fois" et mémorise la
+  // position de chacun) — vit aussi longtemps que la fiche (survit aux
+  // changements d'onglet), recréé si on change de chantier.
+  final _audioController = RexAudioController();
 
   @override
   void dispose() {
     _tabController.dispose();
+    _audioController.dispose();
     super.dispose();
   }
 
@@ -172,11 +179,17 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
 
   @override
   Widget build(BuildContext context) {
-    final ref = GoRouterState.of(context).pathParameters['ref'] ?? '—';
+    final routerState = GoRouterState.of(context);
+    final ref = routerState.pathParameters['ref'] ?? '—';
     final chantier = context.watch<ChantierState>().findByReference(ref);
 
     if (chantier == null) {
-      return const BoShell(activeNav: 'chantiers', child: Text('Chantier introuvable'));
+      // Le type réel du chantier est inconnu (pas encore chargé, ou
+      // référence invalide) — la route empruntée reste le seul indice
+      // disponible pour éviter de surligner "Chantiers" sur un lien direct
+      // vers une fiche SAV introuvable (cloisonnement de l'espace SAV).
+      final isSavRoute = routerState.matchedLocation.startsWith('/backoffice/ct/sav/');
+      return BoShell(activeNav: isSavRoute ? 'sav' : 'chantiers', child: const Text('Chantier introuvable'));
     }
 
     final livretOk = chantier.installateursRattaches.isNotEmpty &&
@@ -215,7 +228,11 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
               ),
             ],
           ),
-          if (isSav) ...[
+          // parentReference est obligatoire pour un SAV côté backend (voir
+          // POST .../sav) — normalement toujours renseigné ici, mais on ne
+          // pousse jamais vers "/backoffice/ct/chantiers/null" si jamais
+          // il manquait (donnée existante corrompue, migration incomplète...).
+          if (isSav && chantier.parentReference != null) ...[
             const SizedBox(height: 10),
             // Exception assumée au cloisonnement : seul lien qui bascule
             // volontairement vers l'espace Chantiers — libellé explicite en
@@ -224,7 +241,7 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
             OutlinedButton.icon(
               onPressed: () => context.push('/backoffice/ct/chantiers/${chantier.parentReference}'),
               icon: const Icon(Icons.open_in_new, size: 16),
-              label: Text('Voir le chantier d\'origine (${chantier.parentReference ?? '—'})'),
+              label: Text('Voir le chantier d\'origine (${chantier.parentReference})'),
               style: OutlinedButton.styleFrom(minimumSize: const Size(0, 38), padding: const EdgeInsets.symmetric(horizontal: 14)),
             ),
           ],
@@ -389,6 +406,7 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
                     padding: const EdgeInsets.symmetric(vertical: 6),
                     child: RexCard(
                       rex: rex,
+                      audioController: _audioController,
                       onTelechargerAudio: rex.audioPath != null ? () => _telechargerDocument(context, rex.audioPath!) : null,
                       onSupprimer: peutSupprimer ? () => _confirmerSuppressionRex(context, chantier, rex) : null,
                     ),

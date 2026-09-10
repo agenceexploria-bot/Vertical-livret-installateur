@@ -1,62 +1,45 @@
-import 'dart:async';
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import '../../../core/theme.dart';
+import 'rex_audio_controller.dart';
 
-/// Lecteur audio compact pour la note vocale d'un REX (voir
-/// [Rex.audioPath]) — juste lecture/pause et la durée, pas de barre de
-/// progression ni de contrôle de volume : le besoin ici est d'écouter la
-/// note directement depuis la fiche chantier back-office, pas un lecteur
-/// média complet. N'est jamais affiché si le REX n'a pas d'audio (voir
-/// bo_chantier_detail_screen.dart, _buildRex).
+/// Lecteur audio "façon WhatsApp" pour la note vocale d'un REX — bouton
+/// rond play/pause, waveform (barres de hauteurs déterministes, seedées sur
+/// [rexId]) dont la portion déjà écoutée se colore, et temps courant/durée.
+/// Toute la logique de lecture/position/waveform passe par [controller],
+/// partagé par tous les REX d'une même fiche — voir RexAudioController pour
+/// la reprise de position et la règle "un seul audio à la fois".
 class RexAudioPlayer extends StatefulWidget {
+  final String rexId;
   final String url;
-  const RexAudioPlayer({super.key, required this.url});
+  final RexAudioController controller;
+
+  const RexAudioPlayer({super.key, required this.rexId, required this.url, required this.controller});
 
   @override
   State<RexAudioPlayer> createState() => _RexAudioPlayerState();
 }
 
 class _RexAudioPlayerState extends State<RexAudioPlayer> {
-  final _player = AudioPlayer();
-  PlayerState _state = PlayerState.stopped;
-  Duration _duration = Duration.zero;
-  Duration _position = Duration.zero;
-  late final StreamSubscription<PlayerState> _stateSub;
-  late final StreamSubscription<Duration> _durationSub;
-  late final StreamSubscription<Duration> _positionSub;
+  late final List<double> _barHeights = generateWaveformHeights(widget.rexId);
 
   @override
   void initState() {
     super.initState();
-    _stateSub = _player.onPlayerStateChanged.listen((s) {
-      if (mounted) setState(() => _state = s);
-    });
-    _durationSub = _player.onDurationChanged.listen((d) {
-      if (mounted) setState(() => _duration = d);
-    });
-    _positionSub = _player.onPositionChanged.listen((p) {
-      if (mounted) setState(() => _position = p);
-    });
+    widget.controller.addListener(_onControllerChanged);
   }
 
   @override
   void dispose() {
-    _stateSub.cancel();
-    _durationSub.cancel();
-    _positionSub.cancel();
-    _player.dispose();
+    widget.controller.removeListener(_onControllerChanged);
     super.dispose();
   }
 
-  Future<void> _toggle() async {
-    if (_state == PlayerState.playing) {
-      await _player.pause();
-    } else if (_state == PlayerState.paused) {
-      await _player.resume();
-    } else {
-      await _player.play(UrlSource(widget.url));
-    }
+  // Le contrôleur notifie à chaque tick de position, pour tous les REX de la
+  // fiche confondus — un setState ici ne concerne que ce petit widget (bouton
+  // + waveform + temps), jamais le reste de la carte REX (auteur, date,
+  // transcription), qui ne s'abonne pas au contrôleur.
+  void _onControllerChanged() {
+    if (mounted) setState(() {});
   }
 
   String _format(Duration d) {
@@ -65,24 +48,99 @@ class _RexAudioPlayerState extends State<RexAudioPlayer> {
     return '$minutes:$seconds';
   }
 
+  void _handleSeekTap(TapUpDetails details, double width, Duration duration) {
+    if (duration == Duration.zero || width <= 0) return;
+    final ratio = (details.localPosition.dx / width).clamp(0.0, 1.0);
+    widget.controller.seekWithin(widget.rexId, widget.url, duration * ratio);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final playing = _state == PlayerState.playing;
-    final total = _duration > Duration.zero ? _duration : _position;
+    final isCurrent = widget.controller.isCurrentRex(widget.rexId);
+    final playing = widget.controller.isPlayingRex(widget.rexId);
+    final position = widget.controller.savedPosition(widget.rexId);
+    final duration = isCurrent ? widget.controller.duration : Duration.zero;
+    final progress = duration > Duration.zero ? (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0) : 0.0;
+
     return Row(
-      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         IconButton(
-          onPressed: _toggle,
+          onPressed: () => widget.controller.toggle(widget.rexId, widget.url),
           icon: Icon(playing ? Icons.pause_circle_filled : Icons.play_circle_fill, color: AppColors.orange),
-          iconSize: 28,
+          iconSize: 34,
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(),
           tooltip: playing ? 'Mettre en pause' : 'Écouter la note vocale',
         ),
         const SizedBox(width: 8),
-        Text('${_format(_position)} / ${_format(total)}', style: const TextStyle(fontSize: 11, color: AppColors.acierClair)),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  return GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTapUp: (details) => _handleSeekTap(details, constraints.maxWidth, duration),
+                    child: SizedBox(
+                      height: 28,
+                      width: double.infinity,
+                      child: CustomPaint(
+                        painter: _WaveformPainter(
+                          heights: _barHeights,
+                          progress: progress,
+                          playedColor: AppColors.orange,
+                          unplayedColor: AppColors.lignes,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 2),
+              Text(
+                '${_format(position)} / ${_format(duration > Duration.zero ? duration : position)}',
+                style: const TextStyle(fontSize: 10.5, color: AppColors.acierClair),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
+}
+
+/// Dessine uniquement la waveform — un nouveau [_WaveformPainter] est créé à
+/// chaque tick de position, mais [shouldRepaint] ne redessine le canevas que
+/// si la portion "écoutée" a réellement changé de barre, pas à chaque pixel
+/// de progression.
+class _WaveformPainter extends CustomPainter {
+  final List<double> heights;
+  final double progress;
+  final Color playedColor;
+  final Color unplayedColor;
+
+  _WaveformPainter({required this.heights, required this.progress, required this.playedColor, required this.unplayedColor});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (heights.isEmpty || size.width <= 0) return;
+    const gap = 2.0;
+    final barCount = heights.length;
+    final barWidth = ((size.width - gap * (barCount - 1)) / barCount).clamp(1.0, double.infinity);
+    final playedBars = (progress * barCount).round();
+    for (var i = 0; i < barCount; i++) {
+      final barHeight = (heights[i] * size.height).clamp(2.0, size.height);
+      final x = i * (barWidth + gap);
+      final paint = Paint()..color = i < playedBars ? playedColor : unplayedColor;
+      final rect = Rect.fromLTWH(x, (size.height - barHeight) / 2, barWidth, barHeight);
+      canvas.drawRRect(RRect.fromRectAndRadius(rect, Radius.circular(barWidth / 2)), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _WaveformPainter oldDelegate) =>
+      oldDelegate.progress != progress || oldDelegate.playedColor != playedColor || oldDelegate.unplayedColor != unplayedColor;
 }

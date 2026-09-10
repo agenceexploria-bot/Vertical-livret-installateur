@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vertical_app/data/models/chantier.dart';
+import 'package:vertical_app/screens/backoffice/widgets/rex_audio_controller.dart';
 import 'package:vertical_app/screens/backoffice/widgets/rex_audio_player.dart';
 import 'package:vertical_app/screens/backoffice/widgets/rex_card.dart';
 
@@ -9,7 +10,7 @@ void main() {
     return tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: RexCard(rex: rex, onTelechargerAudio: onTelechargerAudio, onSupprimer: onSupprimer),
+          body: RexCard(rex: rex, audioController: RexAudioController(), onTelechargerAudio: onTelechargerAudio, onSupprimer: onSupprimer),
         ),
       ),
     );
@@ -27,7 +28,7 @@ void main() {
     await pump(tester, rex, onTelechargerAudio: () {});
 
     expect(find.byType(RexAudioPlayer), findsOneWidget);
-    expect(find.text('Télécharger l\'audio'), findsOneWidget);
+    expect(find.byTooltip('Télécharger l\'audio'), findsOneWidget);
     expect(find.text('Tout s\'est bien passé'), findsOneWidget);
     expect(find.textContaining('Marin Dupont'), findsOneWidget);
   });
@@ -46,7 +47,7 @@ void main() {
     await pump(tester, rex);
 
     expect(find.byType(RexAudioPlayer), findsNothing);
-    expect(find.text('Télécharger l\'audio'), findsNothing);
+    expect(find.byTooltip('Télécharger l\'audio'), findsNothing);
     expect(find.text('RAS sur ce chantier'), findsOneWidget);
   });
 

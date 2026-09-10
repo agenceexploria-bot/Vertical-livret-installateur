@@ -314,6 +314,25 @@ permissions équivalentes au CA ; il n'est pas alimenté par le script de seed.
 Toutes les suppressions (chantiers, comptes, REX) sont **définitives et
 immédiates**, y compris sur les fichiers associés stockés sur Vercel Blob.
 
+## Sécurité des documents
+
+Les documents terrain/chantier (`documentTerrain`, `documentChantier`,
+voir `backend/src/routes/uploads.ts`) acceptent n'importe quel type de
+fichier par choix métier (PPSPS, plans, photos, vidéos, archives, bureautique...) —
+aucune liste blanche de types MIME n'y est appliquée.
+
+Exception volontaire : les extensions **`.svg`, `.html`, `.htm`, `.xml`,
+`.xhtml`** restent acceptées (le fichier n'est jamais refusé), mais leur
+Content-Type stocké est **toujours forcé à `application/octet-stream`**,
+quel que soit le Content-Type déclaré par l'appelant. Un navigateur
+n'exécute et n'affiche jamais un fichier servi en `application/octet-stream`
+— contrairement à `text/html` ou `image/svg+xml`, qui seraient interprétés
+(et tout script embarqué exécuté) si un CT/Admin ouvrait directement le
+lien depuis le store Blob. C'est le seul rempart réel : le client Flutter
+retombe déjà sur `application/octet-stream` pour ces extensions
+(`mimeForFilename`), mais c'est une convention côté client, sans valeur de
+sécurité face à un appel direct à l'API.
+
 ## Structure du dépôt
 
 ```

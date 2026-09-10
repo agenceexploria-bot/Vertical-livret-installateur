@@ -12,6 +12,25 @@ export const uploadsRouter = Router();
 // tout ce qu'on connaît côté serveur avant l'upload effectif.
 const DANGEROUS_EXTENSIONS = ['exe', 'bat', 'sh', 'msi'];
 
+// Contrairement à DANGEROUS_EXTENSIONS (fichiers refusés purement et
+// simplement), ces extensions restent acceptées — exigence métier :
+// documentTerrain/documentChantier doivent pouvoir recevoir n'importe quel
+// type de document — mais un navigateur qui ouvre directement un fichier
+// stocké avec son Content-Type "naturel" (text/html, image/svg+xml,
+// application/xml...) l'affiche ET exécute tout script qu'il contient :
+// un .svg/.html déposé par un installateur (le rôle le moins privilégié
+// autorisé à déposer un documentTerrain) serait ainsi exécuté dans le
+// contexte de la page pour quiconque l'ouvre depuis le store Blob, y
+// compris un CT/Admin. Le client (mimeForFilename côté Flutter) retombe
+// déjà sur application/octet-stream pour ces extensions, mais c'est une
+// convention côté client — rien n'empêche un appel direct à l'API de
+// déclarer un autre Content-Type pour le même fichier. Contrainte
+// reproduite ici côté serveur, seul rempart réel : quel que soit le kind,
+// un .svg/.html/.xml ne peut être stocké qu'en application/octet-stream
+// (jamais interprété/exécuté par un navigateur), voir onBeforeGenerateToken
+// ci-dessous. Voir aussi README.md, section "Sécurité des documents".
+const RENDERABLE_EXTENSIONS = ['svg', 'html', 'htm', 'xml', 'xhtml'];
+
 // Types, tailles ET rôles autorisés par nature de pièce jointe — décidés
 // côté serveur uniquement (jamais à partir de ce que le client déclare, à
 // part le choix du `kind` lui-même), pour qu'un client ne puisse pas
@@ -108,8 +127,16 @@ uploadsRouter.post('/token', async (req: AuthedRequest, res) => {
         if (extension && DANGEROUS_EXTENSIONS.includes(extension)) {
           throw new Error('Ce type de fichier n\'est pas autorisé pour des raisons de sécurité');
         }
+        // Force le Content-Type stocké à application/octet-stream pour ces
+        // extensions (voir RENDERABLE_EXTENSIONS) — le fichier reste accepté,
+        // mais @vercel/blob rejette l'upload si le client déclare un autre
+        // Content-Type pour ce pathname, empêchant qu'un .svg/.html soit
+        // jamais stocké (et donc rendu/exécuté par un navigateur) avec son
+        // Content-Type "naturel".
+        const forcedAllowedContentTypes =
+          extension && RENDERABLE_EXTENSIONS.includes(extension) ? ['application/octet-stream'] : config.allowedContentTypes;
         return {
-          ...(config.allowedContentTypes ? { allowedContentTypes: config.allowedContentTypes } : {}),
+          ...(forcedAllowedContentTypes ? { allowedContentTypes: forcedAllowedContentTypes } : {}),
           maximumSizeInBytes: config.maximumSizeInBytes,
           addRandomSuffix: true,
         };
