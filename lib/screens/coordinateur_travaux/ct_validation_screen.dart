@@ -18,7 +18,7 @@ class CtValidationScreen extends StatelessWidget {
     return ResponsiveLayout(
       appBar: GlassAppBar(
         title: const Text('Valider des inscriptions'),
-        backgroundColor: AppColors.encre,
+        backgroundColor: AppColors.primaire,
         foregroundColor: Colors.white,
       ),
       child: ListView(

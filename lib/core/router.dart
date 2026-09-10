@@ -289,6 +289,7 @@ class AppRouter {
         // contrôles/REX/anomalies/habilitations (ex-espace Qualité, fusionné
         // ici) + validation des installateurs. Accessible aussi à l'Admin.
         GoRoute(path: '/backoffice/ct', builder: (context, state) => const BoCtChantiersScreen()),
+        GoRoute(path: '/backoffice/ct/sav', builder: (context, state) => const BoCtChantiersScreen(savOnly: true)),
         GoRoute(path: '/backoffice/ct/auto-controle', builder: (context, state) => const BoAutoControleDetailScreen()),
         GoRoute(path: '/backoffice/ct/chantiers/nouveau', builder: (context, state) => const BoNewChantierScreen()),
         GoRoute(path: '/backoffice/ct/chantiers/:ref', builder: (context, state) => const BoChantierDetailScreen()),

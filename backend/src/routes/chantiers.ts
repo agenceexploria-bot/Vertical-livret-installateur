@@ -21,7 +21,7 @@ const CHANTIER_INCLUDE = {
   documentsTerrain: { include: { auteur: true } },
   documentsChantier: { orderBy: { createdAt: 'asc' as const } },
   coordinateurTravaux: true,
-  rex: { orderBy: { soumisAt: 'desc' as const } },
+  rex: { orderBy: { soumisAt: 'desc' as const }, include: { auteur: true } },
 };
 
 interface ChantierScopedRequest extends AuthedRequest {
@@ -498,6 +498,7 @@ chantiersRouter.post('/:reference/rex', requireAuth, requireRattachement, async 
       chantierId: req.chantier!.id,
       transcription: parsed.data.transcription,
       audioPath: parsed.data.audioUrl,
+      auteurId: req.auth!.userId,
     },
   });
   console.log(`POST /rex: REX ${rex.id} créé pour ${req.params.reference} — audioUrl=${parsed.data.audioUrl ?? 'aucun'} transcriptionClient=${parsed.data.transcription ? 'oui' : 'non'}`);

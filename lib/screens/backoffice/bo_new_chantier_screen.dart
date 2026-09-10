@@ -216,16 +216,19 @@ class _BoNewChantierScreenState extends State<BoNewChantierScreen> {
                   children: List.generate(_modeles.length, (i) {
                     final isOn = i == _modeleIndex;
                     return Expanded(
-                      child: GestureDetector(
-                        onTap: () => setState(() => _modeleIndex = i),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 7),
-                          decoration: BoxDecoration(color: isOn ? AppColors.encre : Colors.white),
-                          alignment: Alignment.center,
-                          child: Text(
-                            _modeles[i],
-                            textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: isOn ? Colors.white : AppColors.acier),
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: GestureDetector(
+                          onTap: () => setState(() => _modeleIndex = i),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 7),
+                            decoration: BoxDecoration(color: isOn ? AppColors.encre : Colors.white),
+                            alignment: Alignment.center,
+                            child: Text(
+                              _modeles[i],
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: isOn ? Colors.white : AppColors.acier),
+                            ),
                           ),
                         ),
                       ),

@@ -38,7 +38,7 @@ class ProfilScreen extends StatelessWidget {
     return ResponsiveLayout(
       appBar: GlassAppBar(
         title: const Text('Profil'),
-        backgroundColor: AppColors.encre,
+        backgroundColor: AppColors.primaire,
         foregroundColor: Colors.white,
       ),
       child: SingleChildScrollView(
@@ -289,7 +289,7 @@ class ProfilScreen extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.encre,
+        color: AppColors.primaire,
         borderRadius: BorderRadius.circular(9),
       ),
       child: Column(

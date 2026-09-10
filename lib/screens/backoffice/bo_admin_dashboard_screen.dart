@@ -7,6 +7,7 @@ import '../../core/theme.dart';
 import '../../core/widgets/dashboard_stat_card.dart';
 import '../../data/api_client.dart';
 import '../../data/models/activity_feed.dart';
+import '../../data/models/chantier.dart';
 import '../../data/models/user.dart';
 import '../../state/admin_state.dart';
 import '../../state/auth_state.dart';
@@ -22,7 +23,22 @@ class BoAdminDashboardScreen extends StatefulWidget {
   State<BoAdminDashboardScreen> createState() => _BoAdminDashboardScreenState();
 }
 
+/// Module SAV — seul le panneau REX consolidé de ce dashboard mélange les
+/// REX de chantiers d'installation et d'interventions SAV (audit : la fiche
+/// d'un chantier précis, elle, ne montre jamais que ses propres REX). Ces
+/// deux onglets séparent strictement l'affichage sans changer les données
+/// reçues (voir [RexEnAttente.chantierType]).
+enum RexEnAttenteTab { chantiers, sav }
+
+/// Sépare le flux REX consolidé par type de chantier d'origine — pure,
+/// testable sans BoShell ni AdminState. Jamais mélangé : voir
+/// [RexEnAttenteTab].
+List<RexEnAttente> rexEnAttentePourType(List<RexEnAttente> all, ChantierType type) =>
+    all.where((r) => r.chantierType == type).toList();
+
 class _BoAdminDashboardScreenState extends State<BoAdminDashboardScreen> {
+  RexEnAttenteTab _rexTab = RexEnAttenteTab.chantiers;
+
   @override
   void initState() {
     super.initState();
@@ -348,12 +364,40 @@ class _BoAdminDashboardScreenState extends State<BoAdminDashboardScreen> {
   }
 
   Widget _buildRexEnAttente(ActivityFeed? feed) {
-    final rexEnAttente = feed?.rexEnAttente ?? const <RexEnAttente>[];
+    final all = feed?.rexEnAttente ?? const <RexEnAttente>[];
+    final chantiersCount = rexEnAttentePourType(all, ChantierType.installation).length;
+    final savCount = rexEnAttentePourType(all, ChantierType.sav).length;
+    final filtered = rexEnAttentePourType(all, _rexTab == RexEnAttenteTab.chantiers ? ChantierType.installation : ChantierType.sav);
+    const chipTextStyle = TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600);
+
     return BoPanel(
-      title: 'REX reçus — en attente de traitement BE/Qualité (${rexEnAttente.length})',
-      child: rexEnAttente.isEmpty
-          ? const Text('Aucun REX en attente.', style: TextStyle(fontSize: 12.5, color: AppColors.acierClair))
-          : Column(children: [for (final rex in rexEnAttente) _rexRow(rex)]),
+      title: 'REX reçus — en attente de traitement BE/Qualité (${all.length})',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 8,
+            children: [
+              ChoiceChip(
+                label: Text('REX chantiers ($chantiersCount)', style: chipTextStyle),
+                visualDensity: VisualDensity.compact,
+                selected: _rexTab == RexEnAttenteTab.chantiers,
+                onSelected: (_) => setState(() => _rexTab = RexEnAttenteTab.chantiers),
+              ),
+              ChoiceChip(
+                label: Text('REX SAV ($savCount)', style: chipTextStyle),
+                visualDensity: VisualDensity.compact,
+                selected: _rexTab == RexEnAttenteTab.sav,
+                onSelected: (_) => setState(() => _rexTab = RexEnAttenteTab.sav),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          filtered.isEmpty
+              ? const Text('Aucun REX en attente pour ce filtre.', style: TextStyle(fontSize: 12.5, color: AppColors.acierClair))
+              : Column(children: [for (final rex in filtered) _rexRow(rex)]),
+        ],
+      ),
     );
   }
 

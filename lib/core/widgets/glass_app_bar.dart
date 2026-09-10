@@ -15,7 +15,7 @@ class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
     super.key,
     this.title,
     this.actions,
-    this.backgroundColor = AppColors.encre,
+    this.backgroundColor = AppColors.primaire,
     this.foregroundColor = Colors.white,
   });
 

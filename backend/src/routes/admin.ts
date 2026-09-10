@@ -183,6 +183,7 @@ adminRouter.get('/activity', requireAuth, requireRole('admin'), async (_req, res
       rexId: r.id,
       chantierReference: r.chantier.reference,
       client: r.chantier.client,
+      chantierType: r.chantier.type,
       rexTranscription: r.transcription,
       rexSoumisAt: r.soumisAt,
     })),

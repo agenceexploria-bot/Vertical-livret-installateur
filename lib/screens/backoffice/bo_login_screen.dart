@@ -93,9 +93,12 @@ class _BoLoginScreenState extends State<BoLoginScreen> {
                   alignment: WrapAlignment.center,
                   children: [
                     const Text('Nouveau chargé d\'affaires ? ', style: TextStyle(fontSize: 11.5, color: AppColors.acier)),
-                    GestureDetector(
-                      onTap: () => context.push('/backoffice/acces'),
-                      child: const Text('Demander un accès', style: TextStyle(fontSize: 11.5, color: AppColors.orange, fontWeight: FontWeight.bold)),
+                    MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: GestureDetector(
+                        onTap: () => context.push('/backoffice/acces'),
+                        child: const Text('Demander un accès', style: TextStyle(fontSize: 11.5, color: AppColors.orange, fontWeight: FontWeight.bold)),
+                      ),
                     ),
                   ],
                 ),

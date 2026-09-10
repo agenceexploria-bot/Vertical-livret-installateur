@@ -18,14 +18,18 @@ class Rex {
   final String? transcription;
   final String? audioPath;
   final DateTime soumisAt;
+  // Nullable : les REX soumis avant l'ajout de l'auteur en base n'en ont
+  // pas (affiché "Auteur inconnu" côté back-office, voir RexCard).
+  final String? auteur;
 
-  Rex({required this.id, this.transcription, this.audioPath, required this.soumisAt});
+  Rex({required this.id, this.transcription, this.audioPath, required this.soumisAt, this.auteur});
 
   factory Rex.fromJson(Map<String, dynamic> json) => Rex(
         id: json['id'] as String,
         transcription: json['transcription'] as String?,
         audioPath: json['audioPath'] as String?,
         soumisAt: DateTime.parse(json['soumisAt'] as String),
+        auteur: json['auteur'] as String?,
       );
 
   Map<String, dynamic> toJson() => {
@@ -33,6 +37,7 @@ class Rex {
         'transcription': transcription,
         'audioPath': audioPath,
         'soumisAt': soumisAt.toIso8601String(),
+        'auteur': auteur,
       };
 }
 

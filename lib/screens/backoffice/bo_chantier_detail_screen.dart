@@ -123,11 +123,14 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
           ),
           if (chantier.type == ChantierType.sav) ...[
             const SizedBox(height: 8),
-            GestureDetector(
-              onTap: () => context.push('/backoffice/ct/chantiers/${chantier.parentReference}'),
-              child: Text(
-                'Intervention SAV rattachée au chantier ${chantier.parentReference ?? '—'}',
-                style: const TextStyle(fontSize: 12.5, color: AppColors.orange, fontWeight: FontWeight.w600, decoration: TextDecoration.underline),
+            MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                onTap: () => context.push('/backoffice/ct/chantiers/${chantier.parentReference}'),
+                child: Text(
+                  'Intervention SAV rattachée au chantier ${chantier.parentReference ?? '—'}',
+                  style: const TextStyle(fontSize: 12.5, color: AppColors.primaire, fontWeight: FontWeight.w600, decoration: TextDecoration.underline),
+                ),
               ),
             ),
           ],
@@ -190,9 +193,9 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
             child: TabBar(
               controller: _tabController,
               isScrollable: true,
-              labelColor: AppColors.orange,
+              labelColor: AppColors.primaire,
               unselectedLabelColor: AppColors.acier,
-              indicatorColor: AppColors.orange,
+              indicatorColor: AppColors.primaire,
               indicatorSize: TabBarIndicatorSize.label,
               labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
               tabs: const [

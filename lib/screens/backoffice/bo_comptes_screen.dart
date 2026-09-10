@@ -595,11 +595,14 @@ class _BoComptesScreenState extends State<BoComptesScreen> {
           Expanded(flex: 2, child: StatusBadge(label: compteLabel, type: compteType)),
           Expanded(
             flex: 3,
-            child: GestureDetector(
-              onTap: u.habilitations.any((h) => h.filePath != null)
-                  ? () => launchUrl(Uri.parse(u.habilitations.firstWhere((h) => h.filePath != null).filePath!))
-                  : null,
-              child: StatusIndicator(label: habLabel, type: habType),
+            child: MouseRegion(
+              cursor: u.habilitations.any((h) => h.filePath != null) ? SystemMouseCursors.click : MouseCursor.defer,
+              child: GestureDetector(
+                onTap: u.habilitations.any((h) => h.filePath != null)
+                    ? () => launchUrl(Uri.parse(u.habilitations.firstWhere((h) => h.filePath != null).filePath!))
+                    : null,
+                child: StatusIndicator(label: habLabel, type: habType),
+              ),
             ),
           ),
           Expanded(flex: 2, child: Text(mesChantiers.isEmpty ? '—' : mesChantiers, style: const TextStyle(fontSize: 12.5))),

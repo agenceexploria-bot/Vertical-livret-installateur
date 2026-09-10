@@ -16,7 +16,8 @@ class _BoNavTab {
   final String label;
   final String route;
   final String key;
-  const _BoNavTab(this.label, this.route, this.key);
+  final IconData? icon;
+  const _BoNavTab(this.label, this.route, this.key, {this.icon});
 }
 
 class _BoSpace {
@@ -27,6 +28,7 @@ class _BoSpace {
 
 const _ctTabs = [
   _BoNavTab('Chantiers', '/backoffice/ct', 'chantiers'),
+  _BoNavTab('SAV', '/backoffice/ct/sav', 'sav', icon: Icons.build_outlined),
   _BoNavTab('Comptes', '/backoffice/ct/comptes', 'comptes'),
 ];
 const _ctSpace = _BoSpace('Espace Coordinateur travaux', _ctTabs);
@@ -184,14 +186,14 @@ class _TopBar extends StatelessWidget {
         ),
         const SizedBox(width: 16),
         for (final tab in space.tabs) ...[
-          _NavLink(label: tab.label, route: tab.route, isActive: activeNav == tab.key),
+          _NavLink(label: tab.label, route: tab.route, isActive: activeNav == tab.key, icon: tab.icon),
           const SizedBox(width: 18),
         ],
       ],
     );
 
     return Container(
-      color: AppColors.encre,
+      color: AppColors.primaire,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       child: Row(
         children: [
@@ -315,37 +317,58 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-class _NavLink extends StatelessWidget {
+class _NavLink extends StatefulWidget {
   final String label;
   final String route;
   final bool isActive;
+  final IconData? icon;
 
-  const _NavLink({required this.label, required this.route, required this.isActive});
+  const _NavLink({required this.label, required this.route, required this.isActive, this.icon});
+
+  @override
+  State<_NavLink> createState() => _NavLinkState();
+}
+
+class _NavLinkState extends State<_NavLink> {
+  bool _hovered = false;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => context.go(route),
-        borderRadius: BorderRadius.circular(6),
-        // Fond sombre de la barre : la teinte de survol globale (claire, voir
-        // ThemeData.hoverColor) y serait quasi invisible.
-        hoverColor: Colors.white.withValues(alpha: 0.1),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-          child: Container(
-            decoration: isActive
-                ? const BoxDecoration(border: Border(bottom: BorderSide(color: Colors.white, width: 2)))
-                : null,
-            padding: const EdgeInsets.only(bottom: 2),
-            child: Text(
-              label,
-              style: TextStyle(
-                color: isActive ? Colors.white : const Color(0xFFB9C4CE),
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                fontSize: 13,
-              ),
+    // La barre de navigation est déjà bleue (AppColors.primaire) : la
+    // bordure bleue de survol prévue par la charte n'y serait pas visible —
+    // remplacée par un fond clair, qui lui se voit nettement sur ce fond.
+    // L'item actif se distingue par un fond plus marqué ET un texte orange
+    // (accent), conformément à la charte.
+    final color = widget.isActive ? AppColors.orange : (_hovered ? Colors.white : const Color(0xFFB9C4CE));
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => context.go(widget.route),
+          borderRadius: BorderRadius.circular(6),
+          hoverColor: Colors.transparent,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOut,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: widget.isActive
+                  ? Colors.white.withValues(alpha: 0.18)
+                  : (_hovered ? Colors.white.withValues(alpha: 0.1) : Colors.transparent),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (widget.icon != null) ...[Icon(widget.icon, size: 15, color: color), const SizedBox(width: 5)],
+                Text(
+                  widget.label,
+                  style: TextStyle(color: color, fontWeight: widget.isActive ? FontWeight.w600 : FontWeight.normal, fontSize: 13),
+                ),
+              ],
             ),
           ),
         ),

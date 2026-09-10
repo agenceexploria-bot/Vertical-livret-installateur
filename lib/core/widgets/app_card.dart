@@ -42,10 +42,10 @@ class _AppCardState extends State<AppCard> {
           onTap: widget.onTap,
           borderRadius: BorderRadius.circular(20),
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 220),
+            duration: const Duration(milliseconds: 150),
             curve: Curves.easeOut,
             transformAlignment: Alignment.center,
-            transform: Matrix4.diagonal3Values(hovered ? 1.025 : 1.0, hovered ? 1.025 : 1.0, 1.0),
+            transform: Matrix4.diagonal3Values(hovered ? 1.02 : 1.0, hovered ? 1.02 : 1.0, 1.0),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
               gradient: LinearGradient(
@@ -53,7 +53,7 @@ class _AppCardState extends State<AppCard> {
                 end: Alignment.bottomRight,
                 colors: [Colors.white, AppColors.fond],
               ),
-              border: Border.all(color: hovered ? AppColors.orange.withValues(alpha: 0.3) : Colors.transparent, width: 1.5),
+              border: Border.all(color: hovered ? AppColors.primaire.withValues(alpha: 0.35) : Colors.transparent, width: 1.5),
               boxShadow: [
                 BoxShadow(
                   color: AppColors.encre.withValues(alpha: hovered ? 0.22 : 0.08),

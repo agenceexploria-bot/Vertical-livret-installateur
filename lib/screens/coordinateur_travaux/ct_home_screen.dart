@@ -127,7 +127,7 @@ class _CtHomeScreenState extends State<CtHomeScreen> {
     return ResponsiveLayout(
       appBar: GlassAppBar(
         title: const Text('Suivi chantiers'),
-        backgroundColor: AppColors.encre,
+        backgroundColor: AppColors.primaire,
         foregroundColor: Colors.white,
         actions: [
           _buildNouveauMenu(context),

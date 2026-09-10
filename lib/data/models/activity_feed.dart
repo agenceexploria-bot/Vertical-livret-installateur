@@ -1,3 +1,4 @@
+import 'chantier.dart';
 import 'user.dart';
 
 class InscriptionEnAttente {
@@ -92,17 +93,32 @@ class WeeklyStat {
       );
 }
 
+/// Module SAV — [chantierType] distingue un REX soumis sur un chantier
+/// d'installation d'un REX soumis sur une intervention SAV : ce panneau
+/// consolidé (tous chantiers confondus, voir bo_admin_dashboard_screen.dart)
+/// est le seul endroit de l'app à mélanger les deux, contrairement à la
+/// fiche d'un chantier précis (déjà scindée par construction, un REX
+/// n'appartenant qu'à un seul chantier). Jamais mélangés dans l'UI : voir
+/// les onglets "REX chantiers"/"REX SAV" de ce panneau.
 class RexEnAttente {
   final String chantierReference;
   final String client;
+  final ChantierType chantierType;
   final String? rexTranscription;
   final DateTime? rexSoumisAt;
 
-  RexEnAttente({required this.chantierReference, required this.client, this.rexTranscription, this.rexSoumisAt});
+  RexEnAttente({
+    required this.chantierReference,
+    required this.client,
+    required this.chantierType,
+    this.rexTranscription,
+    this.rexSoumisAt,
+  });
 
   factory RexEnAttente.fromJson(Map<String, dynamic> json) => RexEnAttente(
         chantierReference: json['chantierReference'] as String,
         client: json['client'] as String,
+        chantierType: ChantierType.values.firstWhere((t) => t.name == json['chantierType'], orElse: () => ChantierType.installation),
         rexTranscription: json['rexTranscription'] as String?,
         rexSoumisAt: json['rexSoumisAt'] != null ? DateTime.parse(json['rexSoumisAt'] as String) : null,
       );

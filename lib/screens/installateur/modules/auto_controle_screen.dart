@@ -36,7 +36,7 @@ class _AutoControleScreenState extends State<AutoControleScreen> {
     return ResponsiveLayout(
       appBar: GlassAppBar(
         title: const Text('Auto-contrôle'),
-        backgroundColor: AppColors.encre,
+        backgroundColor: AppColors.primaire,
         foregroundColor: Colors.white,
       ),
       child: Column(

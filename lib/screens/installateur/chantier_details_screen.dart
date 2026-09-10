@@ -126,7 +126,7 @@ class _ChantierDetailsScreenState extends State<ChantierDetailsScreen> {
     return ResponsiveLayout(
       appBar: GlassAppBar(
         title: Text('${chantier.reference} — ${chantier.client}'),
-        backgroundColor: AppColors.encre,
+        backgroundColor: AppColors.primaire,
         foregroundColor: Colors.white,
       ),
       child: Column(

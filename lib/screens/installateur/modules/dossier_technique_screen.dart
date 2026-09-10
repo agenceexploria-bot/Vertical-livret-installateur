@@ -19,7 +19,7 @@ class DossierTechniqueScreen extends StatelessWidget {
     return ResponsiveLayout(
       appBar: GlassAppBar(
         title: const Text('Dossier technique'),
-        backgroundColor: AppColors.encre,
+        backgroundColor: AppColors.primaire,
         foregroundColor: Colors.white,
       ),
       child: docs.isEmpty

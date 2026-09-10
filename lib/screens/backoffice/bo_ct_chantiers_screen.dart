@@ -25,13 +25,19 @@ import 'widgets/creer_sav_dialog.dart';
 /// fusion du rôle Qualité dans cet espace — auto-contrôles, REX à qualifier,
 /// anomalies et habilitations.
 class BoCtChantiersScreen extends StatefulWidget {
-  const BoCtChantiersScreen({super.key});
+  /// Vue SAV (module SAV, nav "SAV") — même écran, mais restreint aux
+  /// interventions SAV (`Chantier.type == sav`) : tableau, segments En
+  /// cours/Terminés/Tous/À traiter et recherche identiques à la vue
+  /// Chantiers, sans les panneaux Anomalies/Habilitations (déjà visibles
+  /// depuis la vue Chantiers, sans rapport avec le filtre SAV).
+  final bool savOnly;
+  const BoCtChantiersScreen({super.key, this.savOnly = false});
 
   @override
   State<BoCtChantiersScreen> createState() => _BoCtChantiersScreenState();
 }
 
-enum _TableauSegment { enCours, termines, tous }
+enum TableauChantiersSegment { enCours, termines, tous, aTraiter }
 
 /// Un installateur rattaché n'a pas encore ouvert son livret pour ce
 /// chantier (vérification de la veille, EX-22) — la seule partie de
@@ -40,11 +46,42 @@ enum _TableauSegment { enCours, termines, tous }
 /// l'écran approprié pour ça).
 bool _aLivretNonOuvert(Chantier c) => c.installateursRattaches.any((u) => !c.livretsOuverts.contains(u.id));
 
+/// Groupe exclusif (radio) : le segment sélectionné détermine SEUL la liste
+/// affichée — jamais une combinaison de deux segments (ancien bug : "À
+/// traiter" était un booléen indépendant, cumulable avec n'importe quel
+/// segment principal). Pure, testable sans BoShell ni ChantierState.
+List<Chantier> chantiersPourSegment(
+  TableauChantiersSegment segment, {
+  required List<Chantier> tous,
+  required List<Chantier> enCours,
+  required List<Chantier> termines,
+}) =>
+    switch (segment) {
+      TableauChantiersSegment.enCours => enCours,
+      TableauChantiersSegment.termines => termines,
+      TableauChantiersSegment.tous => tous,
+      TableauChantiersSegment.aTraiter => tous.where(_aLivretNonOuvert).toList(),
+    };
+
+/// Bascule tuiles/liste — [cartesEmpilees] est un repli, pas un choix : en
+/// dessous du seuil de largeur, la vue liste (en colonnes) n'aurait pas la
+/// place de respirer, les cartes s'imposent quel que soit [vueListe].
+enum ChantiersRenduVue { cartesEmpilees, tuiles, liste }
+
+/// Pure, testable sans LayoutBuilder ni BoShell — voir [chantiersPourSegment]
+/// pour le même principe appliqué au filtre de segment.
+ChantiersRenduVue renduVuePour({required double largeurDisponible, required bool vueListe, required double breakpoint}) {
+  if (largeurDisponible < breakpoint) return ChantiersRenduVue.cartesEmpilees;
+  return vueListe ? ChantiersRenduVue.liste : ChantiersRenduVue.tuiles;
+}
+
 class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
   final _searchController = TextEditingController();
   String _search = '';
-  _TableauSegment _segment = _TableauSegment.enCours;
-  bool _aTraiterOnly = false;
+  TableauChantiersSegment _segment = TableauChantiersSegment.enCours;
+  // Persiste seulement pour la session (pas de disque) — un simple champ
+  // d'état suffit, voir _buildVueToggle. Tuiles par défaut.
+  bool _vueListe = false;
 
   @override
   void dispose() {
@@ -55,30 +92,29 @@ class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
   @override
   Widget build(BuildContext context) {
     final chantierState = context.watch<ChantierState>();
-    final tous = chantierState.chantiers;
-    final enCours = chantierState.chantiersEnCoursList;
-    final termines = chantierState.chantiersTerminesList;
-    final segmentList = switch (_segment) {
-      _TableauSegment.enCours => enCours,
-      _TableauSegment.termines => termines,
-      _TableauSegment.tous => tous,
-    };
+    final tous = widget.savOnly ? chantiersSav(chantierState.chantiers) : chantierState.chantiers;
+    final enCours = chantiersEnCours(tous);
+    final termines = chantiersTermines(tous);
+    final segmentList = chantiersPourSegment(_segment, tous: tous, enCours: enCours, termines: termines);
     // Compté sur l'ensemble des chantiers (pas seulement le segment actif) :
     // le badge du chip reste stable quel que soit le filtre principal
     // sélectionné, plutôt que de changer de sens selon l'onglet.
     final aTraiterCount = tous.where(_aLivretNonOuvert).length;
-    final afterATraiter = _aTraiterOnly ? segmentList.where(_aLivretNonOuvert).toList() : segmentList;
 
     final query = _search.trim().toLowerCase();
     final filteredChantiers = query.isEmpty
-        ? afterATraiter
-        : afterATraiter.where((c) => c.reference.toLowerCase().contains(query) || c.client.toLowerCase().contains(query)).toList();
+        ? segmentList
+        : segmentList.where((c) => c.reference.toLowerCase().contains(query) || c.client.toLowerCase().contains(query)).toList();
 
     return BoShell(
-      activeNav: 'chantiers',
+      activeNav: widget.savOnly ? 'sav' : 'chantiers',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (widget.savOnly) ...[
+            Text('Interventions SAV', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 16),
+          ],
           _buildStatsGrid(context, tous),
           const SizedBox(height: 20),
           _buildFiltersRow(
@@ -90,10 +126,12 @@ class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
           ),
           const SizedBox(height: 16),
           _buildTable(context, filteredChantiers, query.isNotEmpty),
-          const SizedBox(height: 20),
-          _buildAnomalies(tous),
-          const SizedBox(height: 16),
-          _buildHabilitations(context),
+          if (!widget.savOnly) ...[
+            const SizedBox(height: 20),
+            _buildAnomalies(tous),
+            const SizedBox(height: 16),
+            _buildHabilitations(context),
+          ],
         ],
       ),
     );
@@ -149,11 +187,11 @@ class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
     );
   }
 
-  /// Filtre principal (En cours / Terminés / Tous, mutuellement exclusifs)
-  /// + filtre additionnel (À traiter, cumulable) + recherche + action —
-  /// [Wrap] pour que chaque élément retombe sur sa propre ligne dès que la
-  /// largeur manque, plutôt qu'un débordement horizontal (voir l'ancien
-  /// Row rigide, remplacé).
+  /// Quatre segments mutuellement exclusifs (En cours / Terminés / Tous / À
+  /// traiter, voir [chantiersPourSegment]) + recherche + action — [Wrap]
+  /// pour que chaque élément retombe sur sa propre ligne dès que la largeur
+  /// manque, plutôt qu'un débordement horizontal (voir l'ancien Row rigide,
+  /// remplacé).
   Widget _buildFiltersRow(
     BuildContext context, {
     required int enCoursCount,
@@ -170,30 +208,31 @@ class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
         ChoiceChip(
           label: Text('En cours ($enCoursCount)', style: chipTextStyle),
           visualDensity: VisualDensity.compact,
-          selected: _segment == _TableauSegment.enCours,
-          onSelected: (_) => setState(() => _segment = _TableauSegment.enCours),
+          selected: _segment == TableauChantiersSegment.enCours,
+          onSelected: (_) => setState(() => _segment = TableauChantiersSegment.enCours),
         ),
         ChoiceChip(
           label: Text('Terminés ($terminesCount)', style: chipTextStyle),
           visualDensity: VisualDensity.compact,
-          selected: _segment == _TableauSegment.termines,
-          onSelected: (_) => setState(() => _segment = _TableauSegment.termines),
+          selected: _segment == TableauChantiersSegment.termines,
+          onSelected: (_) => setState(() => _segment = TableauChantiersSegment.termines),
         ),
         ChoiceChip(
           label: Text('Tous ($tousCount)', style: chipTextStyle),
           visualDensity: VisualDensity.compact,
-          selected: _segment == _TableauSegment.tous,
-          onSelected: (_) => setState(() => _segment = _TableauSegment.tous),
+          selected: _segment == TableauChantiersSegment.tous,
+          onSelected: (_) => setState(() => _segment = TableauChantiersSegment.tous),
         ),
-        FilterChip(
+        ChoiceChip(
           label: Text('À traiter ($aTraiterCount)', style: chipTextStyle),
           visualDensity: VisualDensity.compact,
           avatar: aTraiterCount > 0 ? const Icon(Icons.pending_actions_outlined, size: 16) : null,
-          selected: _aTraiterOnly,
+          selected: _segment == TableauChantiersSegment.aTraiter,
           selectedColor: AppColors.orange.withValues(alpha: 0.18),
           checkmarkColor: AppColors.orange,
-          onSelected: (value) => setState(() => _aTraiterOnly = value),
+          onSelected: (_) => setState(() => _segment = TableauChantiersSegment.aTraiter),
         ),
+        _buildVueToggle(),
         SizedBox(
           width: 220,
           height: 36,
@@ -213,6 +252,48 @@ class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
           child: _buildNouveauMenu(context),
         ),
       ],
+    );
+  }
+
+  /// Bascule tuiles/liste — persiste pour la durée de la session ([_vueListe],
+  /// pas de disque). N'a d'effet qu'au-dessus de [_cardBreakpoint] : en
+  /// dessous, l'écran est trop étroit pour la vue liste (colonnes), les
+  /// cartes s'imposent quel que soit le choix (voir _buildTable).
+  Widget _buildVueToggle() {
+    return Container(
+      height: 36,
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      decoration: BoxDecoration(border: Border.all(color: AppColors.lignes), borderRadius: BorderRadius.circular(8)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _vueToggleButton(icon: Icons.view_module_outlined, tooltip: 'Vue tuiles', selected: !_vueListe, onTap: () => setState(() => _vueListe = false)),
+          _vueToggleButton(icon: Icons.view_list_outlined, tooltip: 'Vue liste', selected: _vueListe, onTap: () => setState(() => _vueListe = true)),
+        ],
+      ),
+    );
+  }
+
+  Widget _vueToggleButton({required IconData icon, required String tooltip, required bool selected, required VoidCallback onTap}) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: Tooltip(
+        message: tooltip,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(6),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOut,
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: selected ? AppColors.primaire.withValues(alpha: 0.12) : Colors.transparent,
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Icon(icon, size: 18, color: selected ? AppColors.primaire : AppColors.acierClair),
+          ),
+        ),
+      ),
     );
   }
 
@@ -294,39 +375,43 @@ class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
   static const _cardBreakpoint = 700.0;
 
   Widget _buildTable(BuildContext context, List<Chantier> chantiers, bool isSearching) {
-    final emptyIcon = _aTraiterOnly
+    final emptyIcon = _segment == TableauChantiersSegment.aTraiter || _segment == TableauChantiersSegment.termines
         ? Icons.check_circle_outline
-        : _segment == _TableauSegment.termines
-            ? Icons.check_circle_outline
-            : Icons.construction_outlined;
+        : Icons.construction_outlined;
+    final noun = widget.savOnly ? 'intervention SAV' : 'chantier';
     final emptyMessage = isSearching
         ? 'Aucun résultat pour « ${_search.trim()} ».'
-        : _aTraiterOnly
-            ? 'Rien à traiter pour ce filtre.'
-            : switch (_segment) {
-                _TableauSegment.enCours => 'Aucun chantier en cours pour l\'instant.',
-                _TableauSegment.termines => 'Aucun chantier terminé pour l\'instant.',
-                _TableauSegment.tous => 'Aucun chantier pour l\'instant.',
-              };
-    final canCreer = !isSearching && !_aTraiterOnly && _segment != _TableauSegment.termines;
+        : switch (_segment) {
+            TableauChantiersSegment.enCours => 'Aucun(e) $noun en cours pour l\'instant.',
+            TableauChantiersSegment.termines => 'Aucun(e) $noun terminé(e) pour l\'instant.',
+            TableauChantiersSegment.tous => 'Aucun(e) $noun pour l\'instant.',
+            TableauChantiersSegment.aTraiter => 'Rien à traiter pour ce filtre.',
+          };
+    final canCreer = !isSearching && _segment != TableauChantiersSegment.aTraiter && _segment != TableauChantiersSegment.termines;
 
     if (chantiers.isEmpty) {
       return BoPanel(
         child: EmptyState(
           icon: emptyIcon,
           message: emptyMessage,
-          actionLabel: canCreer ? 'Créer un nouveau chantier' : null,
-          onAction: canCreer ? () => context.push('/backoffice/ct/chantiers/nouveau') : null,
+          actionLabel: canCreer ? (widget.savOnly ? 'Créer une intervention SAV' : 'Créer un nouveau chantier') : null,
+          onAction: canCreer
+              ? (widget.savOnly ? () => _openCreerSavDialog(context) : () => context.push('/backoffice/ct/chantiers/nouveau'))
+              : null,
         ),
       );
     }
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth < _cardBreakpoint) {
+        final rendu = renduVuePour(largeurDisponible: constraints.maxWidth, vueListe: _vueListe, breakpoint: _cardBreakpoint);
+        if (rendu == ChantiersRenduVue.cartesEmpilees) {
           return Column(
             children: [for (final c in chantiers) _buildCompactCard(context, c)],
           );
+        }
+        if (rendu == ChantiersRenduVue.tuiles) {
+          return _buildTuilesGrid(context, constraints, chantiers);
         }
         return BoResponsiveTable(
           minWidth: 600,
@@ -349,6 +434,21 @@ class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
           ),
         );
       },
+    );
+  }
+
+  /// Vue tuiles (par défaut) au-dessus de [_cardBreakpoint] — grille
+  /// responsive des mêmes cartes compactes qu'en dessous du breakpoint,
+  /// plusieurs colonnes selon la largeur disponible (voir _buildStatsGrid,
+  /// même pattern).
+  Widget _buildTuilesGrid(BuildContext context, BoxConstraints constraints, List<Chantier> chantiers) {
+    final columns = constraints.maxWidth > 1400 ? 3 : (constraints.maxWidth > 900 ? 2 : 1);
+    const spacing = 12.0;
+    final cardWidth = (constraints.maxWidth - spacing * (columns - 1)) / columns;
+    return Wrap(
+      spacing: spacing,
+      runSpacing: spacing,
+      children: [for (final c in chantiers) SizedBox(width: cardWidth, child: _buildCompactCard(context, c))],
     );
   }
 
@@ -383,7 +483,7 @@ class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
             child: Row(
               children: [
                 Flexible(child: Text(c.reference, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), overflow: TextOverflow.ellipsis)),
-                if (c.type == ChantierType.sav) ...[const SizedBox(width: 6), _savTag()],
+                if (!widget.savOnly && c.type == ChantierType.sav) ...[const SizedBox(width: 6), _savTag()],
               ],
             ),
           ),
@@ -419,7 +519,7 @@ class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (c.type == ChantierType.sav) ...[_savTag(), const SizedBox(width: 6)],
+                if (!widget.savOnly && c.type == ChantierType.sav) ...[_savTag(), const SizedBox(width: 6)],
                 const Icon(Icons.chevron_right, size: 18, color: AppColors.acierClair),
               ],
             ),

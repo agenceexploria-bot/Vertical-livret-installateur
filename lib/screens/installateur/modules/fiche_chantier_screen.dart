@@ -22,7 +22,7 @@ class FicheChantierScreen extends StatelessWidget {
     return ResponsiveLayout(
       appBar: GlassAppBar(
         title: const Text('Fiche chantier'),
-        backgroundColor: AppColors.encre,
+        backgroundColor: AppColors.primaire,
         foregroundColor: Colors.white,
       ),
       child: SingleChildScrollView(

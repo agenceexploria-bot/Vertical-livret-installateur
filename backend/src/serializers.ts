@@ -62,12 +62,15 @@ export function serializeDocumentChantier(d: DocumentChantier) {
   };
 }
 
-export function serializeRex(r: Rex) {
+export function serializeRex(r: Rex & { auteur?: User | null }) {
   return {
     id: r.id,
     transcription: r.transcription,
     audioPath: r.audioPath,
     soumisAt: r.soumisAt,
+    // Nullable : les REX soumis avant l'ajout de auteurId n'ont pas
+    // d'auteur connu (affiché "Auteur inconnu" côté back-office).
+    auteur: r.auteur ? `${r.auteur.prenom} ${r.auteur.nom}` : null,
   };
 }
 
@@ -78,7 +81,7 @@ export function serializeChantier(
     documentsTerrain?: (DocumentTerrain & { auteur: User })[];
     documentsChantier?: DocumentChantier[];
     coordinateurTravaux?: User | null;
-    rex?: Rex[];
+    rex?: (Rex & { auteur?: User | null })[];
   },
 ) {
   const reception = (c.pointsControle ?? []).filter((p) => p.type === 'reception');

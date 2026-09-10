@@ -97,7 +97,7 @@ class _CtEditChantierScreenState extends State<CtEditChantierScreen> {
     final chantier = _chantier;
     if (chantier == null) {
       return ResponsiveLayout(
-        appBar: GlassAppBar(title: const Text('Chantier introuvable'), backgroundColor: AppColors.encre, foregroundColor: Colors.white),
+        appBar: GlassAppBar(title: const Text('Chantier introuvable'), backgroundColor: AppColors.primaire, foregroundColor: Colors.white),
         child: const SizedBox.shrink(),
       );
     }
@@ -105,7 +105,7 @@ class _CtEditChantierScreenState extends State<CtEditChantierScreen> {
     return ResponsiveLayout(
       appBar: GlassAppBar(
         title: Text('Modifier ${chantier.reference}'),
-        backgroundColor: AppColors.encre,
+        backgroundColor: AppColors.primaire,
         foregroundColor: Colors.white,
       ),
       child: ListView(

@@ -86,9 +86,12 @@ class _BoAccessRequestScreenState extends State<BoAccessRequestScreen> {
                   alignment: WrapAlignment.center,
                   children: [
                     const Text('Déjà un compte ? ', style: TextStyle(fontSize: 11.5, color: AppColors.acier)),
-                    GestureDetector(
-                      onTap: () => context.pop(),
-                      child: const Text('Se connecter', style: TextStyle(fontSize: 11.5, color: AppColors.orange, fontWeight: FontWeight.bold)),
+                    MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: GestureDetector(
+                        onTap: () => context.pop(),
+                        child: const Text('Se connecter', style: TextStyle(fontSize: 11.5, color: AppColors.orange, fontWeight: FontWeight.bold)),
+                      ),
                     ),
                   ],
                 ),

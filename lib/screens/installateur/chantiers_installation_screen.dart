@@ -62,7 +62,7 @@ class _ChantiersInstallationScreenState extends State<ChantiersInstallationScree
     return ResponsiveLayout(
       appBar: GlassAppBar(
         title: const Text('Mes chantiers'),
-        backgroundColor: AppColors.encre,
+        backgroundColor: AppColors.primaire,
         foregroundColor: Colors.white,
       ),
       child: Column(
@@ -77,9 +77,9 @@ class _ChantiersInstallationScreenState extends State<ChantiersInstallationScree
               color: AppColors.blanc,
               child: TabBar(
                 controller: _tabController,
-                labelColor: AppColors.orange,
+                labelColor: AppColors.primaire,
                 unselectedLabelColor: AppColors.acier,
-                indicatorColor: AppColors.orange,
+                indicatorColor: AppColors.primaire,
                 labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                 tabs: [
                   Tab(text: 'En cours (${enCours.length})'),

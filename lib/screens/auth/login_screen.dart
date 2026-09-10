@@ -79,7 +79,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               
               const SizedBox(height: 16),
-              TextButton(onPressed: () => context.push('/forgot-password'), child: const Text('Mot de passe oublié ?', style: TextStyle(color: AppColors.encre, fontSize: 13))),
+              TextButton(onPressed: () => context.push('/forgot-password'), child: const Text('Mot de passe oublié ?', style: TextStyle(color: AppColors.primaire, fontSize: 13))),
               
               const SizedBox(height: 32),
               const Divider(color: AppColors.lignes),

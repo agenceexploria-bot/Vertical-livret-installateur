@@ -44,7 +44,7 @@ class _DocsTerrainScreenState extends State<DocsTerrainScreen> {
     return ResponsiveLayout(
       appBar: GlassAppBar(
         title: const Text('Documents terrain'),
-        backgroundColor: AppColors.encre,
+        backgroundColor: AppColors.primaire,
         foregroundColor: Colors.white,
       ),
       child: Column(

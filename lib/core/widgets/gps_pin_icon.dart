@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme.dart';
 
 /// Icône "carte + repère" pour les boutons GPS — une base de carte pliée
 /// (dégradé bleu eau / beige-jaune zones et itinéraires) surmontée d'un pin
@@ -36,7 +37,7 @@ class GpsPinIcon extends StatelessWidget {
           ),
           Positioned(
             top: -size * 0.12,
-            child: Icon(Icons.location_on, size: size * 0.8, color: const Color(0xFFE11F1B)),
+            child: Icon(Icons.location_on, size: size * 0.8, color: AppColors.rouge),
           ),
         ],
       ),

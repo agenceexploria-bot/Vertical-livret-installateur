@@ -536,6 +536,7 @@ describe('POST /chantiers/:reference/rex', () => {
     expect(res.status).toBe(200);
     expect(res.body.chantier.rex).toHaveLength(1);
     expect(res.body.chantier.rex[0].transcription).toBe('Tout s\'est bien passé.');
+    expect(res.body.chantier.rex[0].auteur).toBe('Sandrine Martin');
   });
 
   it('accepte une note vocale seule (sans transcription) et enregistre le fichier audio', async () => {

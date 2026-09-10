@@ -16,13 +16,28 @@ void main() {
   }
 
   testWidgets('REX avec audio : le lecteur et le bouton de téléchargement sont affichés', (tester) async {
-    final rex = Rex(id: 'r1', transcription: 'Tout s\'est bien passé', audioPath: 'https://blob.vercel-storage.com/rex-audio.webm', soumisAt: DateTime(2026, 9, 1, 10, 30));
+    final rex = Rex(
+      id: 'r1',
+      transcription: 'Tout s\'est bien passé',
+      audioPath: 'https://blob.vercel-storage.com/rex-audio.webm',
+      soumisAt: DateTime(2026, 9, 1, 10, 30),
+      auteur: 'Marin Dupont',
+    );
 
     await pump(tester, rex, onTelechargerAudio: () {});
 
     expect(find.byType(RexAudioPlayer), findsOneWidget);
     expect(find.text('Télécharger l\'audio'), findsOneWidget);
     expect(find.text('Tout s\'est bien passé'), findsOneWidget);
+    expect(find.textContaining('Marin Dupont'), findsOneWidget);
+  });
+
+  testWidgets('REX sans auteur connu (créé avant l\'ajout du champ) : repli "Auteur inconnu"', (tester) async {
+    final rex = Rex(id: 'r5', transcription: 'Texte', audioPath: null, soumisAt: DateTime(2026, 9, 1), auteur: null);
+
+    await pump(tester, rex);
+
+    expect(find.textContaining('Auteur inconnu'), findsOneWidget);
   });
 
   testWidgets('REX texte seul (sans audio) : ni lecteur ni bouton de téléchargement', (tester) async {

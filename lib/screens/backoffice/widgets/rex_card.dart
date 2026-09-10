@@ -4,10 +4,11 @@ import '../../../core/theme.dart';
 import '../../../data/models/chantier.dart';
 import 'rex_audio_player.dart';
 
-/// Carte compacte pour une entrée REX (module Qualité, back-office) — date,
-/// transcription (ou message de repli si absente), et lecteur audio +
-/// téléchargement si [Rex.audioPath] est renseigné (masqués tous les deux
-/// sinon, pas de lecteur vide). Voir bo_chantier_detail_screen.dart, _buildRex.
+/// Carte compacte pour une entrée REX (module Qualité, back-office) —
+/// auteur + date, transcription (ou message de repli si absente), et
+/// lecteur audio + téléchargement si [Rex.audioPath] est renseigné (masqués
+/// tous les deux sinon, pas de lecteur vide). Voir bo_chantier_detail_screen.dart,
+/// _buildRex.
 class RexCard extends StatelessWidget {
   final Rex rex;
   final VoidCallback? onTelechargerAudio;
@@ -29,8 +30,8 @@ class RexCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  DateFormat('dd/MM/yyyy HH:mm').format(rex.soumisAt),
-                  style: const TextStyle(fontSize: 11, color: AppColors.acierClair),
+                  '${rex.auteur ?? 'Auteur inconnu'} · ${DateFormat('dd/MM/yyyy HH:mm').format(rex.soumisAt)}',
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.acierClair),
                 ),
                 const SizedBox(height: 4),
                 Text(
