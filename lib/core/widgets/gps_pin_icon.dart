@@ -37,7 +37,7 @@ class GpsPinIcon extends StatelessWidget {
           ),
           Positioned(
             top: -size * 0.12,
-            child: Icon(Icons.location_on, size: size * 0.8, color: AppColors.rouge),
+            child: Icon(Icons.location_on, size: size * 0.8, color: AppColors.orange),
           ),
         ],
       ),

@@ -57,7 +57,7 @@ class _BoTableRowState extends State<BoTableRow> {
           curve: Curves.easeOut,
           padding: widget.padding,
           decoration: BoxDecoration(
-            color: _hovered ? AppColors.primaire.withValues(alpha: 0.08) : (widget.backgroundColor ?? Colors.transparent),
+            color: _hovered ? AppColors.acier.withValues(alpha: 0.07) : (widget.backgroundColor ?? Colors.transparent),
             border: widget.border,
           ),
           child: widget.child,

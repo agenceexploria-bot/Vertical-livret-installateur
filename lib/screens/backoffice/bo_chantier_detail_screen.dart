@@ -42,12 +42,77 @@ class BoChantierDetailScreen extends StatefulWidget {
 /// construit à la demande (pas de [TabBarView], qui exige une hauteur bornée
 /// incompatible avec le [SingleChildScrollView] de [BoShell]).
 class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with SingleTickerProviderStateMixin {
-  late final TabController _tabController = TabController(length: 4, vsync: this)..addListener(() => setState(() {}));
+  late final TabController _tabController = TabController(length: 5, vsync: this)..addListener(() => setState(() {}));
 
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  /// Actions principales de la fiche regroupées en un seul menu compact
+  /// (icône kebab) plutôt qu'une ligne de boutons — retour testeur : 3-4
+  /// boutons alignés prenaient trop de place et se lisaient mal en un coup
+  /// d'œil. Même pattern à réutiliser sur toute fiche à 3+ actions.
+  Widget _buildActionsMenu(BuildContext context, Chantier chantier, {required bool canModifier, required bool isAdmin}) {
+    return PopupMenuButton<String>(
+      tooltip: 'Actions',
+      onSelected: (value) => _onActionsMenuSelected(context, chantier, value),
+      itemBuilder: (context) => [
+        const PopupMenuItem(
+          value: 'copier_lien',
+          child: ListTile(contentPadding: EdgeInsets.zero, leading: Icon(Icons.link, size: 18), title: Text('Copier le lien')),
+        ),
+        if (canModifier)
+          const PopupMenuItem(
+            value: 'modifier',
+            child: ListTile(contentPadding: EdgeInsets.zero, leading: Icon(Icons.edit_outlined, size: 18), title: Text('Modifier')),
+          ),
+        // Module SAV — une intervention SAV se crée uniquement depuis son
+        // chantier d'installation d'origine, jamais depuis une autre
+        // intervention SAV (voir POST .../sav côté backend).
+        if (canModifier && chantier.type == ChantierType.installation)
+          const PopupMenuItem(
+            value: 'creer_sav',
+            child: ListTile(contentPadding: EdgeInsets.zero, leading: Icon(Icons.build_outlined, size: 18), title: Text('Créer une intervention SAV')),
+          ),
+        if (isAdmin) ...[
+          const PopupMenuDivider(),
+          PopupMenuItem(
+            value: 'supprimer',
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.delete_outline, size: 18, color: AppColors.rouge),
+              title: const Text('Supprimer', style: TextStyle(color: AppColors.rouge)),
+            ),
+          ),
+        ],
+      ],
+      child: Container(
+        height: 42,
+        width: 42,
+        decoration: BoxDecoration(border: Border.all(color: AppColors.lignes), borderRadius: BorderRadius.circular(16)),
+        alignment: Alignment.center,
+        child: const Icon(Icons.more_vert, color: AppColors.encre),
+      ),
+    );
+  }
+
+  void _onActionsMenuSelected(BuildContext context, Chantier chantier, String value) {
+    switch (value) {
+      case 'copier_lien':
+        _copierLien(context, chantier);
+        break;
+      case 'modifier':
+        _openModifierDialog(context, chantier);
+        break;
+      case 'creer_sav':
+        _openCreerSavDialog(context, chantier);
+        break;
+      case 'supprimer':
+        _confirmerSuppression(context, chantier);
+        break;
+    }
   }
 
   /// Lien direct vers la fiche installateur de ce chantier (route
@@ -129,58 +194,15 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
                 onTap: () => context.push('/backoffice/ct/chantiers/${chantier.parentReference}'),
                 child: Text(
                   'Intervention SAV rattachée au chantier ${chantier.parentReference ?? '—'}',
-                  style: const TextStyle(fontSize: 12.5, color: AppColors.primaire, fontWeight: FontWeight.w600, decoration: TextDecoration.underline),
+                  style: const TextStyle(fontSize: 12.5, color: AppColors.orange, fontWeight: FontWeight.w600, decoration: TextDecoration.underline),
                 ),
               ),
             ),
           ],
           const SizedBox(height: 16),
-          Wrap(
-            alignment: WrapAlignment.end,
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              OutlinedButton.icon(
-                onPressed: () => _copierLien(context, chantier),
-                icon: const Icon(Icons.link, size: 18),
-                label: const Text('Copier le lien'),
-                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 42), padding: const EdgeInsets.symmetric(horizontal: 16)),
-              ),
-              if (canModifier)
-                OutlinedButton.icon(
-                  onPressed: () => _openModifierDialog(context, chantier),
-                  icon: const Icon(Icons.edit_outlined, size: 18),
-                  label: const Text('Modifier'),
-                  style: OutlinedButton.styleFrom(minimumSize: const Size(0, 42), padding: const EdgeInsets.symmetric(horizontal: 16)),
-                ),
-              // Module SAV — une intervention SAV se crée uniquement depuis
-              // son chantier d'installation d'origine, jamais depuis une
-              // autre intervention SAV (voir POST .../sav côté backend).
-              if (canModifier && chantier.type == ChantierType.installation)
-                ElevatedButton.icon(
-                  onPressed: () => _openCreerSavDialog(context, chantier),
-                  icon: const Icon(Icons.build_outlined, size: 18),
-                  label: const Text('Créer une intervention SAV'),
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size(0, 42),
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    backgroundColor: AppColors.orange,
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-              if (isAdmin)
-                OutlinedButton.icon(
-                  onPressed: () => _confirmerSuppression(context, chantier),
-                  icon: const Icon(Icons.delete_outline, size: 18),
-                  label: const Text('Supprimer'),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(0, 42),
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    foregroundColor: AppColors.rouge,
-                    side: const BorderSide(color: AppColors.rouge),
-                  ),
-                ),
-            ],
+          Align(
+            alignment: Alignment.centerRight,
+            child: _buildActionsMenu(context, chantier, canModifier: canModifier, isAdmin: isAdmin),
           ),
           const SizedBox(height: 20),
           Container(
@@ -193,16 +215,17 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
             child: TabBar(
               controller: _tabController,
               isScrollable: true,
-              labelColor: AppColors.primaire,
+              labelColor: AppColors.orange,
               unselectedLabelColor: AppColors.acier,
-              indicatorColor: AppColors.primaire,
+              indicatorColor: AppColors.orange,
               indicatorSize: TabBarIndicatorSize.label,
               labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-              tabs: const [
-                Tab(text: 'Vue d\'ensemble'),
-                Tab(text: 'Documents'),
-                Tab(text: 'Qualité'),
-                Tab(text: 'PV'),
+              tabs: [
+                const Tab(text: 'Vue d\'ensemble'),
+                const Tab(text: 'Documents'),
+                const Tab(text: 'Qualité'),
+                const Tab(text: 'PV'),
+                Tab(text: chantier.rex.isEmpty ? 'REX' : 'REX (${chantier.rex.length})'),
               ],
             ),
           ),
@@ -210,8 +233,9 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
           switch (_tabController.index) {
             0 => _buildVueEnsembleTab(context, chantier),
             1 => _buildDocumentsTab(context, chantier),
-            2 => _buildQualiteTab(context, chantier, role),
-            _ => _buildPvTab(context, chantier, canRenseignerPv: canRenseignerPv, canSupprimerPv: canSupprimerPv),
+            2 => _buildQualiteTab(chantier),
+            3 => _buildPvTab(context, chantier, canRenseignerPv: canRenseignerPv, canSupprimerPv: canSupprimerPv),
+            _ => _buildRex(context, chantier, role),
           },
         ],
       ),
@@ -252,13 +276,8 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
     );
   }
 
-  Widget _buildQualiteTab(BuildContext context, Chantier chantier, UserRole? role) {
-    return Column(
-      children: [
-        _buildAutoControle(chantier),
-        _buildRex(context, chantier, role),
-      ],
-    );
+  Widget _buildQualiteTab(Chantier chantier) {
+    return _buildAutoControle(chantier);
   }
 
   Widget _buildPvTab(BuildContext context, Chantier chantier, {required bool canRenseignerPv, required bool canSupprimerPv}) {

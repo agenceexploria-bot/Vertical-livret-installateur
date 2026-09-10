@@ -193,7 +193,7 @@ class _TopBar extends StatelessWidget {
     );
 
     return Container(
-      color: AppColors.primaire,
+      color: AppColors.encre,
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
       child: Row(
         children: [
@@ -334,11 +334,10 @@ class _NavLinkState extends State<_NavLink> {
 
   @override
   Widget build(BuildContext context) {
-    // La barre de navigation est déjà bleue (AppColors.primaire) : la
-    // bordure bleue de survol prévue par la charte n'y serait pas visible —
-    // remplacée par un fond clair, qui lui se voit nettement sur ce fond.
+    // Fond sombre de la barre (AppColors.encre) : un fond clair au survol
+    // s'y voit nettement, contrairement à une bordure de la même teinte.
     // L'item actif se distingue par un fond plus marqué ET un texte orange
-    // (accent), conformément à la charte.
+    // (accent).
     final color = widget.isActive ? AppColors.orange : (_hovered ? Colors.white : const Color(0xFFB9C4CE));
     return MouseRegion(
       cursor: SystemMouseCursors.click,

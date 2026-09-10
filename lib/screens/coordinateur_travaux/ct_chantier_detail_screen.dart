@@ -33,7 +33,7 @@ class CtChantierDetailScreen extends StatelessWidget {
 
     if (chantier == null) {
       return ResponsiveLayout(
-        appBar: GlassAppBar(title: const Text('Chantier'), backgroundColor: AppColors.primaire, foregroundColor: Colors.white),
+        appBar: GlassAppBar(title: const Text('Chantier'), backgroundColor: AppColors.encre, foregroundColor: Colors.white),
         child: const Center(child: Text('Chantier introuvable')),
       );
     }
@@ -48,7 +48,7 @@ class CtChantierDetailScreen extends StatelessWidget {
     return ResponsiveLayout(
       appBar: GlassAppBar(
         title: Text(chantier.reference),
-        backgroundColor: AppColors.primaire,
+        backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,
         actions: [
           IconButton(

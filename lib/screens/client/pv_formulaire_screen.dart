@@ -149,7 +149,7 @@ class _PvFormulaireScreenState extends State<PvFormulaireScreen> {
     return ResponsiveLayout(
       appBar: GlassAppBar(
         title: const Text('Procès-verbal de réception'),
-        backgroundColor: AppColors.primaire,
+        backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,
       ),
       child: chantier == null

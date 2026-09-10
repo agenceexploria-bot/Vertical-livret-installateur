@@ -25,7 +25,7 @@ class ReceptionMarchandisesScreen extends StatelessWidget {
     return ResponsiveLayout(
       appBar: GlassAppBar(
         title: const Text('Réception des marchandises'),
-        backgroundColor: AppColors.primaire,
+        backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,
       ),
       child: Column(

@@ -59,7 +59,7 @@ class _SavListScreenState extends State<SavListScreen> with SingleTickerProvider
     return ResponsiveLayout(
       appBar: GlassAppBar(
         title: const Text('Interventions SAV'),
-        backgroundColor: AppColors.primaire,
+        backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,
       ),
       child: Column(
@@ -74,9 +74,9 @@ class _SavListScreenState extends State<SavListScreen> with SingleTickerProvider
               color: AppColors.blanc,
               child: TabBar(
                 controller: _tabController,
-                labelColor: AppColors.primaire,
+                labelColor: AppColors.orange,
                 unselectedLabelColor: AppColors.acier,
-                indicatorColor: AppColors.primaire,
+                indicatorColor: AppColors.orange,
                 labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                 tabs: [
                   Tab(text: 'En cours (${enCours.length})'),

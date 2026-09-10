@@ -98,7 +98,7 @@ class _CtNewChantierScreenState extends State<CtNewChantierScreen> {
     return ResponsiveLayout(
       appBar: GlassAppBar(
         title: const Text('Nouveau chantier'),
-        backgroundColor: AppColors.primaire,
+        backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,
       ),
       child: ListView(

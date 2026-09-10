@@ -90,7 +90,7 @@ class _PvSavFormulaireScreenState extends State<PvSavFormulaireScreen> {
     return ResponsiveLayout(
       appBar: GlassAppBar(
         title: const Text('Procès-verbal d\'intervention SAV'),
-        backgroundColor: AppColors.primaire,
+        backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,
       ),
       child: chantier == null

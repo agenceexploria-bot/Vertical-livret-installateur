@@ -53,7 +53,7 @@ class _AppCardState extends State<AppCard> {
                 end: Alignment.bottomRight,
                 colors: [Colors.white, AppColors.fond],
               ),
-              border: Border.all(color: hovered ? AppColors.primaire.withValues(alpha: 0.35) : Colors.transparent, width: 1.5),
+              border: Border.all(color: hovered ? AppColors.orange.withValues(alpha: 0.3) : Colors.transparent, width: 1.5),
               boxShadow: [
                 BoxShadow(
                   color: AppColors.encre.withValues(alpha: hovered ? 0.22 : 0.08),

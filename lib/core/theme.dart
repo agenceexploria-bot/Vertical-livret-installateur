@@ -2,14 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppColors {
-  // Charte à deux couleurs (refonte) : primaire bleu profond — navigation,
-  // éléments structurels, liens — et accent orange ambre — actions
-  // principales (Valider/Créer/Ajouter), alertes, badges d'action. Remplace
-  // l'ancienne charte anthracite + rouge. `encre` et `orange` gardent leur
-  // nom historique pour ne pas casser les dizaines d'usages existants dans
-  // l'app (orange = déjà l'accent partout) — seule la valeur de `orange`
-  // change ; `primaire` est nouveau.
-  static const Color primaire = Color(0xFF1D4ED8);
+  // Couleurs de marque — reprises du vrai logo Vertical (anthracite + rouge),
+  // le site officiel n'étant pas accessible pour vérification directe
+  // (protégé par Cloudflare). `encre` et `orange` gardent leur nom historique
+  // pour ne pas casser les dizaines d'usages existants dans l'app — seule la
+  // valeur a changé.
   static const Color encre = Color(0xFF2D2A26);
   static const Color acier = Color(0xFF4C5E6E);
   static const Color acierClair = Color(0xFF98A3AE);
@@ -20,10 +17,10 @@ class AppColors {
   static const Color fond = Color(0xFFF2F0ED);
   static const Color blanc = Color(0xFFFFFFFF);
 
-  // Couleurs d'état (sémantique inchangée par la refonte)
+  // Couleurs d'état
   static const Color vert = Color(0xFF1E7F5C);
   static const Color rouge = Color(0xFFB02E2E);
-  static const Color orange = Color(0xFFF59E0B);
+  static const Color orange = Color(0xFFE11F1B);
 }
 
 /// Ton clair du orange (utilisé pour les dégradés boutons/glow) — dérivé de
@@ -50,9 +47,6 @@ BoxDecoration appButtonDecoration(Set<WidgetState> states, {double radius = 16})
   // Au survol, le dégradé est nettement assombri (pas seulement l'ombre) —
   // un changement de teinte sur la face du bouton est bien plus perceptible
   // qu'une variation d'ombre portée à peine visible sous un aplat coloré.
-  // Assombri plutôt qu'éclairci : c'est l'accent (orange ambre) qui remplit
-  // ce bouton — un bouton rempli de la couleur primaire (bleu), lui,
-  // s'éclaircirait au survol (aucun bouton de ce type actuellement).
   final topColor = hovered ? Color.lerp(_orangeClair, Colors.black, 0.12)! : _orangeClair;
   final bottomColor = hovered ? Color.lerp(AppColors.orange, Colors.black, 0.12)! : AppColors.orange;
   return BoxDecoration(
@@ -101,15 +95,12 @@ class AppTheme {
       useMaterial3: true,
       scaffoldBackgroundColor: AppColors.fond,
       colorScheme: ColorScheme.fromSeed(
-        seedColor: AppColors.primaire,
-        primary: AppColors.primaire,
+        seedColor: AppColors.orange,
+        primary: AppColors.orange,
         onPrimary: Colors.white,
-        secondary: AppColors.orange,
-        onSecondary: Colors.white,
         surface: AppColors.blanc,
         onSurface: AppColors.encre,
         surfaceTint: Colors.transparent,
-        error: AppColors.rouge,
       ),
       // Teinte de survol par défaut pour tout InkWell/ListTile/PopupMenuItem
       // qui ne définit pas la sienne (menus déroulants, lignes de tableau,
@@ -117,7 +108,7 @@ class AppTheme {
       hoverColor: AppColors.acier.withValues(alpha: 0.1),
       textTheme: _textTheme,
       appBarTheme: AppBarTheme(
-        backgroundColor: AppColors.primaire,
+        backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -147,7 +138,7 @@ class AppTheme {
         ),
         focusedBorder: const UnderlineInputBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-          borderSide: BorderSide(color: AppColors.primaire, width: 2.4),
+          borderSide: BorderSide(color: AppColors.orange, width: 2.4),
         ),
         errorBorder: const UnderlineInputBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
@@ -162,7 +153,7 @@ class AppTheme {
           return GoogleFonts.outfit(
             fontSize: 16,
             fontWeight: FontWeight.w600,
-            color: states.contains(WidgetState.focused) ? AppColors.primaire : AppColors.acier,
+            color: states.contains(WidgetState.focused) ? AppColors.orange : AppColors.acier,
           );
         }),
         hintStyle: GoogleFonts.outfit(color: AppColors.acierClair, fontSize: 16),

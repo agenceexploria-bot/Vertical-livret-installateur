@@ -273,7 +273,7 @@ class _RexScreenState extends State<RexScreen> with SingleTickerProviderStateMix
     return ResponsiveLayout(
       appBar: GlassAppBar(
         title: const Text('Retour d\'expérience'),
-        backgroundColor: AppColors.primaire,
+        backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,
       ),
       child: SingleChildScrollView(

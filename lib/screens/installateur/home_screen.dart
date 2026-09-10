@@ -44,7 +44,7 @@ class _InstallateurHomeScreenState extends State<InstallateurHomeScreen> {
     return ResponsiveLayout(
       appBar: GlassAppBar(
         title: const Text('Accueil'),
-        backgroundColor: AppColors.primaire,
+        backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,
         actions: [
           Icon(networkState.isOnline ? Icons.wifi : Icons.wifi_off, color: Colors.white),
@@ -120,7 +120,7 @@ class _HomeTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: AppColors.primaire,
+      color: AppColors.encre,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),

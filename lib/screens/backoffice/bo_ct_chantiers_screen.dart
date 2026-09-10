@@ -287,10 +287,10 @@ class _BoCtChantiersScreenState extends State<BoCtChantiersScreen> {
             curve: Curves.easeOut,
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
-              color: selected ? AppColors.primaire.withValues(alpha: 0.12) : Colors.transparent,
+              color: selected ? AppColors.orange.withValues(alpha: 0.12) : Colors.transparent,
               borderRadius: BorderRadius.circular(6),
             ),
-            child: Icon(icon, size: 18, color: selected ? AppColors.primaire : AppColors.acierClair),
+            child: Icon(icon, size: 18, color: selected ? AppColors.orange : AppColors.acierClair),
           ),
         ),
       ),
