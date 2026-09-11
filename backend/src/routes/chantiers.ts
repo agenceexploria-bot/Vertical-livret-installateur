@@ -535,6 +535,34 @@ chantiersRouter.post('/:reference/rex', requireAuth, requireRattachement, async 
   res.json({ chantier: serializeChantier(chantier!) });
 });
 
+// Relance manuellement la transcription automatique d'un REX déposé sans
+// transcription (échec initial de POST /rex, ou Whisper indisponible au
+// moment de l'envoi) — réservé au CT/Qualité/Admin. Écrase toute
+// transcription déjà présente si rappelée.
+chantiersRouter.post(
+  '/:reference/rex/:rexId/transcribe',
+  requireAuth,
+  requireRole('coordinateurTravaux', 'qualite', 'admin'),
+  async (req, res) => {
+    const chantier = await prisma.chantier.findUnique({ where: { reference: req.params.reference } });
+    if (!chantier) return res.status(404).json({ error: 'Chantier introuvable' });
+
+    const rex = await prisma.rex.findUnique({ where: { id: req.params.rexId } });
+    if (!rex || rex.chantierId !== chantier.id) return res.status(404).json({ error: 'REX introuvable' });
+
+    if (!rex.audioPath) return res.status(400).json({ error: 'Ce REX ne contient pas de note vocale à transcrire' });
+
+    const transcription = await transcribeAudio(rex.audioPath);
+    if (!transcription) return res.status(422).json({ error: 'La transcription automatique a échoué' });
+
+    await prisma.rex.update({ where: { id: rex.id }, data: { transcription } });
+
+    const updated = await prisma.chantier.findUnique({ where: { id: chantier.id }, include: CHANTIER_INCLUDE });
+    await triggerChantierChanged(updated!.reference);
+    res.json({ chantier: serializeChantier(updated!) });
+  },
+);
+
 // Supprime une entrée REX précise — réservé au CT/Admin. Suppression
 // immédiate et définitive, y compris de la note vocale sur Vercel Blob si
 // elle existe. Les autres entrées REX du chantier ne sont pas affectées.

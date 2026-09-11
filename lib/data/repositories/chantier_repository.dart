@@ -256,6 +256,14 @@ class ChantierRepository {
     return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
   }
 
+  /// Relance la transcription automatique d'un REX audio sans transcription
+  /// (CT/Qualité/Admin, back-office) — toujours en ligne (appelle Whisper
+  /// côté serveur).
+  Future<Chantier> transcribeRex(String reference, String rexId) async {
+    final data = await _api.transcribeRex(reference, rexId);
+    return Chantier.fromJson(data['chantier'] as Map<String, dynamic>);
+  }
+
   /// Dépôt du gabarit PV par le back-office — toujours en ligne, comme
   /// [addDocumentChantier] (action web, pas de file d'attente hors-ligne).
   Future<Chantier> uploadPvDocument(String reference, String file) async {

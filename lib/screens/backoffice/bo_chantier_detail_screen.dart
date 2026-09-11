@@ -395,6 +395,7 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
 
   Widget _buildRex(BuildContext context, Chantier chantier, UserRole? role) {
     final peutSupprimer = role == UserRole.coordinateurTravaux || role == UserRole.admin;
+    final peutTranscrire = role == UserRole.coordinateurTravaux || role == UserRole.qualite || role == UserRole.admin;
     return BoPanel(
       title: 'Retour d\'expérience (REX) (${chantier.rex.length})',
       child: chantier.rex.isEmpty
@@ -409,11 +410,28 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
                       audioController: _audioController,
                       onTelechargerAudio: rex.audioPath != null ? () => _telechargerDocument(context, rex.audioPath!) : null,
                       onSupprimer: peutSupprimer ? () => _confirmerSuppressionRex(context, chantier, rex) : null,
+                      onTranscrire: peutTranscrire ? () => _transcrireRex(context, chantier, rex) : null,
                     ),
                   ),
               ],
             ),
     );
+  }
+
+  /// Relance la transcription automatique d'un REX audio sans transcription
+  /// — voir RexCard, qui affiche son propre indicateur de chargement pendant
+  /// l'appel et se met à jour automatiquement (diffusion Pusher) une fois
+  /// la transcription reçue.
+  Future<void> _transcrireRex(BuildContext context, Chantier chantier, Rex rex) async {
+    try {
+      await context.read<ChantierState>().transcribeRex(chantier.reference, rex.id);
+    } on ApiException catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('La transcription a échoué. Réessayez.')));
+    }
   }
 
   void _confirmerSuppressionRex(BuildContext context, Chantier chantier, Rex rex) {

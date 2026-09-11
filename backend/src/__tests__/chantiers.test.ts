@@ -59,6 +59,18 @@ async function createAdmin() {
   return { user: admin, accessToken: login.body.accessToken as string };
 }
 
+async function createQualite() {
+  const passwordHash = await bcrypt.hash('demodemo', 10);
+  const qualite = await prisma.user.create({
+    data: {
+      nom: 'Dubois', prenom: 'Qualité', mobile: '0102030408', email: 'qualite@actiwork.fr',
+      passwordHash, role: 'qualite', isActive: true,
+    },
+  });
+  const login = await request(app).post('/auth/login').send({ identifier: 'qualite@actiwork.fr', password: 'demodemo' });
+  return { user: qualite, accessToken: login.body.accessToken as string };
+}
+
 async function createInstallateur(overrides: Partial<{ isActive: boolean; mobile: string }> = {}) {
   const signup = await doSignup(app, {
     nom: 'Roux', prenom: 'Thomas', mobile: overrides.mobile ?? '0652417890', email: 't.roux@elevpro.fr', password: 'demodemo',
@@ -660,6 +672,123 @@ describe('POST /chantiers/:reference/rex', () => {
       'Deuxième REX.',
       'Premier REX.',
     ]);
+  });
+});
+
+describe('POST /chantiers/:reference/rex/:rexId/transcribe', () => {
+  it('transcrit un REX audio sans transcription et diffuse la mise à jour', async () => {
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
+    const audioUrl = await fakeUpload('rex.webm', ONE_PX_PNG_BASE64, 'audio/webm');
+    const created = await request(app)
+      .post('/chantiers/LD64397/rex')
+      .set('Authorization', `Bearer ${ct.accessToken}`)
+      .send({ audioUrl });
+    const rexId = created.body.chantier.rex[0].id;
+    expect(created.body.chantier.rex[0].transcription).toBeNull();
+
+    const res = await withStubbedTranscription(
+      'GROQ_API_KEY',
+      GROQ_TRANSCRIPTION_URL,
+      new Response(JSON.stringify({ text: 'Tout est conforme, RAS.' }), { status: 200 }),
+      () =>
+        request(app)
+          .post(`/chantiers/LD64397/rex/${rexId}/transcribe`)
+          .set('Authorization', `Bearer ${ct.accessToken}`),
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.chantier.rex[0].transcription).toBe('Tout est conforme, RAS.');
+  });
+
+  it('autorise la Qualité à déclencher la transcription', async () => {
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
+    const audioUrl = await fakeUpload('rex.webm', ONE_PX_PNG_BASE64, 'audio/webm');
+    const created = await request(app)
+      .post('/chantiers/LD64397/rex')
+      .set('Authorization', `Bearer ${ct.accessToken}`)
+      .send({ audioUrl });
+    const rexId = created.body.chantier.rex[0].id;
+
+    const qualite = await createQualite();
+    const res = await withStubbedTranscription(
+      'GROQ_API_KEY',
+      GROQ_TRANSCRIPTION_URL,
+      new Response(JSON.stringify({ text: 'RAS.' }), { status: 200 }),
+      () =>
+        request(app)
+          .post(`/chantiers/LD64397/rex/${rexId}/transcribe`)
+          .set('Authorization', `Bearer ${qualite.accessToken}`),
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.chantier.rex[0].transcription).toBe('RAS.');
+  });
+
+  it('refuse si le REX ne contient pas de note vocale', async () => {
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
+    const created = await request(app)
+      .post('/chantiers/LD64397/rex')
+      .set('Authorization', `Bearer ${ct.accessToken}`)
+      .send({ transcription: 'Déjà du texte.' });
+    const rexId = created.body.chantier.rex[0].id;
+
+    const res = await request(app)
+      .post(`/chantiers/LD64397/rex/${rexId}/transcribe`)
+      .set('Authorization', `Bearer ${ct.accessToken}`);
+    expect(res.status).toBe(400);
+  });
+
+  it('renvoie une erreur si la transcription automatique échoue', async () => {
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
+    const audioUrl = await fakeUpload('rex.webm', ONE_PX_PNG_BASE64, 'audio/webm');
+    const created = await request(app)
+      .post('/chantiers/LD64397/rex')
+      .set('Authorization', `Bearer ${ct.accessToken}`)
+      .send({ audioUrl });
+    const rexId = created.body.chantier.rex[0].id;
+
+    const res = await withStubbedTranscription('GROQ_API_KEY', GROQ_TRANSCRIPTION_URL, new Response('erreur', { status: 500 }), () =>
+      request(app)
+        .post(`/chantiers/LD64397/rex/${rexId}/transcribe`)
+        .set('Authorization', `Bearer ${ct.accessToken}`),
+    );
+    expect(res.status).toBe(422);
+  });
+
+  it('refuse à un installateur de déclencher la transcription', async () => {
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
+    const audioUrl = await fakeUpload('rex.webm', ONE_PX_PNG_BASE64, 'audio/webm');
+    const created = await request(app)
+      .post('/chantiers/LD64397/rex')
+      .set('Authorization', `Bearer ${ct.accessToken}`)
+      .send({ audioUrl });
+    const rexId = created.body.chantier.rex[0].id;
+
+    const installateur = await createInstallateur({ isActive: true });
+    await request(app)
+      .post('/chantiers/LD64397/rattacher')
+      .set('Authorization', `Bearer ${ct.accessToken}`)
+      .send({ userId: installateur.user.id });
+
+    const res = await request(app)
+      .post(`/chantiers/LD64397/rex/${rexId}/transcribe`)
+      .set('Authorization', `Bearer ${installateur.accessToken}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('renvoie 404 si l\'entrée REX n\'existe pas', async () => {
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
+
+    const res = await request(app)
+      .post('/chantiers/LD64397/rex/inexistant/transcribe')
+      .set('Authorization', `Bearer ${ct.accessToken}`);
+    expect(res.status).toBe(404);
   });
 });
 

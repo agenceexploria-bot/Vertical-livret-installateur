@@ -632,6 +632,11 @@ class ApiClient {
   Future<Map<String, dynamic>> deleteRex(String reference, String rexId) =>
       _request('DELETE', '/chantiers/$reference/rex/$rexId');
 
+  /// Relance la transcription automatique d'un REX audio sans transcription
+  /// (CT/Qualité/Admin).
+  Future<Map<String, dynamic>> transcribeRex(String reference, String rexId) =>
+      _request('POST', '/chantiers/$reference/rex/$rexId/transcribe');
+
   /// Dépôt (ou remplacement) du gabarit PV par le back-office — ne valide
   /// rien, voir signPv pour la signature qui valide effectivement le PV.
   Future<Map<String, dynamic>> uploadPvDocument(String reference, String fileUrl) {

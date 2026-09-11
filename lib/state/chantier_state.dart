@@ -317,6 +317,15 @@ class ChantierState extends ChangeNotifier {
     }
   }
 
+  /// Relance la transcription automatique d'un REX audio sans transcription.
+  /// Pas de mise à jour optimiste (le texte n'est connu qu'au retour du
+  /// serveur) — la carte REX affiche son propre indicateur de chargement le
+  /// temps de l'appel (voir RexCard).
+  Future<void> transcribeRex(String reference, String rexId) async {
+    final updated = await _repository.transcribeRex(reference, rexId);
+    _replaceInList(updated);
+  }
+
   /// Dépôt (ou remplacement) du gabarit PV par le back-office — ne valide
   /// rien (voir [signPv]).
   Future<void> uploadPvDocument(String reference, String file) async {
