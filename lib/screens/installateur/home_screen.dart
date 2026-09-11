@@ -5,6 +5,7 @@ import '../../core/theme.dart';
 import '../../core/widgets/glass_app_bar.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../core/widgets/user_avatar.dart';
+import '../../core/widgets/vertical_logo.dart';
 import '../../state/auth_state.dart';
 import '../../state/network_state.dart';
 import '../../state/chantier_state.dart';
@@ -74,42 +75,87 @@ class _InstallateurHomeScreenState extends State<InstallateurHomeScreen> {
           ? const Center(child: CircularProgressIndicator(color: AppColors.orange))
           : Padding(
               padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  Expanded(
-                    child: _HomeTile(
-                      titre: 'Mes chantiers',
-                      sousTitre: 'Installations en cours et terminées',
-                      icon: Icons.construction_outlined,
-                      count: chantierState.chantiersInstallationList.length,
-                      onTap: () => context.push('/mes-chantiers'),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Expanded(
-                    child: _HomeTile(
-                      titre: 'Interventions SAV',
-                      sousTitre: 'Service après-vente',
-                      icon: Icons.build_outlined,
-                      count: chantierState.chantiersSavList.length,
-                      onTap: () => context.push('/sav'),
-                    ),
-                  ),
-                ],
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return Column(
+                    children: [
+                      HomeLogoHeader(constraints: constraints),
+                      const SizedBox(height: 14),
+                      Expanded(
+                        child: HomeTile(
+                          titre: 'Mes chantiers',
+                          sousTitre: 'Installations en cours et terminées',
+                          icon: Icons.construction_outlined,
+                          count: chantierState.chantiersInstallationList.length,
+                          onTap: () => context.push('/mes-chantiers'),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Expanded(
+                        child: HomeTile(
+                          titre: 'Interventions SAV',
+                          sousTitre: 'Service après-vente',
+                          icon: Icons.build_outlined,
+                          count: chantierState.chantiersSavList.length,
+                          onTap: () => context.push('/sav'),
+                        ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
     );
   }
 }
 
-class _HomeTile extends StatelessWidget {
+/// Logo + "Accueil" au-dessus des tuiles — hauteur du logo adaptative
+/// (priorité absolue : les deux tuiles doivent rester visibles sans scroll
+/// sur un écran mobile standard, voir home_screen_test.dart). 64px sur
+/// mobile, jusqu'à 80px sur grand écran ; repli à 48px si la hauteur
+/// réellement disponible pour ce bloc + les deux tuiles est trop serrée
+/// (petit écran, clavier...) — jamais le logo ne doit pousser les tuiles
+/// hors écran. Le seuil "grand écran" se base sur MediaQuery (largeur
+/// réelle de l'appareil/fenêtre), pas sur [constraints] : ResponsiveLayout
+/// plafonne la largeur de contenu à 500px pour simuler un mobile même sur
+/// le Web, donc constraints.maxWidth ne dépasse jamais ce seuil.
+/// [constraints], lui, sert au repli sur la hauteur (jamais plafonnée de la
+/// même façon par ResponsiveLayout).
+class HomeLogoHeader extends StatelessWidget {
+  final BoxConstraints constraints;
+
+  const HomeLogoHeader({super.key, required this.constraints});
+
+  @override
+  Widget build(BuildContext context) {
+    final base = MediaQuery.sizeOf(context).width >= 600 ? 80.0 : 64.0;
+    // Sur un mobile standard (360×640, la cible visée), la hauteur dispo pour
+    // ce bloc + les deux tuiles mesure ~479px une fois AppBar, barre du bas
+    // et padding déduits — [base] y tient encore confortablement (mesuré,
+    // voir home_screen_test.dart) ; en dessous de 470, le contenu des tuiles
+    // (titre + sous-titre + badge) ne tient plus à 64px, d'où le repli 48px.
+    final logoHeight = constraints.maxHeight < 470 ? 48.0 : base;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        VerticalLogo(height: logoHeight),
+        const SizedBox(height: 4),
+        Text('Accueil', style: Theme.of(context).textTheme.bodySmall),
+      ],
+    );
+  }
+}
+
+class HomeTile extends StatelessWidget {
   final String titre;
   final String sousTitre;
   final IconData icon;
   final int count;
   final VoidCallback onTap;
 
-  const _HomeTile({
+  const HomeTile({
+    super.key,
     required this.titre,
     required this.sousTitre,
     required this.icon,
@@ -143,6 +189,12 @@ class _HomeTile extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       sousTitre,
+                      // Sur une seule ligne : à deux lignes, ce sous-titre
+                      // fait déborder la tuile une fois la hauteur réduite
+                      // par le logo compact au-dessus (voir HomeLogoHeader
+                      // et home_screen_test.dart).
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 13),
                     ),
                     const SizedBox(height: 10),
