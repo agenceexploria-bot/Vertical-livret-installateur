@@ -44,7 +44,13 @@ class _InstallateurHomeScreenState extends State<InstallateurHomeScreen> {
 
     return ResponsiveLayout(
       appBar: GlassAppBar(
-        title: const Text('Accueil'),
+        // Uniquement le logo dans la bande sombre — "Accueil" est un
+        // libellé de section, affiché juste en dessous (voir child), pas un
+        // titre d'AppBar. `bubble: true` (fond blanc derrière le logo,
+        // comme BoShell sur la même couleur AppColors.encre) garantit le
+        // contraste plutôt qu'un logo sombre sur fond sombre.
+        title: const VerticalLogo(height: 30, bubble: true),
+        centerTitle: false,
         backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,
         actions: [
@@ -75,74 +81,35 @@ class _InstallateurHomeScreenState extends State<InstallateurHomeScreen> {
           ? const Center(child: CircularProgressIndicator(color: AppColors.orange))
           : Padding(
               padding: const EdgeInsets.all(16),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  return Column(
-                    children: [
-                      HomeLogoHeader(constraints: constraints),
-                      const SizedBox(height: 14),
-                      Expanded(
-                        child: HomeTile(
-                          titre: 'Mes chantiers',
-                          sousTitre: 'Installations en cours et terminées',
-                          icon: Icons.construction_outlined,
-                          count: chantierState.chantiersInstallationList.length,
-                          onTap: () => context.push('/mes-chantiers'),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Expanded(
-                        child: HomeTile(
-                          titre: 'Interventions SAV',
-                          sousTitre: 'Service après-vente',
-                          icon: Icons.build_outlined,
-                          count: chantierState.chantiersSavList.length,
-                          onTap: () => context.push('/sav'),
-                        ),
-                      ),
-                    ],
-                  );
-                },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Libellé de section, juste sous la bande du logo — pas
+                  // dans l'AppBar (voir GlassAppBar ci-dessus).
+                  Text('Accueil', style: Theme.of(context).textTheme.bodySmall),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: HomeTile(
+                      titre: 'Mes chantiers',
+                      sousTitre: 'Installations en cours et terminées',
+                      icon: Icons.construction_outlined,
+                      count: chantierState.chantiersInstallationList.length,
+                      onTap: () => context.push('/mes-chantiers'),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: HomeTile(
+                      titre: 'Interventions SAV',
+                      sousTitre: 'Service après-vente',
+                      icon: Icons.build_outlined,
+                      count: chantierState.chantiersSavList.length,
+                      onTap: () => context.push('/sav'),
+                    ),
+                  ),
+                ],
               ),
             ),
-    );
-  }
-}
-
-/// Logo + "Accueil" au-dessus des tuiles — hauteur du logo adaptative
-/// (priorité absolue : les deux tuiles doivent rester visibles sans scroll
-/// sur un écran mobile standard, voir home_screen_test.dart). 64px sur
-/// mobile, jusqu'à 80px sur grand écran ; repli à 48px si la hauteur
-/// réellement disponible pour ce bloc + les deux tuiles est trop serrée
-/// (petit écran, clavier...) — jamais le logo ne doit pousser les tuiles
-/// hors écran. Le seuil "grand écran" se base sur MediaQuery (largeur
-/// réelle de l'appareil/fenêtre), pas sur [constraints] : ResponsiveLayout
-/// plafonne la largeur de contenu à 500px pour simuler un mobile même sur
-/// le Web, donc constraints.maxWidth ne dépasse jamais ce seuil.
-/// [constraints], lui, sert au repli sur la hauteur (jamais plafonnée de la
-/// même façon par ResponsiveLayout).
-class HomeLogoHeader extends StatelessWidget {
-  final BoxConstraints constraints;
-
-  const HomeLogoHeader({super.key, required this.constraints});
-
-  @override
-  Widget build(BuildContext context) {
-    final base = MediaQuery.sizeOf(context).width >= 600 ? 80.0 : 64.0;
-    // Sur un mobile standard (360×640, la cible visée), la hauteur dispo pour
-    // ce bloc + les deux tuiles mesure ~479px une fois AppBar, barre du bas
-    // et padding déduits — [base] y tient encore confortablement (mesuré,
-    // voir home_screen_test.dart) ; en dessous de 470, le contenu des tuiles
-    // (titre + sous-titre + badge) ne tient plus à 64px, d'où le repli 48px.
-    final logoHeight = constraints.maxHeight < 470 ? 48.0 : base;
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        VerticalLogo(height: logoHeight),
-        const SizedBox(height: 4),
-        Text('Accueil', style: Theme.of(context).textTheme.bodySmall),
-      ],
     );
   }
 }
@@ -189,13 +156,13 @@ class HomeTile extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       sousTitre,
-                      // Sur une seule ligne : à deux lignes, ce sous-titre
-                      // fait déborder la tuile une fois la hauteur réduite
-                      // par le logo compact au-dessus (voir HomeLogoHeader
-                      // et home_screen_test.dart).
+                      // Sur une seule ligne, par sécurité sur un écran très
+                      // étroit (voir home_screen_test.dart) — la tuile a
+                      // largement la place en hauteur depuis que le logo est
+                      // passé dans l'AppBar plutôt que dans le corps.
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 13),
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 14),
                     ),
                     const SizedBox(height: 10),
                     Container(

@@ -562,7 +562,7 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
       title: 'Filet de secours',
       child: Text(
         'PDF récapitulatif (fiche + consignes) envoyé automatiquement à chaque rattachement — lisible sans app ni compte.',
-        style: TextStyle(fontSize: 12, color: AppColors.acier),
+        style: TextStyle(fontSize: 14, color: AppColors.acier),
       ),
     );
   }
