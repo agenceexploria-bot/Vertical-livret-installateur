@@ -303,7 +303,7 @@ class AppRouter {
         GoRoute(path: '/backoffice/ct/comptes', builder: (context, state) => const BoComptesScreen()),
         GoRoute(path: '/backoffice/ct/comptes/:id', builder: (context, state) => const BoInstallateurDetailScreen()),
 
-        // Espace Administration : flux d'activité + validation des comptes
+        // Espace Administrateur : flux d'activité + validation des comptes
         // internes — en plus de l'espace CT ci-dessus, auquel l'Admin a aussi accès.
         GoRoute(path: '/backoffice/admin', builder: (context, state) => const BoAdminDashboardScreen()),
         // Fiche détaillée d'un compte, tous rôles confondus (sauf Admin) — voir

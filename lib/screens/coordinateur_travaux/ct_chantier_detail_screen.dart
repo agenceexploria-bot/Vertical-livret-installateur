@@ -180,7 +180,7 @@ class CtChantierDetailScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          _kv('Chantier d\'origine', chantier.parentReference ?? '—'),
+          _kv('Chantier terminé', chantier.parentReference ?? '—'),
           _kv('Date d\'intervention', chantier.savDate != null ? DateFormat('dd/MM/yyyy').format(chantier.savDate!) : '—'),
           if (chantier.descriptionIntervention != null) _kv('Problème signalé', chantier.descriptionIntervention!),
           const SizedBox(height: 4),

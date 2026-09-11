@@ -8,6 +8,7 @@ import 'package:vertical_app/data/api_client.dart';
 import 'package:vertical_app/data/local/app_database.dart';
 import 'package:vertical_app/data/repositories/chantier_repository.dart';
 import 'package:vertical_app/screens/backoffice/widgets/creer_sav_dialog.dart';
+import 'package:vertical_app/screens/backoffice/widgets/nouveau_chantier_rapide_dialog.dart';
 import 'package:vertical_app/state/chantier_state.dart';
 import 'package:vertical_app/state/comptes_state.dart';
 
@@ -142,8 +143,8 @@ void main() {
     await tester.tap(find.text('Créer'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Choisissez le chantier d\'origine.'), findsOneWidget);
-    expect(api.lastReference, isNull, reason: 'createSav ne doit jamais être appelé sans chantier d\'origine');
+    expect(find.text('Choisissez le chantier terminé.'), findsOneWidget);
+    expect(api.lastReference, isNull, reason: 'createSav ne doit jamais être appelé sans chantier terminé sélectionné');
   });
 
   testWidgets('sélection du chantier via l\'autocomplete + description + installateur -> création OK', (tester) async {
@@ -169,5 +170,23 @@ void main() {
     expect(api.lastDescription, 'Bruit anormal en cabine');
     expect(api.lastInstallateurId, 'user-1');
     expect(find.byType(CreerSavDialog), findsNothing, reason: 'le dialogue se ferme après une création réussie');
+  });
+
+  testWidgets('bouton "Nouveau chantier" : le mini-formulaire crée le chantier et le présélectionne au retour', (tester) async {
+    await pumpDialog(tester);
+
+    await tester.tap(find.text('Nouveau chantier'));
+    await tester.pumpAndSettle();
+    expect(find.byType(NouveauChantierRapideDialog), findsOneWidget);
+
+    await tester.enterText(find.widgetWithText(TextField, 'Référence'), 'LD64397');
+    await tester.enterText(find.widgetWithText(TextField, 'Client'), 'Costockage');
+    await tester.enterText(find.widgetWithText(TextField, 'Ville'), 'Meyzieu (69)');
+    await tester.tap(find.text('Créer').last);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(NouveauChantierRapideDialog), findsNothing, reason: 'retour au dialogue SAV après création');
+    expect(find.byType(CreerSavDialog), findsOneWidget);
+    expect(find.text('LD64397 — Costockage'), findsOneWidget, reason: 'chantier fraîchement créé présélectionné dans le champ');
   });
 }

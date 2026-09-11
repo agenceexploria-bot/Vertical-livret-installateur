@@ -117,10 +117,11 @@ class ChantierState extends ChangeNotifier {
     return null;
   }
 
-  Future<void> createChantier(Map<String, dynamic> body) async {
+  Future<Chantier> createChantier(Map<String, dynamic> body) async {
     final created = await _repository.createChantier(body);
     _chantiers = [..._chantiers, created];
     notifyListeners();
+    return created;
   }
 
   /// Module SAV — création d'une intervention SAV depuis la fiche du

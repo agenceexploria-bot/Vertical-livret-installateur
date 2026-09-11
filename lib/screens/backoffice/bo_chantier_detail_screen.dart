@@ -241,7 +241,7 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
             OutlinedButton.icon(
               onPressed: () => context.push('/backoffice/ct/chantiers/${chantier.parentReference}'),
               icon: const Icon(Icons.open_in_new, size: 16),
-              label: Text('Voir le chantier d\'origine (${chantier.parentReference})'),
+              label: Text('Voir le chantier terminé (${chantier.parentReference})'),
               style: OutlinedButton.styleFrom(minimumSize: const Size(0, 38), padding: const EdgeInsets.symmetric(horizontal: 14)),
             ),
           ],
@@ -577,7 +577,7 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
       title: 'Intervention SAV',
       child: Column(
         children: [
-          BoKv(label: 'Chantier d\'origine', value: Text(chantier.parentReference ?? '—', style: const TextStyle(fontSize: 12.5))),
+          BoKv(label: 'Chantier terminé', value: Text(chantier.parentReference ?? '—', style: const TextStyle(fontSize: 12.5))),
           BoKv(
             label: 'Date d\'intervention',
             value: Text(

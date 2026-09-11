@@ -7,6 +7,7 @@ import '../../../data/api_client.dart';
 import '../../../data/models/chantier.dart';
 import '../../../state/chantier_state.dart';
 import '../../../state/comptes_state.dart';
+import 'nouveau_chantier_rapide_dialog.dart';
 
 /// Module SAV — dialogue de création d'une intervention SAV, partagé entre
 /// deux points d'entrée : la fiche d'un chantier d'installation ([chantier]
@@ -29,6 +30,14 @@ class CreerSavDialog extends StatefulWidget {
 
 class _CreerSavDialogState extends State<CreerSavDialog> {
   final _descriptionController = TextEditingController();
+  // Contrôleur externe (plutôt que celui, interne, que l'Autocomplete
+  // créerait tout seul) — nécessaire pour refléter dans le champ le chantier
+  // fraîchement créé depuis le mini-formulaire (voir _ouvrirNouveauChantier),
+  // qui ne passe jamais par onSelected.
+  final _chantierSearchController = TextEditingController();
+  // Autocomplete exige que focusNode et textEditingController soient fournis
+  // ensemble (ou ni l'un ni l'autre) — voir RawAutocomplete.
+  final _chantierSearchFocusNode = FocusNode();
   late Chantier? _chantierOrigine = widget.chantier;
   String? _installateurId;
   DateTime? _savDate;
@@ -38,6 +47,8 @@ class _CreerSavDialogState extends State<CreerSavDialog> {
   @override
   void dispose() {
     _descriptionController.dispose();
+    _chantierSearchController.dispose();
+    _chantierSearchFocusNode.dispose();
     super.dispose();
   }
 
@@ -51,9 +62,22 @@ class _CreerSavDialogState extends State<CreerSavDialog> {
     if (picked != null) setState(() => _savDate = picked);
   }
 
+  /// Ouvre le mini-formulaire de création rapide d'un chantier ancien (voir
+  /// NouveauChantierRapideDialog) au-dessus de ce dialogue — le chantier créé,
+  /// s'il y en a un, est présélectionné dès le retour.
+  Future<void> _ouvrirNouveauChantier() async {
+    final created = await showDialog<Chantier>(
+      context: context,
+      builder: (_) => const NouveauChantierRapideDialog(),
+    );
+    if (created == null || !mounted) return;
+    setState(() => _chantierOrigine = created);
+    _chantierSearchController.text = '${created.reference} — ${created.client}';
+  }
+
   Future<void> _creer() async {
     if (_chantierOrigine == null) {
-      setState(() => _erreur = 'Choisissez le chantier d\'origine.');
+      setState(() => _erreur = 'Choisissez le chantier terminé.');
       return;
     }
     if (_descriptionController.text.trim().isEmpty) {
@@ -118,16 +142,32 @@ class _CreerSavDialogState extends State<CreerSavDialog> {
                     );
                   },
                   onSelected: (c) => setState(() => _chantierOrigine = c),
+                  textEditingController: _chantierSearchController,
+                  focusNode: _chantierSearchFocusNode,
                   fieldViewBuilder: (context, controller, focusNode, onSubmitted) {
                     return TextField(
                       controller: controller,
                       focusNode: focusNode,
                       decoration: const InputDecoration(
-                        labelText: 'Chantier d\'origine',
+                        labelText: 'Chantier terminé',
                         hintText: 'Réf. ERP ou nom du client...',
                       ),
                     );
                   },
+                ),
+                const SizedBox(height: 6),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: OutlinedButton.icon(
+                    onPressed: _ouvrirNouveauChantier,
+                    icon: const Icon(Icons.add, size: 16),
+                    label: const Text('Nouveau chantier'),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 32),
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 14),
               ],

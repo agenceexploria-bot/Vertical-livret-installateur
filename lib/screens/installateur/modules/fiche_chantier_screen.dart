@@ -169,7 +169,7 @@ class FicheChantierScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          _buildRow('Chantier d\'origine', chantier.parentReference ?? '—'),
+          _buildRow('Chantier terminé', chantier.parentReference ?? '—'),
           if (chantier.descriptionIntervention != null) _buildRow('Problème signalé', chantier.descriptionIntervention!),
         ],
       ),

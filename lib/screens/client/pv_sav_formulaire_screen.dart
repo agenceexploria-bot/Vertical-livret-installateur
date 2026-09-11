@@ -236,7 +236,7 @@ class _PvSavFormulaireScreenState extends State<PvSavFormulaireScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _champLectureSeule('Chantier d\'origine', chantier.parentReference ?? '—'),
+          _champLectureSeule('Chantier terminé', chantier.parentReference ?? '—'),
           _champLectureSeule('Client', chantier.client),
           _champLectureSeule('Adresse chantier', chantier.adresse),
           _champLectureSeule('Affaire n°', chantier.referenceAffaire),

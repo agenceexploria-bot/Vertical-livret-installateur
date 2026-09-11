@@ -43,7 +43,7 @@ const _ctSpace = _BoSpace('Espace Coordinateur travaux', _ctTabs);
 /// l'espace CT — l'entrée reste ici en filet de sécurité si un compte encore
 /// marqué `qualite` en base atteint malgré tout cet écran.
 const _spaces = <UserRole, _BoSpace>{
-  UserRole.admin: _BoSpace('Espace Administration', [
+  UserRole.admin: _BoSpace('Espace Administrateur', [
     _BoNavTab('Tableau de bord', '/backoffice/admin', 'admin'),
     _BoNavTab('Listes', '/backoffice/admin/checklists', 'checklists'),
     ..._ctTabs,
@@ -345,9 +345,9 @@ class _NavLinkState extends State<_NavLink> {
   Widget build(BuildContext context) {
     // Fond sombre de la barre (AppColors.encre) : un fond clair au survol
     // s'y voit nettement, contrairement à une bordure de la même teinte.
-    // L'item actif se distingue par un fond plus marqué ET un texte orange
-    // (accent).
-    final color = widget.isActive ? AppColors.orange : (_hovered ? Colors.white : const Color(0xFFB9C4CE));
+    // L'item actif s'inverse complètement (fond blanc plein, texte noir) —
+    // jamais de rouge/orange dans la sélection de navigation.
+    final color = widget.isActive ? Colors.black : (_hovered ? Colors.white : const Color(0xFFB9C4CE));
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hovered = true),
@@ -363,9 +363,7 @@ class _NavLinkState extends State<_NavLink> {
             curve: Curves.easeOut,
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: widget.isActive
-                  ? Colors.white.withValues(alpha: 0.18)
-                  : (_hovered ? Colors.white.withValues(alpha: 0.1) : Colors.transparent),
+              color: widget.isActive ? Colors.white : (_hovered ? Colors.white.withValues(alpha: 0.1) : Colors.transparent),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Row(
