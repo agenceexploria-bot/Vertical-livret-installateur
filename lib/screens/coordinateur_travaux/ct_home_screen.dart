@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme.dart';
-import '../../core/widgets/glass_app_bar.dart';
+import '../../core/widgets/vertical_app_bar.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../core/widgets/app_card.dart';
 import '../../core/widgets/status_indicator.dart';
@@ -130,7 +130,7 @@ class _CtHomeScreenState extends State<CtHomeScreen> {
     final chantiersEnCoursInstallation = chantiersEnCours(chantiersInstallation(chantierState.chantiers));
 
     return ResponsiveLayout(
-      appBar: GlassAppBar(
+      appBar: VerticalAppBar(
         title: const Text('Suivi chantiers'),
         backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,

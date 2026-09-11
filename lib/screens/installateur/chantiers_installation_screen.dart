@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/app_card.dart';
-import '../../core/widgets/glass_app_bar.dart';
+import '../../core/widgets/vertical_app_bar.dart';
 import '../../core/widgets/status_indicator.dart';
 import '../../core/widgets/sync_banner.dart';
 import '../../core/widgets/responsive_layout.dart';
@@ -60,7 +60,7 @@ class _ChantiersInstallationScreenState extends State<ChantiersInstallationScree
     final activeList = _tabController.index == 0 ? enCours : termines;
 
     return ResponsiveLayout(
-      appBar: GlassAppBar(
+      appBar: VerticalAppBar(
         title: const Text('Mes chantiers'),
         backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,

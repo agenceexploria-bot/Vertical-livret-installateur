@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/document_download.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/responsive_layout.dart';
+import '../../core/widgets/vertical_app_bar.dart';
 import '../../data/models/chantier.dart';
 import '../../state/chantier_state.dart';
 
@@ -28,6 +29,7 @@ class _ConfirmationScreenState extends State<ConfirmationScreen> {
     final isSav = chantier?.type == ChantierType.sav;
 
     return ResponsiveLayout(
+      appBar: const VerticalAppBar(),
       child: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(

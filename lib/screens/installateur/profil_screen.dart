@@ -8,7 +8,7 @@ import '../../core/build_info.dart';
 import '../../core/document_capture.dart';
 import '../../core/platform/mobile_detector.dart';
 import '../../core/theme.dart';
-import '../../core/widgets/glass_app_bar.dart';
+import '../../core/widgets/vertical_app_bar.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../core/widgets/user_avatar.dart';
 import '../../data/api_client.dart';
@@ -36,7 +36,7 @@ class ProfilScreen extends StatelessWidget {
     }
 
     return ResponsiveLayout(
-      appBar: GlassAppBar(
+      appBar: VerticalAppBar(
         title: const Text('Profil'),
         backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../theme.dart';
+import 'vertical_pattern_background.dart';
 
 class ResponsiveLayout extends StatelessWidget {
   final Widget child;
@@ -7,6 +8,11 @@ class ResponsiveLayout extends StatelessWidget {
   final PreferredSizeWidget? appBar;
   final Widget? bottomNavigationBar;
   final Color? backgroundColor;
+  // Filigrane thématique derrière le contenu (voir VerticalPatternBackground)
+  // — activé par défaut sur tout écran mobile utilisant ResponsiveLayout,
+  // qu'il soit désactivé au cas par cas pour un écran plein écran
+  // (aperçu photo/PDF...) qui n'en a pas besoin.
+  final bool showPattern;
 
   const ResponsiveLayout({
     super.key,
@@ -15,6 +21,7 @@ class ResponsiveLayout extends StatelessWidget {
     this.appBar,
     this.bottomNavigationBar,
     this.backgroundColor,
+    this.showPattern = true,
   });
 
   @override
@@ -23,7 +30,17 @@ class ResponsiveLayout extends StatelessWidget {
     Widget mobileScreen = Scaffold(
       backgroundColor: backgroundColor ?? AppColors.fond,
       appBar: appBar,
-      body: child,
+      // Le filigrane vit sous le contenu réel dans un Stack — les
+      // cartes/tuiles du contenu, opaques, le masquent naturellement ; il ne
+      // reste visible que dans les interstices (effet façon WhatsApp).
+      body: showPattern
+          ? Stack(
+              children: [
+                const Positioned.fill(child: VerticalPatternBackground()),
+                child,
+              ],
+            )
+          : child,
       bottomNavigationBar: bottomNavigationBar,
     );
 

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme.dart';
-import '../../../core/widgets/glass_app_bar.dart';
+import '../../../core/widgets/vertical_app_bar.dart';
 import '../../../core/widgets/responsive_layout.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../data/models/document_chantier.dart';
@@ -17,7 +17,7 @@ class DossierTechniqueScreen extends StatelessWidget {
     final docs = chantier.documentsChantier.where((d) => d.type == TypeDocumentChantier.technique).toList();
 
     return ResponsiveLayout(
-      appBar: GlassAppBar(
+      appBar: VerticalAppBar(
         title: const Text('Dossier technique'),
         backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,

@@ -6,7 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/document_download.dart';
 import '../../core/photo_capture.dart';
 import '../../core/theme.dart';
-import '../../core/widgets/glass_app_bar.dart';
+import '../../core/widgets/vertical_app_bar.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../core/widgets/signature_pad.dart';
 import '../../core/widgets/vertical_logo.dart';
@@ -88,7 +88,7 @@ class _PvSavFormulaireScreenState extends State<PvSavFormulaireScreen> {
     }
 
     return ResponsiveLayout(
-      appBar: GlassAppBar(
+      appBar: VerticalAppBar(
         title: const Text('Procès-verbal d\'intervention SAV'),
         backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,

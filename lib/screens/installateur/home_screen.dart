@@ -2,10 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme.dart';
-import '../../core/widgets/glass_app_bar.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../core/widgets/user_avatar.dart';
-import '../../core/widgets/vertical_logo.dart';
+import '../../core/widgets/vertical_app_bar.dart';
 import '../../state/auth_state.dart';
 import '../../state/network_state.dart';
 import '../../state/chantier_state.dart';
@@ -43,16 +42,12 @@ class _InstallateurHomeScreenState extends State<InstallateurHomeScreen> {
     final user = authState.currentUser;
 
     return ResponsiveLayout(
-      appBar: GlassAppBar(
-        // Uniquement le logo dans la bande sombre — "Accueil" est un
-        // libellé de section, affiché juste en dessous (voir child), pas un
-        // titre d'AppBar. `bubble: true` (fond blanc derrière le logo,
-        // comme BoShell sur la même couleur AppColors.encre) garantit le
-        // contraste plutôt qu'un logo sombre sur fond sombre.
-        title: const VerticalLogo(height: 30, bubble: true),
-        centerTitle: false,
-        backgroundColor: AppColors.encre,
-        foregroundColor: Colors.white,
+      appBar: VerticalAppBar(
+        // Écran racine : jamais de flèche de retour, même si techniquement
+        // dépilable dans un état de navigation inhabituel. Le logo (avec son
+        // fond blanc pour le contraste) est géré par VerticalAppBar — voir
+        // sa documentation, seul point de rendu du logo dans toute l'app.
+        showBackButton: false,
         actions: [
           Icon(networkState.isOnline ? Icons.wifi : Icons.wifi_off, color: Colors.white),
           const SizedBox(width: 12),

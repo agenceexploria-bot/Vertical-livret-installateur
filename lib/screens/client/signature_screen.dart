@@ -9,7 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/document_download.dart';
 import '../../core/theme.dart';
-import '../../core/widgets/glass_app_bar.dart';
+import '../../core/widgets/vertical_app_bar.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../data/api_client.dart';
 import '../../data/models/chantier.dart';
@@ -118,7 +118,7 @@ class _SignatureScreenState extends State<SignatureScreen> {
     }
 
     return ResponsiveLayout(
-      appBar: GlassAppBar(
+      appBar: VerticalAppBar(
         title: const Text('Signature du procès-verbal'),
         backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,

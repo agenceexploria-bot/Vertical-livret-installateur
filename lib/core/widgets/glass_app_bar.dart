@@ -15,6 +15,14 @@ class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
   // renseignent pas. Ajouté pour l'accueil installateur, qui a besoin d'un
   // logo aligné à gauche plutôt que centré (voir home_screen.dart).
   final bool? centerTitle;
+  // Les trois suivants (leading/leadingWidth/automaticallyImplyLeading) sont
+  // passés tels quels à l'AppBar sous-jacente — `null`/valeurs par défaut
+  // Flutter, comme AppBar, tant qu'un appelant ne les renseigne pas.
+  // Ajoutés pour VerticalAppBar, qui construit son propre leading
+  // (flèche de retour + logo) plutôt que de laisser AppBar l'inférer.
+  final Widget? leading;
+  final double? leadingWidth;
+  final bool automaticallyImplyLeading;
 
   const GlassAppBar({
     super.key,
@@ -23,6 +31,9 @@ class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.backgroundColor = AppColors.encre,
     this.foregroundColor = Colors.white,
     this.centerTitle,
+    this.leading,
+    this.leadingWidth,
+    this.automaticallyImplyLeading = true,
   });
 
   @override
@@ -37,6 +48,9 @@ class GlassAppBar extends StatelessWidget implements PreferredSizeWidget {
           title: title,
           centerTitle: centerTitle,
           actions: actions,
+          leading: leading,
+          leadingWidth: leadingWidth,
+          automaticallyImplyLeading: automaticallyImplyLeading,
           backgroundColor: backgroundColor.withValues(alpha: 0.8),
           foregroundColor: foregroundColor,
           elevation: 0,

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme.dart';
-import '../../../core/widgets/glass_app_bar.dart';
+import '../../../core/widgets/vertical_app_bar.dart';
 import '../../../core/widgets/gps_pin_icon.dart';
 import '../../../core/widgets/responsive_layout.dart';
 import '../../../core/widgets/app_card.dart';
@@ -20,7 +20,7 @@ class FicheChantierScreen extends StatelessWidget {
     if (chantier == null) return const Scaffold();
 
     return ResponsiveLayout(
-      appBar: GlassAppBar(
+      appBar: VerticalAppBar(
         title: const Text('Fiche chantier'),
         backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,

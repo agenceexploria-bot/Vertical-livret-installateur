@@ -4,7 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/app_card.dart';
-import '../../core/widgets/glass_app_bar.dart';
+import '../../core/widgets/vertical_app_bar.dart';
 import '../../core/widgets/status_indicator.dart';
 import '../../core/widgets/sync_banner.dart';
 import '../../core/widgets/responsive_layout.dart';
@@ -57,7 +57,7 @@ class _SavListScreenState extends State<SavListScreen> with SingleTickerProvider
     final activeList = _tabController.index == 0 ? enCours : terminees;
 
     return ResponsiveLayout(
-      appBar: GlassAppBar(
+      appBar: VerticalAppBar(
         title: const Text('Interventions SAV'),
         backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,

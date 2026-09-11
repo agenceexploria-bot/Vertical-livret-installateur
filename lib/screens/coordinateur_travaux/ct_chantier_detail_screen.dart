@@ -10,7 +10,7 @@ import '../../core/document_download.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/ajouter_document_chantier_dialog.dart';
 import '../../core/widgets/app_card.dart';
-import '../../core/widgets/glass_app_bar.dart';
+import '../../core/widgets/vertical_app_bar.dart';
 import '../../core/widgets/renseigner_pv_dialog.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../core/widgets/status_indicator.dart';
@@ -34,7 +34,7 @@ class CtChantierDetailScreen extends StatelessWidget {
 
     if (chantier == null) {
       return ResponsiveLayout(
-        appBar: GlassAppBar(title: const Text('Chantier'), backgroundColor: AppColors.encre, foregroundColor: Colors.white),
+        appBar: VerticalAppBar(title: const Text('Chantier'), backgroundColor: AppColors.encre, foregroundColor: Colors.white),
         child: const Center(child: Text('Chantier introuvable')),
       );
     }
@@ -47,7 +47,7 @@ class CtChantierDetailScreen extends StatelessWidget {
             : ('Non déposé', StatusType.attente);
 
     return ResponsiveLayout(
-      appBar: GlassAppBar(
+      appBar: VerticalAppBar(
         title: Text(chantier.reference),
         backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,

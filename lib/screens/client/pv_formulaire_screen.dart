@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/document_download.dart';
 import '../../core/theme.dart';
-import '../../core/widgets/glass_app_bar.dart';
+import '../../core/widgets/vertical_app_bar.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../core/widgets/signature_pad.dart';
 import '../../core/widgets/vertical_logo.dart';
@@ -147,7 +147,7 @@ class _PvFormulaireScreenState extends State<PvFormulaireScreen> {
     }
 
     return ResponsiveLayout(
-      appBar: GlassAppBar(
+      appBar: VerticalAppBar(
         title: const Text('Procès-verbal de réception'),
         backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,

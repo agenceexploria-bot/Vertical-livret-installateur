@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme.dart';
-import '../../core/widgets/glass_app_bar.dart';
+import '../../core/widgets/vertical_app_bar.dart';
 import '../../core/widgets/responsive_layout.dart';
 import '../../data/api_client.dart';
 import '../../data/models/chantier.dart';
@@ -97,13 +97,13 @@ class _CtEditChantierScreenState extends State<CtEditChantierScreen> {
     final chantier = _chantier;
     if (chantier == null) {
       return ResponsiveLayout(
-        appBar: GlassAppBar(title: const Text('Chantier introuvable'), backgroundColor: AppColors.encre, foregroundColor: Colors.white),
+        appBar: VerticalAppBar(title: const Text('Chantier introuvable'), backgroundColor: AppColors.encre, foregroundColor: Colors.white),
         child: const SizedBox.shrink(),
       );
     }
 
     return ResponsiveLayout(
-      appBar: GlassAppBar(
+      appBar: VerticalAppBar(
         title: Text('Modifier ${chantier.reference}'),
         backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,

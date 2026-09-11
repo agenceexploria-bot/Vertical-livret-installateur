@@ -10,7 +10,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 import '../../../core/platform/mobile_detector.dart';
 import '../../../core/theme.dart';
-import '../../../core/widgets/glass_app_bar.dart';
+import '../../../core/widgets/vertical_app_bar.dart';
 import '../../../core/voice_recorder.dart';
 import '../../../core/widgets/responsive_layout.dart';
 import '../../../data/api_client.dart';
@@ -271,7 +271,7 @@ class _RexScreenState extends State<RexScreen> with SingleTickerProviderStateMix
     final envoyes = chantier?.rex ?? const <Rex>[];
 
     return ResponsiveLayout(
-      appBar: GlassAppBar(
+      appBar: VerticalAppBar(
         title: const Text('Retour d\'expérience'),
         backgroundColor: AppColors.encre,
         foregroundColor: Colors.white,
