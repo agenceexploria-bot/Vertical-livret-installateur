@@ -81,7 +81,7 @@ void main() {
 
       expect(find.byType(SelectableText), findsNothing);
       expect(find.text('Une transcription à dérouler'), findsNothing);
-      expect(find.byTooltip('Afficher la transcription'), findsOneWidget);
+      expect(find.text('Afficher la transcription'), findsOneWidget);
     });
 
     testWidgets('toggle : un clic déroule (texte sélectionnable visible), un second replie', (tester) async {
@@ -89,19 +89,20 @@ void main() {
 
       await pump(tester, rex);
 
-      await tester.tap(find.byTooltip('Afficher la transcription'));
+      await tester.tap(find.text('Afficher la transcription'));
       await tester.pumpAndSettle();
 
       expect(find.byType(SelectableText), findsOneWidget);
       final selectable = tester.widget<SelectableText>(find.byType(SelectableText));
       expect(selectable.data, 'Une transcription à dérouler');
-      expect(find.byTooltip('Masquer la transcription'), findsOneWidget);
+      expect(find.text('Masquer'), findsOneWidget);
+      expect(find.text('Afficher la transcription'), findsNothing);
 
-      await tester.tap(find.byTooltip('Masquer la transcription'));
+      await tester.tap(find.text('Masquer'));
       await tester.pumpAndSettle();
 
       expect(find.byType(SelectableText), findsNothing);
-      expect(find.byTooltip('Afficher la transcription'), findsOneWidget);
+      expect(find.text('Afficher la transcription'), findsOneWidget);
     });
 
     testWidgets('sans transcription : le bouton est grisé (désactivé), tooltip "Aucune transcription"', (tester) async {
@@ -115,14 +116,63 @@ void main() {
       await pump(tester, rex);
 
       expect(find.byTooltip('Aucune transcription'), findsOneWidget);
-      final button = tester.widget<IconButton>(find.ancestor(of: find.byTooltip('Aucune transcription'), matching: find.byType(IconButton)));
+      expect(find.text('Afficher la transcription'), findsOneWidget);
+      final button = tester.widget<TextButton>(find.ancestor(of: find.text('Afficher la transcription'), matching: find.byType(TextButton)));
       expect(button.onPressed, isNull);
 
-      // Un tap sur un IconButton désactivé ne fait rien — la transcription
-      // reste introuvable dans l'arbre.
-      await tester.tap(find.byTooltip('Aucune transcription'));
+      // Un tap sur un bouton désactivé ne fait rien — la transcription reste
+      // introuvable dans l'arbre.
+      await tester.tap(find.text('Afficher la transcription'));
       await tester.pumpAndSettle();
       expect(find.byType(SelectableText), findsNothing);
+    });
+  });
+
+  group('disposition (structure des deux lignes)', () {
+    testWidgets('ligne 1 : auteur/date à gauche, "Afficher la transcription" à droite, sur la même ligne', (tester) async {
+      final rex = Rex(
+        id: 'd1',
+        transcription: 'Une transcription',
+        audioPath: 'https://blob.vercel-storage.com/rex-audio.webm',
+        soumisAt: DateTime(2026, 9, 1),
+        auteur: 'Marin Dupont',
+      );
+      await pump(tester, rex, onTelechargerAudio: () {});
+
+      final auteurTopLeft = tester.getTopLeft(find.textContaining('Marin Dupont'));
+      final boutonTopLeft = tester.getTopLeft(find.text('Afficher la transcription'));
+      expect(auteurTopLeft.dx, lessThan(boutonTopLeft.dx), reason: 'auteur/date à gauche du bouton');
+      expect((auteurTopLeft.dy - boutonTopLeft.dy).abs(), lessThan(20), reason: 'les deux sur la même ligne');
+    });
+
+    testWidgets('ligne 2 : lecteur audio à gauche, actions (télécharger/supprimer) à droite', (tester) async {
+      final rex = Rex(
+        id: 'd2',
+        transcription: 'Texte',
+        audioPath: 'https://blob.vercel-storage.com/rex-audio.webm',
+        soumisAt: DateTime(2026, 9, 1),
+      );
+      await pump(tester, rex, onTelechargerAudio: () {}, onSupprimer: () {});
+
+      final playerTopLeft = tester.getTopLeft(find.byType(RexAudioPlayer));
+      final telechargerTopLeft = tester.getTopLeft(find.byTooltip('Télécharger l\'audio'));
+      final supprimerTopLeft = tester.getTopLeft(find.byTooltip('Supprimer ce REX'));
+      expect(playerTopLeft.dx, lessThan(telechargerTopLeft.dx), reason: 'lecteur audio à gauche des actions');
+      expect(telechargerTopLeft.dx, lessThan(supprimerTopLeft.dx), reason: 'télécharger avant supprimer, aligné à droite');
+    });
+
+    testWidgets('le bouton "Afficher la transcription" (ligne 1) est bien au-dessus de la ligne du lecteur audio (ligne 2)', (tester) async {
+      final rex = Rex(
+        id: 'd3',
+        transcription: 'Texte',
+        audioPath: 'https://blob.vercel-storage.com/rex-audio.webm',
+        soumisAt: DateTime(2026, 9, 1),
+      );
+      await pump(tester, rex);
+
+      final boutonTopLeft = tester.getTopLeft(find.text('Afficher la transcription'));
+      final playerTopLeft = tester.getTopLeft(find.byType(RexAudioPlayer));
+      expect(boutonTopLeft.dy, lessThan(playerTopLeft.dy));
     });
   });
 

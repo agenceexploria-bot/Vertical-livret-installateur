@@ -446,8 +446,12 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
   Widget _buildRex(BuildContext context, Chantier chantier, UserRole? role) {
     final peutSupprimer = role == UserRole.coordinateurTravaux || role == UserRole.admin;
     final peutTranscrire = role == UserRole.coordinateurTravaux || role == UserRole.qualite || role == UserRole.admin;
+    // Pas de titre : l'onglet "REX (N)" juste au-dessus l'indique déjà —
+    // un second en-tête redondant ne faisait que creuser un espace vide.
+    // Padding du haut réduit en conséquence (BoPanel réserve normalement
+    // 14px pour le titre + son propre padding, ici inutile).
     return BoPanel(
-      title: 'Retour d\'expérience (REX) (${chantier.rex.length})',
+      padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
       child: chantier.rex.isEmpty
           ? const EmptyState(message: 'Aucun REX soumis pour l\'instant.', illustration: MonteChargeIllustration())
           : Column(

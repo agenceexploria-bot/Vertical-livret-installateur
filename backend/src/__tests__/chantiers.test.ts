@@ -570,6 +570,34 @@ describe('POST /chantiers/:reference/rex', () => {
     expect(res.body.chantier.rex[0].auteur).toBe('Sandrine Martin');
   });
 
+  it('capte l\'auteur depuis le JWT de l\'installateur authentifié (jamais un champ client) et le renvoie ensuite via GET', async () => {
+    const ct = await createCt();
+    await createChantier(ct.accessToken);
+    const installateur = await createInstallateur({ isActive: true });
+    await request(app)
+      .post('/chantiers/LD64397/rattacher')
+      .set('Authorization', `Bearer ${ct.accessToken}`)
+      .send({ userId: installateur.user.id });
+
+    // auteurId n'est jamais envoyé par le client — seul req.auth!.userId
+    // (décodé depuis le token de l'installateur) doit déterminer l'auteur.
+    const post = await request(app)
+      .post('/chantiers/LD64397/rex')
+      .set('Authorization', `Bearer ${installateur.accessToken}`)
+      .send({ transcription: 'RAS, tout est conforme.', auteurId: 'un-autre-id-ignoré' });
+    expect(post.status).toBe(200);
+    expect(post.body.chantier.rex[0].auteur).toBe('Thomas Roux');
+
+    // Le GET, indépendant de la requête de création, doit renvoyer le même
+    // auteur — preuve que le join Prisma (CHANTIER_INCLUDE) fonctionne, pas
+    // seulement la réponse immédiate du POST.
+    const get = await request(app)
+      .get('/chantiers/LD64397')
+      .set('Authorization', `Bearer ${ct.accessToken}`);
+    expect(get.status).toBe(200);
+    expect(get.body.chantier.rex[0].auteur).toBe('Thomas Roux');
+  }, 30000);
+
   it('accepte une note vocale seule (sans transcription) et enregistre le fichier audio', async () => {
     const ct = await createCt();
     await createChantier(ct.accessToken);
