@@ -38,6 +38,25 @@ void main() {
     expect(verticalPatternSpacing, lessThanOrEqualTo(50));
   });
 
+  test('set d\'icônes riche et 100% chantier — aucune icône hors-thème (ex: ancre)', () {
+    expect(verticalPatternIcons.length, greaterThanOrEqualTo(12));
+    expect(verticalPatternIcons.toSet().length, verticalPatternIcons.length, reason: 'aucun doublon');
+    expect(verticalPatternIcons, isNot(contains(Icons.anchor_outlined)));
+    expect(verticalPatternIcons, isNot(contains(Icons.anchor)));
+  });
+
+  test('bruit du filigrane déterministe — même position + même canal = toujours la même valeur', () {
+    final a = verticalPatternJitter(3, 7, 1);
+    final b = verticalPatternJitter(3, 7, 1);
+    expect(a, equals(b), reason: 'aucun flickering : deux peintures produisent la même disposition');
+    expect(a, inInclusiveRange(0.0, 1.0));
+
+    // Des canaux différents (décalage X, décalage Y, rotation, taille, icône)
+    // pour la même position ne doivent pas dégénérer en une seule constante.
+    final valeurs = List.generate(5, (salt) => verticalPatternJitter(3, 7, salt));
+    expect(valeurs.toSet().length, greaterThan(1));
+  });
+
   testWidgets('showPattern: false désactive le filigrane pour un écran qui n\'en a pas besoin', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
