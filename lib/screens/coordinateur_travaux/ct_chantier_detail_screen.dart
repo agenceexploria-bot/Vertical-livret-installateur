@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/chantier_link.dart';
+import '../../core/document_download.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/ajouter_document_chantier_dialog.dart';
 import '../../core/widgets/app_card.dart';
@@ -104,7 +105,13 @@ class CtChantierDetailScreen extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text('PV de réception', style: TextStyle(fontWeight: FontWeight.bold)),
-                    StatusIndicator(label: pvLabel, type: pvType),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _pvDownloadButton(chantier),
+                        StatusIndicator(label: pvLabel, type: pvType),
+                      ],
+                    ),
                   ],
                 ),
                 if (!chantier.pvSigne) ...[
@@ -137,6 +144,24 @@ class CtChantierDetailScreen extends StatelessWidget {
             ],
         ],
       ),
+    );
+  }
+
+  /// Téléchargement du PV signé — jusqu'ici absent de la fiche mobile CT
+  /// (seul un badge de statut "Signé" y figurait, sans aucun moyen d'accéder
+  /// au PDF) alors que la fiche back-office Web l'a toujours proposé (voir
+  /// PvSignaturePanel). `forceDownloadUri` force Content-Disposition:
+  /// attachment côté Vercel Blob, comme sur le Web.
+  Widget _pvDownloadButton(Chantier chantier) {
+    final url = pvSignatureDownloadUrl(chantier);
+    if (url == null) return const SizedBox.shrink();
+    return IconButton(
+      onPressed: () => launchUrl(forceDownloadUri(url), mode: LaunchMode.externalApplication),
+      icon: const Icon(Icons.download_outlined, size: 20, color: AppColors.acier),
+      tooltip: 'Télécharger le PV (PDF)',
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
     );
   }
 
@@ -188,9 +213,15 @@ class CtChantierDetailScreen extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text('PV', style: TextStyle(fontSize: 11.5, color: AppColors.acierClair)),
-              StatusIndicator(
-                label: chantier.pvSigne ? 'Signé' : '—',
-                type: chantier.pvSigne ? StatusType.conforme : StatusType.attente,
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _pvDownloadButton(chantier),
+                  StatusIndicator(
+                    label: chantier.pvSigne ? 'Signé' : '—',
+                    type: chantier.pvSigne ? StatusType.conforme : StatusType.attente,
+                  ),
+                ],
               ),
             ],
           ),
@@ -385,4 +416,15 @@ class CtChantierDetailScreen extends StatelessWidget {
       );
     }
   }
+}
+
+/// URL du PDF du PV signé à proposer au téléchargement, ou `null` si aucun
+/// bouton ne doit être affiché (PV non signé, ou fichier non-PDF —
+/// signature au doigt seul, ancien flux, voir PvSignaturePanel). Fonction
+/// pure extraite pour être testable sans monter tout l'écran
+/// (Provider/GoRouter) — voir ct_chantier_detail_screen_test.dart.
+String? pvSignatureDownloadUrl(Chantier chantier) {
+  final path = chantier.pvSignatureImagePath;
+  if (!chantier.pvSigne || path == null || !path.toLowerCase().endsWith('.pdf')) return null;
+  return path;
 }
