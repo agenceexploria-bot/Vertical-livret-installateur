@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 140" fill="none" stroke="#98A3AE" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Rails de guidage -->
+  <line x1="20" y1="8" x2="20" y2="132" />
+  <line x1="80" y1="8" x2="80" y2="132" />
+
+  <!-- Flèche haute -->
+  <path d="M50 8 L50 34" />
+  <path d="M38 22 L50 8 L62 22" />
+
+  <!-- Cabine -->
+  <rect x="26" y="50" width="48" height="40" rx="4" />
+  <line x1="50" y1="50" x2="50" y2="90" />
+
+  <!-- Flèche basse -->
+  <path d="M50 106 L50 132" />
+  <path d="M38 118 L50 132 L62 118" />
+</svg>

@@ -9,6 +9,7 @@ import '../../core/document_capture.dart';
 import '../../core/document_download.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/ajouter_document_chantier_dialog.dart';
+import '../../core/widgets/empty_state.dart';
 import '../../core/widgets/renseigner_pv_dialog.dart';
 import '../../core/widgets/status_badge.dart';
 import '../../core/widgets/status_indicator.dart';
@@ -121,11 +122,49 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
         ],
       ],
       child: Container(
-        height: 42,
-        width: 42,
-        decoration: BoxDecoration(border: Border.all(color: AppColors.lignes), borderRadius: BorderRadius.circular(16)),
+        height: 34,
+        width: 34,
+        decoration: BoxDecoration(border: Border.all(color: AppColors.lignes), borderRadius: BorderRadius.circular(12)),
         alignment: Alignment.center,
-        child: const Icon(Icons.more_vert, color: AppColors.encre),
+        child: const Icon(Icons.more_vert, size: 20, color: AppColors.encre),
+      ),
+    );
+  }
+
+  /// Puce compacte vers le chantier terminé d'un SAV — remplace un bouton
+  /// "Voir le chantier terminé (REF)" qui s'étirait sur toute sa largeur de
+  /// contenu ; ici la référence seule suffit, le tooltip porte le libellé
+  /// complet pour l'accessibilité.
+  Widget _buildChantierTermineChip(BuildContext context, String reference) {
+    return Tooltip(
+      message: 'Voir le chantier terminé',
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 130),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(99),
+            onTap: () => context.push('/backoffice/ct/chantiers/$reference'),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(border: Border.all(color: AppColors.lignes), borderRadius: BorderRadius.circular(99)),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      reference,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.acier),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.open_in_new, size: 13, color: AppColors.acierClair),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -216,48 +255,39 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
             _buildSavBanner(),
             const SizedBox(height: 12),
           ],
+          // Titre, menu d'actions (kebab), statut et — pour un SAV — la puce
+          // vers le chantier terminé partagent la même ligne compacte plutôt
+          // que d'empiler des blocs séparés (kebab isolé à droite, gros
+          // bouton "Voir le chantier..." sur sa propre ligne).
           Wrap(
             crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 12,
+            spacing: 10,
             runSpacing: 8,
             children: [
               Text('${chantier.reference} — ${chantier.client}, ${chantier.ville}', style: Theme.of(context).textTheme.titleMedium),
+              _buildActionsMenu(context, chantier, canModifier: canModifier, isAdmin: isAdmin),
               StatusBadge(
                 label: livretOk ? 'Prêt' : 'En attente',
                 type: livretOk ? StatusType.conforme : StatusType.enCours,
               ),
+              // parentReference est obligatoire pour un SAV côté backend
+              // (voir POST .../sav) — normalement toujours renseigné ici,
+              // mais on ne pousse jamais vers "/backoffice/ct/chantiers/null"
+              // si jamais il manquait (donnée existante corrompue,
+              // migration incomplète...). Exception assumée au cloisonnement
+              // SAV : seul lien qui bascule volontairement vers l'espace
+              // Chantiers.
+              if (isSav && chantier.parentReference != null) _buildChantierTermineChip(context, chantier.parentReference!),
             ],
-          ),
-          // parentReference est obligatoire pour un SAV côté backend (voir
-          // POST .../sav) — normalement toujours renseigné ici, mais on ne
-          // pousse jamais vers "/backoffice/ct/chantiers/null" si jamais
-          // il manquait (donnée existante corrompue, migration incomplète...).
-          if (isSav && chantier.parentReference != null) ...[
-            const SizedBox(height: 10),
-            // Exception assumée au cloisonnement : seul lien qui bascule
-            // volontairement vers l'espace Chantiers — libellé explicite en
-            // bouton, jamais un simple lien texte qu'on suivrait sans s'en
-            // rendre compte.
-            OutlinedButton.icon(
-              onPressed: () => context.push('/backoffice/ct/chantiers/${chantier.parentReference}'),
-              icon: const Icon(Icons.open_in_new, size: 16),
-              label: Text('Voir le chantier terminé (${chantier.parentReference})'),
-              style: OutlinedButton.styleFrom(minimumSize: const Size(0, 38), padding: const EdgeInsets.symmetric(horizontal: 14)),
-            ),
-          ],
-          const SizedBox(height: 16),
-          Align(
-            alignment: Alignment.centerRight,
-            child: _buildActionsMenu(context, chantier, canModifier: canModifier, isAdmin: isAdmin),
           ),
           const SizedBox(height: 20),
           Container(
             decoration: BoxDecoration(
               color: AppColors.blanc,
               border: Border.all(color: AppColors.lignes),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 6),
             child: TabBar(
               controller: _tabController,
               isScrollable: true,
@@ -265,13 +295,13 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
               unselectedLabelColor: AppColors.acier,
               indicatorColor: AppColors.orange,
               indicatorSize: TabBarIndicatorSize.label,
-              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
               tabs: [
-                const Tab(text: 'Vue d\'ensemble'),
-                const Tab(text: 'Documents'),
-                const Tab(text: 'Qualité'),
-                const Tab(text: 'PV'),
-                Tab(text: chantier.rex.isEmpty ? 'REX' : 'REX (${chantier.rex.length})'),
+                _compactTab(Icons.dashboard_outlined, 'Vue d\'ensemble'),
+                _compactTab(Icons.folder_outlined, 'Documents'),
+                _compactTab(Icons.engineering_outlined, 'Qualité'),
+                _compactTab(Icons.receipt_long_outlined, 'PV'),
+                _compactTab(Icons.mic_outlined, chantier.rex.isEmpty ? 'REX' : 'REX (${chantier.rex.length})'),
               ],
             ),
           ),
@@ -283,6 +313,23 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
             3 => _buildPvTab(context, chantier, canRenseignerPv: canRenseignerPv, canSupprimerPv: canSupprimerPv),
             _ => _buildRex(context, chantier, role),
           },
+        ],
+      ),
+    );
+  }
+
+  /// Onglet compact icône + libellé (~42px de haut) plutôt que du texte seul
+  /// — la couleur (sélectionné/non) vient du IconTheme/DefaultTextStyle que
+  /// TabBar applique déjà à tout contenu de tab, icône personnalisée incluse.
+  Tab _compactTab(IconData icon, String label) {
+    return Tab(
+      height: 42,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18),
+          const SizedBox(width: 6),
+          Text(label),
         ],
       ),
     );
@@ -339,7 +386,7 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
     return BoPanel(
       title: 'Auto-contrôle & qualité (${(chantier.progressionAutoControle * 100).toInt()}%)',
       child: chantier.autoControle.isEmpty
-          ? const Text('Aucun point d\'auto-contrôle pour ce chantier.', style: TextStyle(fontSize: 12.5, color: AppColors.acierClair))
+          ? const EmptyState(message: 'Aucun point d\'auto-contrôle pour ce chantier.', illustration: MonteChargeIllustration())
           : Column(
               children: [
                 Padding(
@@ -399,7 +446,7 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
     return BoPanel(
       title: 'Retour d\'expérience (REX) (${chantier.rex.length})',
       child: chantier.rex.isEmpty
-          ? const Text('Aucun REX soumis pour l\'instant.', style: TextStyle(fontSize: 12.5, color: AppColors.acierClair))
+          ? const EmptyState(message: 'Aucun REX soumis pour l\'instant.', illustration: MonteChargeIllustration())
           : Column(
               children: [
                 for (final rex in chantier.rex)
@@ -486,10 +533,7 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
       child: Column(
         children: [
           if (chantier.installateursRattaches.isEmpty)
-            const Padding(
-              padding: EdgeInsets.only(bottom: 10),
-              child: Text('Aucun installateur rattaché pour l\'instant.', style: TextStyle(fontSize: 12.5, color: AppColors.acierClair)),
-            ),
+            const EmptyState(message: 'Aucun installateur rattaché pour l\'instant.', illustration: MonteChargeIllustration()),
           for (final u in chantier.installateursRattaches) _installateurRow(context, chantier, u),
           const SizedBox(height: 10),
           ElevatedButton.icon(
@@ -747,7 +791,7 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
 
   Widget _buildDocsTerrain(BuildContext context, Chantier chantier) {
     if (chantier.docsTerrain.isEmpty) {
-      return const Text('Aucun document terrain déposé pour l\'instant.', style: TextStyle(fontSize: 12.5, color: AppColors.acierClair));
+      return const EmptyState(message: 'Aucun document terrain déposé pour l\'instant.', illustration: MonteChargeIllustration());
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
