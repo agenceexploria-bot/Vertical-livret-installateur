@@ -11,14 +11,19 @@ const verticalPatternBackgroundColor = Color(0xFFF2F2EC);
 /// contenu (voir _VerticalPatternPainter.paint).
 const verticalPatternIconColor = Color(0xFFDCDAD2);
 
-/// Fond à motif répétitif discret (façon WhatsApp) pour les écrans mobiles
-/// (installateur ET CT) — thème monte-charge/chantier : cabine, flèches de
-/// montée/descente, casque, clé, engrenage, crochet de levage, en quinconce.
-/// Dessiné en CustomPainter (glyphes de la police d'icônes Material, jamais
-/// d'asset image) plutôt qu'une image répétée — poids nul, netteté à toute
-/// résolution. Statique (voir [_VerticalPatternPainter.shouldRepaint]) : ne
-/// se redessine jamais après le premier layout, sauf si la taille change
-/// (rotation, redimensionnement de fenêtre).
+/// Espacement (px) entre deux icônes du filigrane — public/testable pour
+/// vérifier que le motif reste dense (voir vertical_pattern_background_test.dart).
+const verticalPatternSpacing = 45.0;
+
+/// Fond à motif répétitif dense (façon WhatsApp) pour les écrans mobiles
+/// (installateur ET CT) — uniquement des icônes liées aux chantiers/
+/// monte-charges : cabine, flèches de montée/descente, casque, clé,
+/// engrenage, chantier/construction, en quinconce. Dessiné en CustomPainter
+/// (glyphes de la police d'icônes Material, jamais d'asset image) plutôt
+/// qu'une image répétée — poids nul, netteté à toute résolution. Statique
+/// (voir [_VerticalPatternPainter.shouldRepaint]) : ne se redessine jamais
+/// après le premier layout, sauf si la taille change (rotation,
+/// redimensionnement de fenêtre).
 ///
 /// Toujours utilisé en fond de [Stack] (voir [ResponsiveLayout]), sous le
 /// contenu réel de l'écran — les cartes/tuiles, opaques, masquent
@@ -48,10 +53,10 @@ class _VerticalPatternPainter extends CustomPainter {
     Icons.engineering_outlined, // casque de chantier
     Icons.build_outlined, // clé à molette
     Icons.settings_outlined, // engrenage
-    Icons.anchor_outlined, // crochet de levage
+    Icons.construction, // chantier
   ];
   static const _tailleIcone = 30.0;
-  static const _espacement = 100.0;
+  static const _espacement = verticalPatternSpacing;
 
   // Un seul TextPainter par icône, calculé une fois pour toute la durée de
   // l'app (static final) — jamais reconstruit à chaque paint ni à chaque

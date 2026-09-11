@@ -126,7 +126,14 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.fond,
+        // Blanc pur plutôt que AppColors.fond (#F2F0ED) — cette teinte est
+        // quasi identique au fond du filigrane mobile (#F2F2EC, voir
+        // VerticalPatternBackground) : un champ rempli en "fond" se
+        // distinguait à peine du motif derrière lui, particulièrement une
+        // fois le motif densifié. Toujours opaque (filled: true) : le
+        // filigrane ne traverse jamais un champ de saisie, quel que soit
+        // l'écran (thème partagé par toute l'app, mobile et back-office).
+        fillColor: AppColors.blanc,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: const UnderlineInputBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(12)),

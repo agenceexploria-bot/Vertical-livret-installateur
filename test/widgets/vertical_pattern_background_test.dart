@@ -33,6 +33,11 @@ void main() {
     expect(stack.children.first, isA<Positioned>());
   });
 
+  test('espacement du filigrane réduit — motif dense (40-50px), pas clairsemé', () {
+    expect(verticalPatternSpacing, greaterThanOrEqualTo(40));
+    expect(verticalPatternSpacing, lessThanOrEqualTo(50));
+  });
+
   testWidgets('showPattern: false désactive le filigrane pour un écran qui n\'en a pas besoin', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
