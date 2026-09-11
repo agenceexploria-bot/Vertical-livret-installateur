@@ -85,7 +85,7 @@ class _BoAdminDashboardScreenState extends State<BoAdminDashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Administration', style: Theme.of(context).textTheme.titleMedium),
+          Text('Administrateur', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 20),
           if (adminState.isLoading && feed == null)
             const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))

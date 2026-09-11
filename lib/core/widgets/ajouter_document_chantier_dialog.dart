@@ -57,6 +57,22 @@ String mimeForFilename(String fileName) {
   return _mimesConnus[extension] ?? 'application/octet-stream';
 }
 
+/// Libellés courts (badge sur chaque ligne de fichier) et complets (menu de
+/// changement de module) pour chaque module — voir [FichierAEnvoyer.type].
+extension TypeDocumentChantierLabel on TypeDocumentChantier {
+  String get badge => switch (this) {
+        TypeDocumentChantier.ficheChantier => 'M1',
+        TypeDocumentChantier.securite => 'M2',
+        TypeDocumentChantier.technique => 'M3',
+      };
+
+  String get labelCourt => switch (this) {
+        TypeDocumentChantier.ficheChantier => 'Module 1 — Fiche chantier',
+        TypeDocumentChantier.securite => 'Module 2 — Sécurité',
+        TypeDocumentChantier.technique => 'Module 3 — Technique',
+      };
+}
+
 /// Un fichier dans le cycle d'envoi du dialogue. [bytes] est `null`
 /// uniquement si la LECTURE du fichier a échoué (rare — appareil qui a
 /// perdu l'accès au fichier entre la sélection et la lecture, par exemple) :
@@ -67,16 +83,23 @@ String mimeForFilename(String fileName) {
 /// lisible restant à chaque ajout ou retrait (voir
 /// [reassignerPremierEnvoyable]), pour que ce nom ne se perde jamais
 /// silencieusement si le fichier qui le portait disparaît de la liste.
+/// [type] capture le module SÉLECTIONNÉ AU MOMENT DE L'AJOUT du fichier
+/// (voir _choisirFichiers/_deposerFichiers) — un changement du sélecteur de
+/// module après coup ne modifie jamais les fichiers déjà dans la liste,
+/// seulement ceux ajoutés ensuite ; modifiable individuellement par la
+/// suite via le badge de chaque ligne (voir _FichierRow).
 class FichierAEnvoyer {
   final String fileName;
   final Uint8List? bytes;
   bool isFirst = false;
   EnvoiStatus status;
   String? erreur;
+  TypeDocumentChantier type;
 
   FichierAEnvoyer({
     required this.fileName,
     required this.bytes,
+    required this.type,
     this.status = EnvoiStatus.attente,
     this.erreur,
   });
@@ -85,24 +108,24 @@ class FichierAEnvoyer {
   String get dataUrl => 'data:${mimeForFilename(fileName)};base64,${base64Encode(bytes!)}';
 }
 
-Future<FichierAEnvoyer> lireDepuisPicker(PlatformFile picked) async {
+Future<FichierAEnvoyer> lireDepuisPicker(PlatformFile picked, TypeDocumentChantier type) async {
   final bytes = picked.bytes;
   if (bytes == null) {
     // file_picker n'a pas fourni les octets malgré withData: true — jamais
     // silencieux : le fichier reste dans la liste, marqué en échec.
     debugPrint('AjouterDocumentChantierDialog.lireDepuisPicker: bytes null pour "${picked.name}" (${picked.size} octets annoncés)');
-    return FichierAEnvoyer(fileName: picked.name, bytes: null, status: EnvoiStatus.echec, erreur: 'Lecture du fichier impossible');
+    return FichierAEnvoyer(fileName: picked.name, bytes: null, type: type, status: EnvoiStatus.echec, erreur: 'Lecture du fichier impossible');
   }
-  return FichierAEnvoyer(fileName: picked.name, bytes: bytes);
+  return FichierAEnvoyer(fileName: picked.name, bytes: bytes, type: type);
 }
 
-Future<FichierAEnvoyer> lireDepuisDrop(XFile file) async {
+Future<FichierAEnvoyer> lireDepuisDrop(XFile file, TypeDocumentChantier type) async {
   try {
     final bytes = await file.readAsBytes();
-    return FichierAEnvoyer(fileName: file.name, bytes: bytes);
+    return FichierAEnvoyer(fileName: file.name, bytes: bytes, type: type);
   } catch (e) {
     debugPrint('AjouterDocumentChantierDialog.lireDepuisDrop: échec de lecture de "${file.name}" — $e');
-    return FichierAEnvoyer(fileName: file.name, bytes: null, status: EnvoiStatus.echec, erreur: 'Lecture du fichier impossible');
+    return FichierAEnvoyer(fileName: file.name, bytes: null, type: type, status: EnvoiStatus.echec, erreur: 'Lecture du fichier impossible');
   }
 }
 
@@ -180,13 +203,18 @@ class _AjouterDocumentChantierDialogState extends State<AjouterDocumentChantierD
     debugPrint('AjouterDocumentChantierDialog._choisirFichiers: ouverture du sélecteur (FileType.any)');
     final result = await FilePicker.platform.pickFiles(type: FileType.any, withData: true, allowMultiple: true);
     if (result == null || !mounted) return;
-    final lus = await Future.wait(result.files.map(lireDepuisPicker));
+    // Le module courant est capturé MAINTENANT, pas relu plus tard — un
+    // changement de sélecteur après coup ne doit jamais re-taguer ces
+    // fichiers (voir FichierAEnvoyer.type).
+    final typeAuMoment = _type;
+    final lus = await Future.wait(result.files.map((f) => lireDepuisPicker(f, typeAuMoment)));
     _ajouterEntrees(lus);
   }
 
   Future<void> _deposerFichiers(List<XFile> files) async {
     debugPrint('AjouterDocumentChantierDialog._deposerFichiers: ${files.length} fichier(s) déposé(s)');
-    final lus = await Future.wait(files.map(lireDepuisDrop));
+    final typeAuMoment = _type;
+    final lus = await Future.wait(files.map((f) => lireDepuisDrop(f, typeAuMoment)));
     _ajouterEntrees(lus);
   }
 
@@ -212,12 +240,12 @@ class _AjouterDocumentChantierDialogState extends State<AjouterDocumentChantierD
 
     for (final (i, f) in envoyables.indexed) {
       if (!mounted) return;
-      debugPrint('AjouterDocumentChantierDialog._envoyer: début envoi "${f.fileName}" (module=${_type.name}, ${f.bytes!.length} octets)');
+      debugPrint('AjouterDocumentChantierDialog._envoyer: début envoi "${f.fileName}" (module=${f.type.name}, ${f.bytes!.length} octets)');
       setState(() => _progression = envoyables.length > 1 ? 'Envoi ${i + 1}/${envoyables.length}...' : 'Envoi en cours...');
       try {
         await chantierState.addDocumentChantier(
           widget.reference,
-          type: _type.name,
+          type: f.type.name,
           nom: f.isFirst && nomSaisi.isNotEmpty ? nomSaisi : null,
           nomFichierOriginal: f.fileName,
           file: f.dataUrl,
@@ -298,6 +326,7 @@ class _AjouterDocumentChantierDialogState extends State<AjouterDocumentChantierD
                   _fichiers.remove(f);
                   reassignerPremierEnvoyable(_fichiers);
                 }),
+                onChangerModule: (f, type) => setState(() => f.type = type),
               ),
             ],
             if (_progression != null) ...[
@@ -327,7 +356,11 @@ class _AjouterDocumentChantierDialogState extends State<AjouterDocumentChantierD
 }
 
 /// Sélecteur des 3 modules (Fiche chantier / Sécurité / Technique) —
-/// détermine où le document sera classé côté chantier.
+/// détermine le module qui sera appliqué aux PROCHAINS fichiers ajoutés
+/// (voir _choisirFichiers/_deposerFichiers, qui capturent [type] au moment
+/// de l'ajout dans FichierAEnvoyer.type) ; changer la sélection ici n'a
+/// aucun effet sur les fichiers déjà dans la liste — voir le badge de
+/// chaque ligne (_FichierRow) pour modifier un fichier précis après coup.
 class _ModuleSelector extends StatelessWidget {
   final TypeDocumentChantier type;
   final bool enabled;
@@ -394,20 +427,34 @@ class _DropZoneSelecteur extends StatelessWidget {
   }
 }
 
-/// Liste des fichiers du cycle d'envoi en cours, avec leur statut.
+/// Liste des fichiers du cycle d'envoi en cours, avec leur statut et le
+/// module (badge) sur lequel chacun partira à l'envoi.
 class _FichierListe extends StatelessWidget {
   final List<FichierAEnvoyer> fichiers;
   final bool isSubmitting;
   final ValueChanged<FichierAEnvoyer> onRetry;
   final ValueChanged<FichierAEnvoyer> onRetirer;
-  const _FichierListe({required this.fichiers, required this.isSubmitting, required this.onRetry, required this.onRetirer});
+  final void Function(FichierAEnvoyer fichier, TypeDocumentChantier type) onChangerModule;
+  const _FichierListe({
+    required this.fichiers,
+    required this.isSubmitting,
+    required this.onRetry,
+    required this.onRetirer,
+    required this.onChangerModule,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
         for (final f in fichiers)
-          _FichierRow(fichier: f, isSubmitting: isSubmitting, onRetry: () => onRetry(f), onRetirer: () => onRetirer(f)),
+          _FichierRow(
+            fichier: f,
+            isSubmitting: isSubmitting,
+            onRetry: () => onRetry(f),
+            onRetirer: () => onRetirer(f),
+            onChangerModule: (type) => onChangerModule(f, type),
+          ),
       ],
     );
   }
@@ -418,7 +465,14 @@ class _FichierRow extends StatelessWidget {
   final bool isSubmitting;
   final VoidCallback onRetry;
   final VoidCallback onRetirer;
-  const _FichierRow({required this.fichier, required this.isSubmitting, required this.onRetry, required this.onRetirer});
+  final ValueChanged<TypeDocumentChantier> onChangerModule;
+  const _FichierRow({
+    required this.fichier,
+    required this.isSubmitting,
+    required this.onRetry,
+    required this.onRetirer,
+    required this.onChangerModule,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -437,6 +491,27 @@ class _FichierRow extends StatelessWidget {
                 if (f.status == EnvoiStatus.echec)
                   Text('Échec — ${f.erreur ?? 'réessayez'}', style: const TextStyle(fontSize: 10.5, color: AppColors.rouge), overflow: TextOverflow.ellipsis),
               ],
+            ),
+          ),
+          const SizedBox(width: 4),
+          // Module sur lequel CE fichier partira à l'envoi (capturé à
+          // l'ajout, voir FichierAEnvoyer.type) — le menu permet de le
+          // changer individuellement après coup, sans toucher aux autres.
+          PopupMenuButton<TypeDocumentChantier>(
+            tooltip: 'Changer de module',
+            enabled: !isSubmitting,
+            onSelected: onChangerModule,
+            itemBuilder: (context) => TypeDocumentChantier.values
+                .map((t) => PopupMenuItem(value: t, child: Text(t.labelCourt, style: const TextStyle(fontSize: 12.5))))
+                .toList(),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+              decoration: BoxDecoration(
+                color: AppColors.fond,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: AppColors.lignes),
+              ),
+              child: Text(f.type.badge, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppColors.acier)),
             ),
           ),
           // Pas de retry pour un fichier illisible (bytes == null) : rien à

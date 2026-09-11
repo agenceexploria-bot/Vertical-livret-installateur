@@ -296,9 +296,9 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
             indicatorWeight: 2,
             indicatorSize: TabBarIndicatorSize.label,
             dividerColor: AppColors.lignes,
-            labelPadding: const EdgeInsets.symmetric(horizontal: 10),
-            labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
-            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 12),
+            labelPadding: const EdgeInsets.symmetric(horizontal: 14),
+            labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
+            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 13.5),
             tabs: [
               _compactTab(Icons.dashboard_outlined, 'Vue d\'ensemble'),
               _compactTab(Icons.folder_outlined, 'Documents'),
@@ -320,18 +320,21 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
     );
   }
 
-  /// Onglet compact icône + libellé (~36px de haut, barre totale ~36-40px)
-  /// plutôt que du texte seul — la couleur (sélectionné/non) vient du
-  /// IconTheme/DefaultTextStyle que TabBar applique déjà à tout contenu de
-  /// tab, icône personnalisée incluse.
+  /// Onglet icône + libellé (~46px de haut, barre totale ~44-48px) — juste
+  /// milieu entre le cartouche volumineux d'origine et une barre trop
+  /// resserrée pour rester confortable au clic (retour testeur) : icônes et
+  /// texte plus grands, zone cliquable généreuse, mais toujours une seule
+  /// ligne fine sans cartouche (fond/bordure) autour. La couleur
+  /// (sélectionné/non) vient du IconTheme/DefaultTextStyle que TabBar
+  /// applique déjà à tout contenu de tab, icône personnalisée incluse.
   Tab _compactTab(IconData icon, String label) {
     return Tab(
-      height: 36,
+      height: 46,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 15),
-          const SizedBox(width: 5),
+          Icon(icon, size: 20),
+          const SizedBox(width: 7),
           Text(label),
         ],
       ),
