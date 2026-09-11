@@ -280,32 +280,34 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
               if (isSav && chantier.parentReference != null) _buildChantierTermineChip(context, chantier.parentReference!),
             ],
           ),
-          const SizedBox(height: 20),
-          Container(
-            decoration: BoxDecoration(
-              color: AppColors.blanc,
-              border: Border.all(color: AppColors.lignes),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            child: TabBar(
-              controller: _tabController,
-              isScrollable: true,
-              labelColor: AppColors.orange,
-              unselectedLabelColor: AppColors.acier,
-              indicatorColor: AppColors.orange,
-              indicatorSize: TabBarIndicatorSize.label,
-              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-              tabs: [
-                _compactTab(Icons.dashboard_outlined, 'Vue d\'ensemble'),
-                _compactTab(Icons.folder_outlined, 'Documents'),
-                _compactTab(Icons.engineering_outlined, 'Qualité'),
-                _compactTab(Icons.receipt_long_outlined, 'PV'),
-                _compactTab(Icons.mic_outlined, chantier.rex.isEmpty ? 'REX' : 'REX (${chantier.rex.length})'),
-              ],
-            ),
+          const SizedBox(height: 16),
+          // Simple ligne discrète sous le titre — pas de cartouche (fond +
+          // bordure + coins arrondis) autour des onglets, juste le TabBar
+          // lui-même avec son propre séparateur fin en bas (dividerColor).
+          // L'onglet actif se distingue par un texte accentué + un
+          // soulignement fin (indicatorWeight réduit), jamais un gros bloc.
+          TabBar(
+            controller: _tabController,
+            isScrollable: true,
+            tabAlignment: TabAlignment.start,
+            labelColor: AppColors.orange,
+            unselectedLabelColor: AppColors.acier,
+            indicatorColor: AppColors.orange,
+            indicatorWeight: 2,
+            indicatorSize: TabBarIndicatorSize.label,
+            dividerColor: AppColors.lignes,
+            labelPadding: const EdgeInsets.symmetric(horizontal: 10),
+            labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 12),
+            tabs: [
+              _compactTab(Icons.dashboard_outlined, 'Vue d\'ensemble'),
+              _compactTab(Icons.folder_outlined, 'Documents'),
+              _compactTab(Icons.engineering_outlined, 'Qualité'),
+              _compactTab(Icons.receipt_long_outlined, 'PV'),
+              _compactTab(Icons.mic_outlined, chantier.rex.isEmpty ? 'REX' : 'REX (${chantier.rex.length})'),
+            ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           switch (_tabController.index) {
             0 => _buildVueEnsembleTab(context, chantier),
             1 => _buildDocumentsTab(context, chantier),
@@ -318,17 +320,18 @@ class _BoChantierDetailScreenState extends State<BoChantierDetailScreen> with Si
     );
   }
 
-  /// Onglet compact icône + libellé (~42px de haut) plutôt que du texte seul
-  /// — la couleur (sélectionné/non) vient du IconTheme/DefaultTextStyle que
-  /// TabBar applique déjà à tout contenu de tab, icône personnalisée incluse.
+  /// Onglet compact icône + libellé (~36px de haut, barre totale ~36-40px)
+  /// plutôt que du texte seul — la couleur (sélectionné/non) vient du
+  /// IconTheme/DefaultTextStyle que TabBar applique déjà à tout contenu de
+  /// tab, icône personnalisée incluse.
   Tab _compactTab(IconData icon, String label) {
     return Tab(
-      height: 42,
+      height: 36,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 18),
-          const SizedBox(width: 6),
+          Icon(icon, size: 15),
+          const SizedBox(width: 5),
           Text(label),
         ],
       ),

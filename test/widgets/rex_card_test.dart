@@ -30,8 +30,6 @@ void main() {
     );
   }
 
-  String? selectableTextOf(WidgetTester tester) => tester.widget<SelectableText>(find.byType(SelectableText)).data;
-
   testWidgets('REX avec audio : le lecteur et le bouton de téléchargement sont affichés', (tester) async {
     final rex = Rex(
       id: 'r1',
@@ -45,7 +43,6 @@ void main() {
 
     expect(find.byType(RexAudioPlayer), findsOneWidget);
     expect(find.byTooltip('Télécharger l\'audio'), findsOneWidget);
-    expect(selectableTextOf(tester), 'Tout s\'est bien passé');
     expect(find.textContaining('Marin Dupont'), findsOneWidget);
   });
 
@@ -57,24 +54,13 @@ void main() {
     expect(find.textContaining('Auteur inconnu'), findsOneWidget);
   });
 
-  testWidgets('REX texte seul (sans audio) : ni lecteur ni bouton de téléchargement', (tester) async {
+  testWidgets('REX texte seul (sans audio) : pas de lecteur ni de bouton de téléchargement', (tester) async {
     final rex = Rex(id: 'r2', transcription: 'RAS sur ce chantier', audioPath: null, soumisAt: DateTime(2026, 9, 1, 10, 30));
 
     await pump(tester, rex);
 
     expect(find.byType(RexAudioPlayer), findsNothing);
     expect(find.byTooltip('Télécharger l\'audio'), findsNothing);
-    expect(selectableTextOf(tester), 'RAS sur ce chantier');
-  });
-
-  testWidgets('REX vocal sans transcription : message de repli, pas de lecteur vide en son absence', (tester) async {
-    final rex = Rex(id: 'r3', transcription: null, audioPath: null, soumisAt: DateTime(2026, 9, 1, 10, 30));
-
-    await pump(tester, rex);
-
-    expect(find.text('(note vocale sans transcription)'), findsOneWidget);
-    expect(find.byType(RexAudioPlayer), findsNothing);
-    expect(find.byType(SelectableText), findsNothing);
   });
 
   testWidgets('bouton supprimer visible seulement si onSupprimer est fourni', (tester) async {
@@ -85,6 +71,59 @@ void main() {
 
     await pump(tester, rex, onSupprimer: () {});
     expect(find.byIcon(Icons.delete_outline), findsOneWidget);
+  });
+
+  group('transcription repliée par défaut', () {
+    testWidgets('la transcription n\'est pas affichée tant qu\'on n\'a pas cliqué sur "Afficher la transcription"', (tester) async {
+      final rex = Rex(id: 'r20', transcription: 'Une transcription à dérouler', audioPath: null, soumisAt: DateTime(2026, 9, 1));
+
+      await pump(tester, rex);
+
+      expect(find.byType(SelectableText), findsNothing);
+      expect(find.text('Une transcription à dérouler'), findsNothing);
+      expect(find.byTooltip('Afficher la transcription'), findsOneWidget);
+    });
+
+    testWidgets('toggle : un clic déroule (texte sélectionnable visible), un second replie', (tester) async {
+      final rex = Rex(id: 'r21', transcription: 'Une transcription à dérouler', audioPath: null, soumisAt: DateTime(2026, 9, 1));
+
+      await pump(tester, rex);
+
+      await tester.tap(find.byTooltip('Afficher la transcription'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SelectableText), findsOneWidget);
+      final selectable = tester.widget<SelectableText>(find.byType(SelectableText));
+      expect(selectable.data, 'Une transcription à dérouler');
+      expect(find.byTooltip('Masquer la transcription'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Masquer la transcription'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SelectableText), findsNothing);
+      expect(find.byTooltip('Afficher la transcription'), findsOneWidget);
+    });
+
+    testWidgets('sans transcription : le bouton est grisé (désactivé), tooltip "Aucune transcription"', (tester) async {
+      final rex = Rex(
+        id: 'r22',
+        transcription: null,
+        audioPath: 'https://blob.vercel-storage.com/rex-audio.webm',
+        soumisAt: DateTime(2026, 9, 1),
+      );
+
+      await pump(tester, rex);
+
+      expect(find.byTooltip('Aucune transcription'), findsOneWidget);
+      final button = tester.widget<IconButton>(find.ancestor(of: find.byTooltip('Aucune transcription'), matching: find.byType(IconButton)));
+      expect(button.onPressed, isNull);
+
+      // Un tap sur un IconButton désactivé ne fait rien — la transcription
+      // reste introuvable dans l'arbre.
+      await tester.tap(find.byTooltip('Aucune transcription'));
+      await tester.pumpAndSettle();
+      expect(find.byType(SelectableText), findsNothing);
+    });
   });
 
   group('bouton copier', () {
@@ -124,7 +163,7 @@ void main() {
   });
 
   group('bouton transcrire', () {
-    testWidgets('visible seulement si audio présent et transcription absente, avec spinner pendant le traitement', (tester) async {
+    testWidgets('visible si le REX a un audio, avec spinner pendant le traitement', (tester) async {
       final rex = Rex(
         id: 'r8',
         transcription: null,
@@ -147,7 +186,7 @@ void main() {
       await tester.pumpAndSettle();
     });
 
-    testWidgets('absent si le REX a déjà une transcription', (tester) async {
+    testWidgets('reste visible sur un REX déjà transcrit — tooltip "Relancer la transcription" (écrase l\'existante)', (tester) async {
       final rex = Rex(
         id: 'r9',
         transcription: 'Déjà transcrit',
@@ -156,14 +195,16 @@ void main() {
       );
 
       await pump(tester, rex, onTranscrire: () async {});
+      expect(find.byTooltip('Relancer la transcription'), findsOneWidget);
       expect(find.byTooltip('Transcrire'), findsNothing);
     });
 
     testWidgets('absent si le REX n\'a pas d\'audio', (tester) async {
-      final rex = Rex(id: 'r10', transcription: null, audioPath: null, soumisAt: DateTime(2026, 9, 1));
+      final rex = Rex(id: 'r10', transcription: 'Texte', audioPath: null, soumisAt: DateTime(2026, 9, 1));
 
       await pump(tester, rex, onTranscrire: () async {});
       expect(find.byTooltip('Transcrire'), findsNothing);
+      expect(find.byTooltip('Relancer la transcription'), findsNothing);
     });
 
     testWidgets('absent si aucun callback onTranscrire n\'est fourni', (tester) async {
